@@ -1,0 +1,9 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.3.10/schema.json",
+  "extends": ["./tooling/biome/biome.json"],
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
+  }
+}

@@ -1,0 +1,12 @@
+[install]
+# Usar lockfile
+frozen = false
+
+[install.cache]
+# Cache local
+dir = ".bun-cache"
+
+[test]
+# Coverage mínimo
+coverage = true
+coverageThreshold = { line = 80, function = 80, branch = 80 }
