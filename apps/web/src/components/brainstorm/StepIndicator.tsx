@@ -13,8 +13,8 @@ const steps: Array<{
 	icon: typeof Settings
 }> = [
 	{ id: 'setup', label: 'Setup', icon: Settings },
-	{ id: 'technique', label: 'Tecnicas', icon: Lightbulb },
-	{ id: 'execution', label: 'Execucao', icon: MessageSquare },
+	{ id: 'technique', label: 'Técnicas', icon: Lightbulb },
+	{ id: 'execution', label: 'Execução', icon: MessageSquare },
 	{ id: 'document', label: 'Documento', icon: FileText },
 ]
 
@@ -24,7 +24,7 @@ export function StepIndicator({ currentStep, hasDocument }: StepIndicatorProps) 
 	const currentIndex = stepOrder.indexOf(currentStep)
 
 	return (
-		<div className="flex items-center justify-between">
+		<div className="flex items-center justify-center gap-1">
 			{steps.map((step, index) => {
 				// Document step is completed when document exists
 				const isCompleted = index < currentIndex || (step.id === 'document' && hasDocument)
@@ -32,38 +32,35 @@ export function StepIndicator({ currentStep, hasDocument }: StepIndicatorProps) 
 				const Icon = step.icon
 
 				return (
-					<div key={step.id} className="flex flex-1 items-center">
-						{/* Step circle */}
+					<div key={step.id} className="flex items-center">
+						{/* Step pill */}
 						<div
 							className={cn(
-								'flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 transition-colors',
-								isCompleted && 'border-primary bg-primary text-primary-foreground',
-								isCurrent && 'border-primary bg-background text-primary',
-								!isCompleted &&
-									!isCurrent &&
-									'border-muted-foreground/30 bg-background text-muted-foreground/50'
+								'flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-medium transition-all duration-200',
+								isCompleted && 'bg-primary/15 text-primary',
+								isCurrent && 'bg-primary text-primary-foreground shadow-sm shadow-primary/25',
+								!isCompleted && !isCurrent && 'text-muted-foreground/60'
 							)}
 						>
-							{isCompleted ? <Check className="h-5 w-5" /> : <Icon className="h-5 w-5" />}
+							<div
+								className={cn(
+									'flex h-6 w-6 items-center justify-center rounded-full transition-colors',
+									isCompleted && 'bg-primary/20',
+									isCurrent && 'bg-primary-foreground/20',
+									!isCompleted && !isCurrent && 'bg-muted-foreground/10'
+								)}
+							>
+								{isCompleted ? <Check className="h-3.5 w-3.5" /> : <Icon className="h-3.5 w-3.5" />}
+							</div>
+							<span className="hidden sm:inline">{step.label}</span>
 						</div>
 
-						{/* Step label */}
-						<span
-							className={cn(
-								'ml-2 text-sm font-medium',
-								isCurrent && 'text-primary',
-								!isCurrent && 'text-muted-foreground'
-							)}
-						>
-							{step.label}
-						</span>
-
-						{/* Connector line */}
+						{/* Connector */}
 						{index < steps.length - 1 && (
 							<div
 								className={cn(
-									'mx-4 h-0.5 flex-1',
-									index < currentIndex ? 'bg-primary' : 'bg-muted-foreground/30'
+									'mx-2 h-px w-6 transition-colors',
+									index < currentIndex ? 'bg-primary/50' : 'bg-border'
 								)}
 							/>
 						)}

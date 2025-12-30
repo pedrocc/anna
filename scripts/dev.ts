@@ -1,4 +1,23 @@
 import { spawn, spawnSync } from 'bun'
+import { resolve } from 'path'
+import { readFileSync } from 'fs'
+
+// Load root .env file
+const envPath = resolve(import.meta.dir, '../.env')
+try {
+	const envContent = readFileSync(envPath, 'utf-8')
+	for (const line of envContent.split('\n')) {
+		const trimmed = line.trim()
+		if (trimmed && !trimmed.startsWith('#')) {
+			const [key, ...valueParts] = trimmed.split('=')
+			if (key && valueParts.length > 0) {
+				process.env[key] = valueParts.join('=')
+			}
+		}
+	}
+} catch {
+	console.warn('⚠️ No .env file found at root')
+}
 
 const DEFAULT_API_PORT = 3000
 const DEFAULT_WEB_PORT = 5173

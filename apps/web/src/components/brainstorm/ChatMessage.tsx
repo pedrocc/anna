@@ -28,8 +28,8 @@ export function ChatMessage({ messageRole, content, isStreaming }: ChatMessagePr
 
 			<div
 				className={cn(
-					'max-w-[80%] rounded-lg px-4 py-3',
-					isUser ? 'bg-primary text-primary-foreground' : 'bg-muted'
+					'rounded-lg px-4 py-3',
+					isUser ? 'max-w-[80%] bg-primary text-primary-foreground' : 'flex-1 bg-muted'
 				)}
 			>
 				<div className={cn('prose prose-sm max-w-none', isUser && 'prose-invert')}>

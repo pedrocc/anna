@@ -472,13 +472,15 @@ brainstormRoutes.post('/sessions/:id/document', authMiddleware, async (c) => {
 				})
 			}
 
-			// Save document to session
+			// Save document to session and mark as completed
 			await db
 				.update(brainstormSessions)
 				.set({
 					documentContent: fullDocument,
 					documentTitle: `Brainstorm: ${session.projectName}`,
 					currentStep: 'document',
+					status: 'completed',
+					completedAt: new Date(),
 					updatedAt: new Date(),
 				})
 				.where(eq(brainstormSessions.id, sessionId))
@@ -567,10 +569,14 @@ brainstormRoutes.post('/sessions/:id/advance', authMiddleware, async (c) => {
 	const currentIndex = stepOrder.indexOf(session.currentStep)
 	const nextStep = stepOrder[Math.min(currentIndex + 1, stepOrder.length - 1)]
 
+	// Mark as completed when reaching document step
+	const isCompleted = nextStep === 'document'
+
 	const [updated] = await db
 		.update(brainstormSessions)
 		.set({
 			currentStep: nextStep,
+			...(isCompleted && { status: 'completed', completedAt: new Date() }),
 			updatedAt: new Date(),
 		})
 		.where(eq(brainstormSessions.id, sessionId))

@@ -8,7 +8,7 @@
 
 :root {
 	/* Layout dimensions */
-	--header-height: 3.5rem;
+	--header-height: 0;
 	--sidebar-width: 16rem;
 	--sidebar-width-icon: 3.5rem;
 
@@ -181,12 +181,12 @@
 }
 
 [data-slot="sidebar-container"] {
-	height: calc(100svh - var(--header-height));
+	height: 100svh;
 	width: var(--sidebar-width);
 	border-right: 1px solid var(--sidebar-border);
 	transition: width 200ms ease-linear;
 	position: sticky;
-	top: var(--header-height);
+	top: 0;
 }
 
 [data-collapsible="icon"] [data-slot="sidebar-container"] {
@@ -307,19 +307,19 @@ button.rounded-full:focus-visible {
 	z-index: 50;
 	display: flex;
 	flex-direction: column;
-	top: var(--header-height);
+	top: 0;
 	left: 0;
 	bottom: 0;
-	height: calc(100% - var(--header-height));
+	height: 100%;
 	width: var(--sidebar-width);
 	background-color: var(--sidebar);
 	border-right: 1px solid var(--sidebar-border);
 }
 
-/* Mobile sheet overlay below topbar */
+/* Mobile sheet overlay */
 [data-slot="sheet-overlay"] {
 	position: fixed;
-	top: var(--header-height);
+	top: 0;
 	left: 0;
 	right: 0;
 	bottom: 0;

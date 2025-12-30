@@ -139,105 +139,114 @@ export function BrainstormSessionPage() {
 
 	return (
 		<div className="flex h-[calc(100vh-4rem)] flex-col">
-			{/* Main content area with tabs */}
-			<div className="min-h-0 flex-1 overflow-hidden">
-				<div className="container flex h-full flex-col py-4">
-					<Tabs
-						value={activeTab}
-						onValueChange={setActiveTab}
-						className="flex min-h-0 flex-1 flex-col"
-					>
-						{/* All controls in one line */}
-						<div className="mb-4 flex shrink-0 items-center gap-3">
-							{/* Back button */}
-							<Button asChild variant="ghost" size="icon" className="shrink-0">
-								<Link href="/brainstorm">
-									<ArrowLeft className="h-5 w-5" />
-								</Link>
-							</Button>
-
-							<TabsList className="w-fit shrink-0">
-								<TabsTrigger value="chat">
-									<MessageSquare className="mr-2 h-4 w-4" />
-									Chat
-								</TabsTrigger>
-								<TabsTrigger value="document" disabled={!hasDocument}>
-									<FileText className="mr-2 h-4 w-4" />
-									Documento
-									{!hasDocument && (
-										<span className="ml-2 text-xs text-muted-foreground">(vazio)</span>
-									)}
-								</TabsTrigger>
-							</TabsList>
-
-							{/* Document button */}
-							{showDocumentButton && (
-								<Button
-									onClick={handleGenerateDocument}
-									disabled={isGenerating}
-									variant={hasDocument ? 'outline' : 'default'}
-									size="sm"
-									className="shrink-0"
-								>
-									{isGenerating ? (
-										<>
-											<Spinner className="mr-2 h-4 w-4" />
-											Gerando...
-										</>
-									) : (
-										<>
-											<FileText className="mr-2 h-4 w-4" />
-											{hasDocument ? 'Regerar' : 'Gerar Documento'}
-										</>
-									)}
+			<div className="container flex min-h-0 flex-1 flex-col py-4">
+				<Tabs
+					value={activeTab}
+					onValueChange={setActiveTab}
+					className="flex min-h-0 flex-1 flex-col"
+				>
+					{/* Header toolbar - organized in 3 visual groups */}
+					<div className="mb-4 flex shrink-0 items-center justify-between">
+							{/* Left group: Navigation + Tabs */}
+							<div className="flex items-center gap-2">
+								<Button asChild variant="ghost" size="icon" className="shrink-0">
+									<Link href="/brainstorm">
+										<ArrowLeft className="h-5 w-5" />
+									</Link>
 								</Button>
-							)}
 
-							{/* Step indicator */}
-							<div className="max-w-lg flex-1">
+								<div className="mx-1 h-6 w-px bg-border/50" />
+
+								<TabsList className="w-fit bg-transparent">
+									<TabsTrigger value="chat" className="gap-2">
+										<MessageSquare className="h-4 w-4" />
+										Chat
+									</TabsTrigger>
+									<TabsTrigger value="document" disabled={!hasDocument} className="gap-2">
+										<FileText className="h-4 w-4" />
+										Documento
+										{!hasDocument && (
+											<span className="text-xs text-muted-foreground/70">(vazio)</span>
+										)}
+									</TabsTrigger>
+								</TabsList>
+							</div>
+
+							{/* Center group: Step indicator */}
+							<div className="mx-8 flex-1">
 								<StepIndicator currentStep={session.currentStep} hasDocument={hasDocument} />
 							</div>
 
-							{/* Advance button */}
-							{session.currentStep !== 'document' && (
-								<Button
-									onClick={handleAdvanceStep}
-									disabled={isAdvancing || isStreaming}
-									variant="outline"
-									size="sm"
-									className="shrink-0"
-								>
-									{isAdvancing ? (
-										<>
-											<Spinner className="mr-2 h-4 w-4" />
-											Avançando...
-										</>
-									) : (
-										<>
-											Avançar
-											<ArrowRight className="ml-2 h-4 w-4" />
-										</>
-									)}
-								</Button>
-							)}
-
-							{/* Settings menu */}
-							<DropdownMenu>
-								<DropdownMenuTrigger asChild>
-									<Button variant="ghost" size="icon" className="shrink-0">
-										<Settings className="h-5 w-5" />
-									</Button>
-								</DropdownMenuTrigger>
-								<DropdownMenuContent align="end">
-									<DropdownMenuItem
-										className="text-destructive focus:text-destructive"
-										onClick={() => setShowDeleteDialog(true)}
+							{/* Right group: Actions */}
+							<div className="flex items-center gap-2">
+								{/* Document button */}
+								{showDocumentButton && (
+									<Button
+										onClick={handleGenerateDocument}
+										disabled={isGenerating}
+										variant={hasDocument ? 'ghost' : 'default'}
+										size="sm"
 									>
-										<Trash2 className="mr-2 h-4 w-4" />
-										Apagar Projeto
-									</DropdownMenuItem>
-								</DropdownMenuContent>
-							</DropdownMenu>
+										{isGenerating ? (
+											<>
+												<Spinner className="mr-2 h-4 w-4" />
+												Gerando...
+											</>
+										) : (
+											<>
+												<FileText className="mr-2 h-4 w-4" />
+												{hasDocument ? 'Regerar' : 'Gerar Doc'}
+											</>
+										)}
+									</Button>
+								)}
+
+								{/* Advance button */}
+								{session.currentStep !== 'document' && (
+									<>
+										<div className="mx-1 h-6 w-px bg-border/50" />
+										<Button
+											onClick={handleAdvanceStep}
+											disabled={isAdvancing || isStreaming}
+											variant="default"
+											size="sm"
+											className="gap-2"
+										>
+											{isAdvancing ? (
+												<>
+													<Spinner className="h-4 w-4" />
+													Avançando...
+												</>
+											) : (
+												<>
+													Avançar
+													<ArrowRight className="h-4 w-4" />
+												</>
+											)}
+										</Button>
+									</>
+								)}
+
+								<div className="mx-1 h-6 w-px bg-border/50" />
+
+								{/* Settings menu */}
+								<DropdownMenu>
+									<DropdownMenuTrigger asChild>
+										<Button variant="ghost" size="icon">
+											<Settings className="h-5 w-5" />
+										</Button>
+									</DropdownMenuTrigger>
+									<DropdownMenuContent align="end">
+										<DropdownMenuItem
+											className="text-destructive focus:text-destructive"
+											onClick={() => setShowDeleteDialog(true)}
+										>
+											<Trash2 className="mr-2 h-4 w-4" />
+											Apagar Projeto
+										</DropdownMenuItem>
+									</DropdownMenuContent>
+								</DropdownMenu>
+							</div>
 						</div>
 
 						<TabsContent value="chat" className="mt-0 min-h-0 flex-1">
@@ -263,7 +272,6 @@ export function BrainstormSessionPage() {
 						</TabsContent>
 					</Tabs>
 				</div>
-			</div>
 
 			{/* Error display */}
 			{chatError && (

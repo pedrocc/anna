@@ -18,7 +18,7 @@ import {
 	Textarea,
 } from '@repo/ui'
 import { Lightbulb, Plus } from 'lucide-react'
-import { type ChangeEvent, useState } from 'react'
+import { type ChangeEvent, type KeyboardEvent, useState } from 'react'
 import { useLocation } from 'wouter'
 import { SessionCard } from '../components/brainstorm'
 import { useBrainstormSessions } from '../lib/api-client'
@@ -91,7 +91,7 @@ export function BrainstormPage() {
 	const sessions = data ?? []
 
 	return (
-		<div className="container py-6">
+		<div className="py-6">
 			<div className="mb-8 flex items-center justify-between">
 				<div>
 					<h1 className="text-3xl font-bold">Brainstorm</h1>
@@ -122,6 +122,12 @@ export function BrainstormPage() {
 									id="name"
 									value={projectName}
 									onChange={(e: ChangeEvent<HTMLInputElement>) => setProjectName(e.target.value)}
+									onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
+										if (e.key === 'Enter' && projectName.trim() && !isCreating) {
+											e.preventDefault()
+											handleCreateSession()
+										}
+									}}
 									placeholder="Ex: App de Delivery Sustentavel"
 								/>
 							</div>
