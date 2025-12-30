@@ -125,9 +125,7 @@ function MarkdownRenderer({ content }: { content: string }) {
 		<ReactMarkdown
 			remarkPlugins={[remarkGfm]}
 			components={{
-				h1: ({ children }) => (
-					<h1 className="mb-4 break-words text-2xl font-bold">{children}</h1>
-				),
+				h1: ({ children }) => <h1 className="mb-4 break-words text-2xl font-bold">{children}</h1>,
 				h2: ({ children }) => (
 					<h2 className="mb-3 mt-6 break-words text-xl font-bold">{children}</h2>
 				),
@@ -159,18 +157,12 @@ function MarkdownRenderer({ content }: { content: string }) {
 				// Table support (GFM)
 				table: ({ children }) => (
 					<div className="my-4 overflow-x-auto">
-						<table className="min-w-full border-collapse border border-border">
-							{children}
-						</table>
+						<table className="min-w-full border-collapse border border-border">{children}</table>
 					</div>
 				),
-				thead: ({ children }) => (
-					<thead className="bg-muted/50">{children}</thead>
-				),
+				thead: ({ children }) => <thead className="bg-muted/50">{children}</thead>,
 				tbody: ({ children }) => <tbody>{children}</tbody>,
-				tr: ({ children }) => (
-					<tr className="border-b border-border">{children}</tr>
-				),
+				tr: ({ children }) => <tr className="border-b border-border">{children}</tr>,
 				th: ({ children }) => (
 					<th className="break-words border border-border px-4 py-2 text-left font-semibold">
 						{children}

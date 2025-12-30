@@ -65,8 +65,7 @@ export function BrainstormPage() {
 
 			// Navigate to the new session
 			navigate(`/brainstorm/${result.data.id}`)
-		} catch (err) {
-			console.error('Error creating session:', err)
+		} catch (_err) {
 		} finally {
 			setIsCreating(false)
 		}

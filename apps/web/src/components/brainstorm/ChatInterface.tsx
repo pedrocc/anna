@@ -29,10 +29,14 @@ export function ChatInterface({
 		if (scrollRef.current) {
 			scrollRef.current.scrollIntoView({ behavior: 'smooth' })
 		}
-	}, [messages, streamingContent, pendingUserMessage])
+	}, [])
 
 	// Show action buttons during technique or execution phase when not streaming
-	const showActionButtons = (currentStep === 'technique' || currentStep === 'execution') && !isStreaming && !pendingUserMessage && messages.length > 0
+	const showActionButtons =
+		(currentStep === 'technique' || currentStep === 'execution') &&
+		!isStreaming &&
+		!pendingUserMessage &&
+		messages.length > 0
 
 	return (
 		<Card className="flex h-full flex-col overflow-hidden">
@@ -52,11 +56,7 @@ export function ChatInterface({
 
 						{/* Pending user message (shown immediately while waiting for response) */}
 						{pendingUserMessage && (
-							<ChatMessage
-								key="pending-user"
-								messageRole="user"
-								content={pendingUserMessage}
-							/>
+							<ChatMessage key="pending-user" messageRole="user" content={pendingUserMessage} />
 						)}
 
 						{/* Streaming response */}

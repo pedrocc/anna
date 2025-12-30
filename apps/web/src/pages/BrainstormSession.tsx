@@ -57,9 +57,7 @@ export function BrainstormSessionPage() {
 			await generateDocument()
 			await mutate()
 			setActiveTab('document')
-		} catch (err) {
-			console.error('Error generating document:', err)
-		}
+		} catch (_err) {}
 	}
 
 	const handleSaveDocument = async (content: string) => {
@@ -79,8 +77,7 @@ export function BrainstormSessionPage() {
 		try {
 			await api.brainstorm.deleteSession(id)
 			navigate('/brainstorm')
-		} catch (err) {
-			console.error('Error deleting session:', err)
+		} catch (_err) {
 			setIsDeleting(false)
 		}
 	}
@@ -107,8 +104,7 @@ export function BrainstormSessionPage() {
 					sendMessage(message)
 				}, 500)
 			}
-		} catch (err) {
-			console.error('Error advancing step:', err)
+		} catch (_err) {
 		} finally {
 			setIsAdvancing(false)
 		}
@@ -146,7 +142,11 @@ export function BrainstormSessionPage() {
 			{/* Main content area with tabs */}
 			<div className="min-h-0 flex-1 overflow-hidden">
 				<div className="container flex h-full flex-col py-4">
-					<Tabs value={activeTab} onValueChange={setActiveTab} className="flex min-h-0 flex-1 flex-col">
+					<Tabs
+						value={activeTab}
+						onValueChange={setActiveTab}
+						className="flex min-h-0 flex-1 flex-col"
+					>
 						{/* All controls in one line */}
 						<div className="mb-4 flex shrink-0 items-center gap-3">
 							{/* Back button */}

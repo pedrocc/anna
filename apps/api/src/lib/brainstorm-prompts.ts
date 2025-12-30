@@ -313,13 +313,17 @@ ${techniquesUsed ? `**TECNICAS UTILIZADAS:** ${techniquesUsed}` : ''}
 
 ${ideaList ? `**IDEIAS REGISTRADAS:**\n${ideaList}` : ''}
 
-${conversationHistory ? `---
+${
+	conversationHistory
+		? `---
 
 **HISTORICO COMPLETO DA SESSAO DE BRAINSTORMING:**
 
 ${conversationHistory}
 
----` : ''}
+---`
+		: ''
+}
 
 Analise CUIDADOSAMENTE todo o historico da conversa acima e extraia:
 1. Ideias PROPOSTAS PELO USUARIO ou que o usuario CONCORDOU EXPLICITAMENTE

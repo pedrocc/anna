@@ -22,16 +22,16 @@ export function SignUpPage() {
 			<div className="stars-container pointer-events-none absolute inset-0">
 				{[...Array(50)].map((_, i) => (
 					<div
-						key={i}
+						key={`star-${i}`}
 						className="absolute rounded-full bg-white"
 						style={{
-							width: Math.random() * 3 + 1 + 'px',
-							height: Math.random() * 3 + 1 + 'px',
-							left: Math.random() * 100 + '%',
-							top: Math.random() * 100 + '%',
+							width: `${Math.random() * 3 + 1}px`,
+							height: `${Math.random() * 3 + 1}px`,
+							left: `${Math.random() * 100}%`,
+							top: `${Math.random() * 100}%`,
 							opacity: Math.random() * 0.5 + 0.2,
 							animation: `twinkle ${Math.random() * 3 + 2}s ease-in-out infinite`,
-							animationDelay: Math.random() * 2 + 's',
+							animationDelay: `${Math.random() * 2}s`,
 						}}
 					/>
 				))}
@@ -68,7 +68,7 @@ export function SignUpPage() {
 						<span className="text-white">Anna </span>
 						<span className="text-white/50">Digital</span>
 					</span>
-					<span className="text-[10px] font-medium uppercase tracking-widest text-white/40">
+					<span className="text-[10px] font-medium uppercase tracking-widest text-white">
 						Uma plataforma Masterboi
 					</span>
 				</div>

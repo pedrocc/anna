@@ -63,7 +63,10 @@ function HeroSignedIn() {
 
 	return (
 		<div className="text-center">
-			<Badge variant="outline" className="mb-8 border-white/20 bg-white/5 px-4 py-1.5 text-white/80">
+			<Badge
+				variant="outline"
+				className="mb-8 border-white/20 bg-white/5 px-4 py-1.5 text-white/80"
+			>
 				<Sparkles className="mr-2 h-3.5 w-3.5" />
 				Bem-vindo de volta
 			</Badge>
@@ -71,8 +74,8 @@ function HeroSignedIn() {
 				Olá, <span className="text-primary">{firstName}</span>
 			</h1>
 			<p className="mx-auto max-w-2xl text-lg leading-relaxed text-white/60 md:text-xl">
-				Anna é sua facilitadora de brainstorming com IA. Explore técnicas criativas, gere insights
-				e crie documentos executivos para seus projetos.
+				Anna é sua facilitadora de brainstorming com IA. Explore técnicas criativas, gere insights e
+				crie documentos executivos para seus projetos.
 			</p>
 			<div className="mt-10 flex flex-wrap justify-center gap-4">
 				<Button asChild size="lg" className="h-12 px-6 text-base shadow-lg">
@@ -94,8 +97,8 @@ function HeroSignedOut() {
 				Transforme suas <span className="text-white/50">ideias</span> em projetos
 			</h1>
 			<p className="mx-auto max-w-2xl text-lg leading-relaxed text-white/60 md:text-xl">
-				Anna é sua facilitadora de brainstorming com IA. Explore técnicas criativas, gere insights
-				e crie documentos executivos para seus projetos.
+				Anna é sua facilitadora de brainstorming com IA. Explore técnicas criativas, gere insights e
+				crie documentos executivos para seus projetos.
 			</p>
 		</div>
 	)
@@ -120,16 +123,16 @@ export function WelcomePage() {
 			<div className="stars-container pointer-events-none absolute inset-0">
 				{[...Array(50)].map((_, i) => (
 					<div
-						key={i}
+						key={`star-${i}`}
 						className="absolute rounded-full bg-white"
 						style={{
-							width: Math.random() * 3 + 1 + 'px',
-							height: Math.random() * 3 + 1 + 'px',
-							left: Math.random() * 100 + '%',
-							top: Math.random() * 100 + '%',
+							width: `${Math.random() * 3 + 1}px`,
+							height: `${Math.random() * 3 + 1}px`,
+							left: `${Math.random() * 100}%`,
+							top: `${Math.random() * 100}%`,
 							opacity: Math.random() * 0.5 + 0.2,
 							animation: `twinkle ${Math.random() * 3 + 2}s ease-in-out infinite`,
-							animationDelay: Math.random() * 2 + 's',
+							animationDelay: `${Math.random() * 2}s`,
 						}}
 					/>
 				))}
@@ -158,13 +161,18 @@ export function WelcomePage() {
 							<span className="text-white">Anna </span>
 							<span className="text-white/50">Digital</span>
 						</span>
-						<span className="text-[10px] font-medium uppercase tracking-widest text-white/40">
+						<span className="text-[10px] font-medium uppercase tracking-widest text-white">
 							Uma plataforma Masterboi
 						</span>
 					</div>
 				</div>
 				<SignedOut>
-					<Button asChild size="lg" className="min-w-[160px] px-8 text-base font-semibold" style={{ height: '48px' }}>
+					<Button
+						asChild
+						size="lg"
+						className="min-w-[160px] px-8 text-base font-semibold"
+						style={{ height: '48px' }}
+					>
 						<Link href="/sign-in">
 							Entrar
 							<ArrowRight className="ml-2 h-5 w-5" />

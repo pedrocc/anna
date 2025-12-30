@@ -100,14 +100,10 @@ export function useBrainstormSession(
 	id: string | null,
 	config?: SWRConfiguration<SessionWithMessages>
 ) {
-	return useSWR<SessionWithMessages>(
-		id ? apiRoutes.brainstorm.session(id) : null,
-		fetcher,
-		{
-			...config,
-			refreshInterval: 0, // Don't auto-refresh, we handle this manually
-		}
-	)
+	return useSWR<SessionWithMessages>(id ? apiRoutes.brainstorm.session(id) : null, fetcher, {
+		...config,
+		refreshInterval: 0, // Don't auto-refresh, we handle this manually
+	})
 }
 
 /**

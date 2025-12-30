@@ -333,43 +333,49 @@ brainstormRoutes.post(
 					.replace(/[\u0300-\u036f]/g, '')
 
 				// Transition from setup to technique when Anna mentions the technique phase
-				if (session.currentStep === 'setup' &&
+				if (
+					session.currentStep === 'setup' &&
 					(normalizedResponse.includes('fase de **tecnicas') ||
-					 normalizedResponse.includes('fase de tecnicas') ||
-					 normalizedResponse.includes('tecnicas de brainstorming') ||
-					 normalizedResponse.includes('tecnica escolhida') ||
-					 normalizedResponse.includes('primeira pergunta criativa') ||
-					 normalizedResponse.includes('vamos para a fase') ||
-					 normalizedResponse.includes('resumo executivo') ||
-					 normalizedResponse.includes('tecnica recomendada'))) {
+						normalizedResponse.includes('fase de tecnicas') ||
+						normalizedResponse.includes('tecnicas de brainstorming') ||
+						normalizedResponse.includes('tecnica escolhida') ||
+						normalizedResponse.includes('primeira pergunta criativa') ||
+						normalizedResponse.includes('vamos para a fase') ||
+						normalizedResponse.includes('resumo executivo') ||
+						normalizedResponse.includes('tecnica recomendada'))
+				) {
 					newStep = 'technique'
 				}
 
 				// Transition from technique to execution when user is satisfied or Anna mentions execution phase
-				if (session.currentStep === 'technique' &&
+				if (
+					session.currentStep === 'technique' &&
 					(normalizedResponse.includes('fase de **execucao') ||
-					 normalizedResponse.includes('fase de execucao') ||
-					 normalizedResponse.includes('vamos comecar a execucao') ||
-					 normalizedResponse.includes('vamos para execucao') ||
-					 normalizedResponse.includes('entrando na fase de **execucao') ||
-					 normalizedResponse.includes('entrando na fase de execucao') ||
-					 normalizedResponse.includes('vamos seguir em frente') ||
-					 normalizedResponse.includes('proxima etapa') ||
-					 normalizedResponse.includes('proximo passo'))) {
+						normalizedResponse.includes('fase de execucao') ||
+						normalizedResponse.includes('vamos comecar a execucao') ||
+						normalizedResponse.includes('vamos para execucao') ||
+						normalizedResponse.includes('entrando na fase de **execucao') ||
+						normalizedResponse.includes('entrando na fase de execucao') ||
+						normalizedResponse.includes('vamos seguir em frente') ||
+						normalizedResponse.includes('proxima etapa') ||
+						normalizedResponse.includes('proximo passo'))
+				) {
 					newStep = 'execution'
 				}
 
 				// Transition from execution to document when user is satisfied
-				if (session.currentStep === 'execution' &&
+				if (
+					session.currentStep === 'execution' &&
 					(normalizedResponse.includes('fase de **documento') ||
-					 normalizedResponse.includes('fase de documento') ||
-					 normalizedResponse.includes('vamos gerar o documento') ||
-					 normalizedResponse.includes('vamos criar o documento') ||
-					 normalizedResponse.includes('preparar o documento') ||
-					 normalizedResponse.includes('vamos seguir em frente') ||
-					 normalizedResponse.includes('proxima etapa') ||
-					 normalizedResponse.includes('proximo passo') ||
-					 normalizedResponse.includes('finalizar'))) {
+						normalizedResponse.includes('fase de documento') ||
+						normalizedResponse.includes('vamos gerar o documento') ||
+						normalizedResponse.includes('vamos criar o documento') ||
+						normalizedResponse.includes('preparar o documento') ||
+						normalizedResponse.includes('vamos seguir em frente') ||
+						normalizedResponse.includes('proxima etapa') ||
+						normalizedResponse.includes('proximo passo') ||
+						normalizedResponse.includes('finalizar'))
+				) {
 					newStep = 'document'
 				}
 
@@ -378,7 +384,7 @@ brainstormRoutes.post(
 					.update(brainstormSessions)
 					.set({
 						updatedAt: new Date(),
-						...(newStep !== session.currentStep && { currentStep: newStep })
+						...(newStep !== session.currentStep && { currentStep: newStep }),
 					})
 					.where(eq(brainstormSessions.id, sessionId))
 

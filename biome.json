@@ -6,6 +6,13 @@
     "clientKind": "git",
     "useIgnoreFile": true
   },
+  "linter": {
+    "rules": {
+      "suspicious": {
+        "noArrayIndexKey": "off"
+      }
+    }
+  },
   "overrides": [
     {
       "includes": ["scripts/**"],

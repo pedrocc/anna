@@ -437,7 +437,8 @@ a[data-slot="button"]:hover {
 
 /* Landing page aurora animation */
 @keyframes aurora {
-	0%, 100% {
+	0%,
+	100% {
 		opacity: 0.3;
 		transform: translateY(0) rotate(0deg);
 	}
@@ -448,7 +449,8 @@ a[data-slot="button"]:hover {
 }
 
 @keyframes aurora-2 {
-	0%, 100% {
+	0%,
+	100% {
 		opacity: 0.2;
 		transform: translateX(0) rotate(0deg);
 	}

@@ -27,8 +27,7 @@ export function StepIndicator({ currentStep, hasDocument }: StepIndicatorProps) 
 		<div className="flex items-center justify-between">
 			{steps.map((step, index) => {
 				// Document step is completed when document exists
-				const isCompleted =
-					index < currentIndex || (step.id === 'document' && hasDocument)
+				const isCompleted = index < currentIndex || (step.id === 'document' && hasDocument)
 				const isCurrent = step.id === currentStep && !(step.id === 'document' && hasDocument)
 				const Icon = step.icon
 
