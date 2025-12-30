@@ -1,6 +1,7 @@
 import { Avatar, AvatarFallback, cn } from '@repo/ui'
 import { Bot, User } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 
 export interface ChatMessageProps {
 	messageRole: 'user' | 'assistant' | 'system'
@@ -33,6 +34,7 @@ export function ChatMessage({ messageRole, content, isStreaming }: ChatMessagePr
 			>
 				<div className={cn('prose prose-sm max-w-none', isUser && 'prose-invert')}>
 					<ReactMarkdown
+						remarkPlugins={[remarkGfm]}
 						components={{
 							// Style markdown elements
 							p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
