@@ -1,4 +1,5 @@
 import { ClerkProvider } from '@clerk/clerk-react'
+import { ptBR } from '@clerk/localizations'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { SWRConfig } from 'swr'
@@ -29,6 +30,7 @@ function AppWithProviders() {
 		return (
 			<ClerkProvider
 				publishableKey={CLERK_KEY}
+				localization={ptBR}
 				signInUrl="/sign-in"
 				signUpUrl="/sign-up"
 				afterSignInUrl="/brainstorm"

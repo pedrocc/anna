@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@clerk/clerk-react": "^5.25.0",
+    "@clerk/localizations": "^3.32.1",
     "@repo/shared": "workspace:*",
     "@repo/ui": "workspace:*",
     "clsx": "^2.1.0",

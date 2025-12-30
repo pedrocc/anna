@@ -1,88 +1,59 @@
-# Stack VDev
+# Anna Digital
 
-Template de monorepo TypeScript + Bun para aplicações web modernas.
+**Anna** é uma plataforma de brainstorming com IA que ajuda você a transformar ideias em projetos executivos.
 
-## Criando um Novo Projeto
+Uma plataforma **Masterboi**.
 
-Este repositório é um template. Para criar um novo projeto a partir dele:
+## Sobre
 
-```bash
-# 1. Clone o template
-git clone https://github.com/seu-usuario/stack-vdev.git meu-projeto
-cd meu-projeto
+Anna é sua facilitadora de brainstorming com IA. Explore técnicas criativas, gere insights e crie documentos executivos para seus projetos.
 
-# 2. Inicialize o projeto com seu nome
-bun new-project --name=meu-projeto --description="Descrição do projeto"
-```
+### Funcionalidades
 
-O script `new-project` automaticamente:
-- Renomeia o projeto em todos os arquivos relevantes:
-  - `package.json` (nome do workspace)
-  - `docker/docker-compose.yml` (containers e banco de dados)
-  - `.env.example` (DATABASE_URL)
-  - `apps/web/index.html` (título da página)
-  - `apps/web/src/pages/Home.tsx` (texto de boas-vindas)
-  - `apps/web/src/components/Layout.tsx` (header)
-  - `packages/email/src/templates/welcome.ts` (templates de email)
-- Converte o nome automaticamente para os formatos necessários:
-  - `meu-projeto` → kebab-case (package.json)
-  - `meu_projeto` → snake_case (docker, database)
-  - `Meu Projeto` → Title Case (UI, emails)
-- Remove o histórico git do template
-- Inicializa um novo repositório git
-- Copia `.env.example` para `.env`
-- Instala todas as dependências
+- **10 Técnicas de Criatividade** - SCAMPER, Six Thinking Hats, First Principles, Mind Mapping e mais metodologias comprovadas
+- **Perguntas Provocativas** - Anna faz as perguntas certas para expandir seu pensamento e revelar novas perspectivas
+- **Documentação Automática** - Suas ideias são organizadas e documentadas em tempo real, prontas para compartilhar
 
-**Requisitos do nome:** deve ser kebab-case (letras minúsculas, números e hífens, começando com letra).
+### Como Funciona
 
-Após a inicialização, configure suas variáveis de ambiente no `.env` e siga o Quick Start abaixo.
+1. **Crie seu projeto** - Dê um nome e descreva brevemente o que você quer explorar
+2. **Escolha a técnica** - Selecione entre 10 metodologias de brainstorming
+3. **Gere o documento** - Anna compila automaticamente um documento executivo com todas as ideias e insights
 
-## Quick Start
+## Stack Técnico
 
-```bash
-# 1. Instalar dependências
-bun install
+### Backend
+- **Hono** - Framework web ultrarrápido
+- **Drizzle ORM** - PostgreSQL
+- **Clerk** - Autenticação
+- **BullMQ** - Filas de processamento
 
-# 2. Iniciar containers (PostgreSQL + Redis)
-docker compose -f docker/docker-compose.yml up -d
+### Frontend
+- **React 19** - UI
+- **Wouter** - Routing
+- **SWR** - Data fetching
+- **shadcn/ui** - Componentes
+- **Tailwind CSS 4** - Estilização
 
-# 3. Configurar variáveis de ambiente
-cp .env.example .env
-# Edite .env com suas chaves (Clerk, Resend, etc.)
+### Infraestrutura
+- **Bun** - Runtime, package manager e bundler
+- **TypeScript** - Linguagem
+- **Biome** - Lint e formatação
+- **Redis** - Cache
 
-# 4. Rodar migrations
-bun db:migrate
-
-# 5. Iniciar desenvolvimento
-bun dev
-```
-
-A API estará em `http://localhost:3000` e o frontend em `http://localhost:5173`.
-
-## Tech Stack
-
-- **Runtime/Bundler/Package Manager**: [Bun](https://bun.sh)
-- **API**: [Hono](https://hono.dev) - Framework web ultrarrápido
-- **Frontend**: [React 19](https://react.dev) + [Wouter](https://github.com/molefrog/wouter) + [SWR](https://swr.vercel.app)
-- **Database**: [PostgreSQL](https://postgresql.org) + [Drizzle ORM](https://orm.drizzle.team)
-- **Cache/Queue**: [Redis](https://redis.io) + [BullMQ](https://bullmq.io)
-- **Auth**: [Clerk](https://clerk.com)
-- **Styling**: [Tailwind CSS 4](https://tailwindcss.com)
-- **Linting**: [Biome](https://biomejs.dev)
-
-## Estrutura
+## Estrutura do Projeto
 
 ```
-stack_vdev/
+anna/
 ├── apps/
 │   ├── api/          # Hono REST API
 │   └── web/          # React SPA
 ├── packages/
-│   ├── shared/       # Schemas, tipos, utilitários
-│   ├── db/           # Drizzle ORM + migrations
-│   ├── ui/           # Componentes React
+│   ├── db/           # Drizzle ORM + schemas
+│   ├── shared/       # Types e schemas Zod
+│   ├── ui/           # Componentes shadcn/ui
 │   ├── jobs/         # BullMQ queues/workers
-│   └── email/        # Templates de email (Resend)
+│   └── email/        # Templates de email
 ├── tooling/
 │   ├── typescript/   # Configs TypeScript
 │   └── biome/        # Config Biome
@@ -90,33 +61,58 @@ stack_vdev/
 └── docker/           # Docker Compose
 ```
 
-## Requisitos
+## Desenvolvimento
 
-- [Bun](https://bun.sh) >= 1.0
+### Pré-requisitos
+
+- [Bun](https://bun.sh/) 1.3.5+
 - [Docker](https://docker.com) (para PostgreSQL e Redis)
+- Conta no [Clerk](https://clerk.com/)
 
-## Comandos
+### Quick Start
+
+```bash
+# 1. Clone o repositório
+git clone https://github.com/masterboi/anna.git
+cd anna
+
+# 2. Instale as dependências
+bun install
+
+# 3. Inicie os containers (PostgreSQL + Redis)
+docker compose -f docker/docker-compose.yml up -d
+
+# 4. Configure as variáveis de ambiente
+cp .env.example .env
+# Edite .env com suas chaves (Clerk, Resend, etc.)
+
+# 5. Execute as migrations
+bun db:migrate
+
+# 6. Inicie o servidor de desenvolvimento
+bun dev
+```
+
+A API estará em `http://localhost:3000` e o frontend em `http://localhost:5173`.
+
+### Comandos
 
 | Comando | Descrição |
 |---------|-----------|
 | `bun dev` | Inicia API + Web em modo desenvolvimento |
-| `bun test` | Executa todos os testes |
 | `bun build` | Build de produção |
-| `bun lint` | Verifica lint com Biome |
+| `bun test` | Roda todos os testes |
+| `bun lint` | Lint + format check |
 | `bun typecheck` | Verifica tipos TypeScript |
 | `bun db:migrate` | Aplica migrations |
 | `bun db:seed` | Popula banco com dados de teste |
 | `bun db:studio` | Abre Drizzle Studio |
-| `bun verify-clerk` | Valida configuração do Clerk |
-| `bun health-check` | Verifica status dos serviços |
-
-## Configuração
 
 ### Variáveis de Ambiente
 
 ```bash
 # Database
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/stack_vdev
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/anna
 
 # Redis
 REDIS_URL=redis://localhost:6379
@@ -133,26 +129,6 @@ API_URL=http://localhost:3000
 WEB_URL=http://localhost:5173
 ```
 
-### Clerk
-
-1. Crie uma conta em [clerk.com](https://clerk.com)
-2. Crie um novo application
-3. Copie as chaves de API Keys para o `.env`
-4. Execute `bun verify-clerk` para validar
-
-## Testes
-
-```bash
-# Todos os testes
-bun test
-
-# Com coverage
-bun test --coverage
-
-# Arquivo específico
-bun test apps/api/src/middleware/auth.test.ts
-```
-
 ## Deploy
 
 O projeto está configurado para deploy via Railway com GitHub Actions:
@@ -162,4 +138,8 @@ O projeto está configurado para deploy via Railway com GitHub Actions:
 
 ## Licença
 
-MIT
+Este projeto é privado e de propriedade da Masterboi.
+
+---
+
+**Anna Digital** - Uma plataforma Masterboi
