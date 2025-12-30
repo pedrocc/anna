@@ -1,0 +1,39 @@
+{
+  "name": "@repo/web",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun --env-file=../../.env --watch src/dev-server.ts",
+    "build": "bun run build.ts",
+    "preview": "bun run dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@clerk/clerk-react": "^5.25.0",
+    "@repo/shared": "workspace:*",
+    "@repo/ui": "workspace:*",
+    "clsx": "^2.1.0",
+    "lucide-react": "^0.562.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
+    "swr": "^2.3.0",
+    "tailwind-merge": "^3.0.0",
+    "wouter": "^3.5.0"
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "workspace:*",
+    "@tailwindcss/cli": "^4.1.18",
+    "@testing-library/react": "^16.1.0",
+    "@testing-library/jest-dom": "^6.6.3",
+    "@types/bun": "latest",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "happy-dom": "^16.6.0",
+    "tailwindcss": "^4.1.0",
+    "typescript": "^5.8.0"
+  }
+}

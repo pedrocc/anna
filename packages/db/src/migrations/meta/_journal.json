@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1766443164348,
+      "tag": "0000_yielding_deathbird",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1766678727366,
+      "tag": "0001_complete_leopardon",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1767041350924,
+      "tag": "0002_wet_tag",
+      "breakpoints": true
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "name": "@repo/api",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun --watch src/index.ts",
+    "build": "bun build src/index.ts --outdir dist --target bun",
+    "start": "bun run dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "hono": "^4.7.0",
+    "@hono/zod-validator": "^0.5.0",
+    "@clerk/backend": "^1.25.0",
+    "ioredis": "^5.4.0",
+    "zod": "^4.0.0",
+    "drizzle-orm": "^0.45.0",
+    "@repo/shared": "workspace:*",
+    "@repo/db": "workspace:*"
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "workspace:*",
+    "@types/bun": "latest",
+    "typescript": "^5.8.0"
+  }
+}

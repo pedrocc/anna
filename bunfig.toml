@@ -1,0 +1,14 @@
+[install]
+# Usar lockfile
+frozen = false
+
+[install.cache]
+# Cache local
+dir = ".bun-cache"
+
+[test]
+# Preload para testes React com happy-dom
+preload = ["./test/happydom.ts", "./test/setup.ts"]
+# Coverage mínimo
+coverage = true
+coverageThreshold = { line = 80, function = 80, branch = 80 }

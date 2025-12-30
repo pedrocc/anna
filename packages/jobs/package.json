@@ -1,0 +1,26 @@
+{
+  "name": "@repo/jobs",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./queues": "./src/queues/index.ts",
+    "./workers": "./src/workers/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "worker": "bun run src/worker.ts",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "bullmq": "^5.30.0",
+    "ioredis": "^5.4.0",
+    "@repo/shared": "workspace:*",
+    "@repo/db": "workspace:*"
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "workspace:*",
+    "typescript": "^5.8.0"
+  }
+}
