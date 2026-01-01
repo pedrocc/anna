@@ -1,10 +1,8 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
-/* Cache bust: v2 */
+/* Basecamp-inspired redesign v1 - Light only */
 @source "../../../../packages/ui/src/**/*.tsx";
-
-@custom-variant dark (&:is(.dark *));
 
 :root {
 	/* Layout dimensions */
@@ -12,72 +10,71 @@
 	--sidebar-width: 16rem;
 	--sidebar-width-icon: 3.5rem;
 
-	--radius: 0.625rem;
-	--background: oklch(1 0 0);
-	--foreground: oklch(0.13 0.028 261.692);
-	--card: oklch(1 0 0);
-	--card-foreground: oklch(0.13 0.028 261.692);
-	--popover: oklch(1 0 0);
-	--popover-foreground: oklch(0.13 0.028 261.692);
-	--primary: oklch(0.21 0.034 264.665);
-	--primary-foreground: oklch(0.985 0.002 247.839);
-	--secondary: oklch(0.967 0.003 264.542);
-	--secondary-foreground: oklch(0.21 0.034 264.665);
-	--muted: oklch(0.967 0.003 264.542);
-	--muted-foreground: oklch(0.551 0.027 264.364);
-	--accent: oklch(0.967 0.003 264.542);
-	--accent-foreground: oklch(0.21 0.034 264.665);
-	--destructive: oklch(0.577 0.245 27.325);
-	--border: oklch(0.928 0.006 264.531);
-	--input: oklch(0.928 0.006 264.531);
-	--ring: oklch(0.707 0.022 261.325);
-	--chart-1: oklch(0.646 0.222 41.116);
-	--chart-2: oklch(0.6 0.118 184.704);
-	--chart-3: oklch(0.398 0.07 227.392);
-	--chart-4: oklch(0.828 0.189 84.429);
-	--chart-5: oklch(0.769 0.188 70.08);
-	--sidebar: oklch(0.985 0.002 247.839);
-	--sidebar-foreground: oklch(0.13 0.028 261.692);
-	--sidebar-primary: oklch(0.21 0.034 264.665);
-	--sidebar-primary-foreground: oklch(0.985 0.002 247.839);
-	--sidebar-accent: oklch(0.967 0.003 264.542);
-	--sidebar-accent-foreground: oklch(0.21 0.034 264.665);
-	--sidebar-border: oklch(0.928 0.006 264.531);
-	--sidebar-ring: oklch(0.707 0.022 261.325);
-}
+	/* Border radius - slightly reduced for calmer feel */
+	--radius: 0.5rem;
 
-.dark {
-	--background: oklch(0.13 0.028 261.692);
-	--foreground: oklch(0.985 0.002 247.839);
-	--card: oklch(0.21 0.034 264.665);
-	--card-foreground: oklch(0.985 0.002 247.839);
-	--popover: oklch(0.21 0.034 264.665);
-	--popover-foreground: oklch(0.985 0.002 247.839);
-	--primary: oklch(0.928 0.006 264.531);
-	--primary-foreground: oklch(0.21 0.034 264.665);
-	--secondary: oklch(0.278 0.033 256.848);
-	--secondary-foreground: oklch(0.985 0.002 247.839);
-	--muted: oklch(0.278 0.033 256.848);
-	--muted-foreground: oklch(0.707 0.022 261.325);
-	--accent: oklch(0.278 0.033 256.848);
-	--accent-foreground: oklch(0.985 0.002 247.839);
-	--destructive: oklch(0.704 0.191 22.216);
-	--border: oklch(1 0 0 / 15%);
-	--input: oklch(1 0 0 / 15%);
-	--ring: oklch(0.551 0.027 264.364);
-	--chart-1: oklch(0.488 0.243 264.376);
-	--chart-2: oklch(0.696 0.17 162.48);
-	--chart-3: oklch(0.769 0.188 70.08);
-	--chart-4: oklch(0.627 0.265 303.9);
-	--chart-5: oklch(0.645 0.246 16.439);
-	--sidebar: oklch(0.21 0.034 264.665);
-	--sidebar-foreground: oklch(0.985 0.002 247.839);
-	--sidebar-primary: oklch(0.488 0.243 264.376);
-	--sidebar-primary-foreground: oklch(0.985 0.002 247.839);
-	--sidebar-accent: oklch(0.278 0.033 256.848);
-	--sidebar-accent-foreground: oklch(0.985 0.002 247.839);
-	--sidebar-border: oklch(1 0 0 / 10%);
-	--sidebar-ring: oklch(0.551 0.027 264.364);
+	/* ==========================================================================
+	   BASECAMP COLOR PALETTE - Light Only
+	   Calm, minimal, typography-driven
+	   ========================================================================== */
+
+	/* Backgrounds */
+	--background: #ffffff;
+	--foreground: #1d1d1d;
+
+	/* Card surfaces */
+	--card: #ffffff;
+	--card-foreground: #1d1d1d;
+
+	/* Popover/Dropdown surfaces */
+	--popover: #ffffff;
+	--popover-foreground: #1d1d1d;
+
+	/* Primary - Calm blue */
+	--primary: #1d6ce0;
+	--primary-foreground: #ffffff;
+
+	/* Secondary - Light gray */
+	--secondary: #f4f4f5;
+	--secondary-foreground: #3f3f46;
+
+	/* Muted - For subtle text and backgrounds */
+	--muted: #f4f4f5;
+	--muted-foreground: #71717a;
+
+	/* Accent - Same as secondary */
+	--accent: #f4f4f5;
+	--accent-foreground: #3f3f46;
+
+	/* Destructive - Muted red */
+	--destructive: #dc2626;
+
+	/* Borders and inputs */
+	--border: #e4e4e7;
+	--input: #e4e4e7;
+	--ring: #1d6ce0;
+
+	/* Chart colors - Muted, harmonious */
+	--chart-1: #1d6ce0;
+	--chart-2: #059669;
+	--chart-3: #7c3aed;
+	--chart-4: #ea580c;
+	--chart-5: #0891b2;
+
+	/* Sidebar */
+	--sidebar: #fafafa;
+	--sidebar-foreground: #1d1d1d;
+	--sidebar-primary: #1d6ce0;
+	--sidebar-primary-foreground: #ffffff;
+	--sidebar-accent: #f4f4f5;
+	--sidebar-accent-foreground: #3f3f46;
+	--sidebar-border: #e4e4e7;
+	--sidebar-ring: #1d6ce0;
+
+	/* Status colors */
+	--success: #059669;
+	--warning: #d97706;
+	--info: #0891b2;
 }
 
 @theme inline {
@@ -327,22 +324,14 @@ button.rounded-full:focus-visible {
 	background-color: rgb(0 0 0 / 0.5);
 }
 
-/* Button hover ring effect - Light mode */
+/* Button hover - subtle brightness change (Basecamp style) */
 [data-slot="button"]:hover {
-	box-shadow: 0 0 0 4px rgba(0, 0, 0, 0.15);
+	filter: brightness(0.95);
 }
 
 [data-slot="button"]:focus-visible {
-	box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.25);
-}
-
-/* Button hover ring effect - Dark mode */
-.dark [data-slot="button"]:hover {
-	box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.35);
-}
-
-.dark [data-slot="button"]:focus-visible {
-	box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.5);
+	outline: 2px solid var(--ring);
+	outline-offset: 2px;
 }
 
 /* Link hover underline effect */
@@ -371,29 +360,9 @@ a[data-slot="button"]:hover {
 	box-shadow: none;
 }
 
-/* Animated gradient for hero background */
-@keyframes gradient-shift {
-	0% {
-		background-position: 0% 50%;
-	}
-	50% {
-		background-position: 100% 50%;
-	}
-	100% {
-		background-position: 0% 50%;
-	}
-}
-
-.hero-gradient {
-	background: linear-gradient(
-		-45deg,
-		var(--background),
-		color-mix(in oklch, var(--primary) 35%, var(--background)),
-		var(--background),
-		color-mix(in oklch, var(--primary) 50%, var(--background))
-	);
-	background-size: 400% 400%;
-	animation: gradient-shift 15s ease infinite;
+/* Hero section - clean, calm background (Basecamp style) */
+.hero-section {
+	background: var(--background);
 }
 
 /* Welcome page animations */
@@ -435,70 +404,723 @@ a[data-slot="button"]:hover {
 	animation-fill-mode: both;
 }
 
-/* Landing page aurora animation */
-@keyframes aurora {
-	0%,
-	100% {
-		opacity: 0.3;
-		transform: translateY(0) rotate(0deg);
+/* ==========================================================================
+   Basecamp Card Utilities
+   Clean, flat, subtle borders
+   ========================================================================== */
+
+.basecamp-card {
+	background: var(--card);
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	transition: border-color 150ms ease;
+}
+
+.basecamp-card:hover {
+	border-color: #d4d4d8;
+}
+
+/* Staggered animation delays for sequential reveal */
+.animate-stagger-1 {
+	animation-delay: 50ms;
+}
+.animate-stagger-2 {
+	animation-delay: 100ms;
+}
+.animate-stagger-3 {
+	animation-delay: 150ms;
+}
+.animate-stagger-4 {
+	animation-delay: 200ms;
+}
+.animate-stagger-5 {
+	animation-delay: 250ms;
+}
+.animate-stagger-6 {
+	animation-delay: 300ms;
+}
+
+/* Utility for applying fade-in-up with stagger */
+.stagger-fade-in {
+	opacity: 0;
+	animation: fade-in-up 0.5s ease-out forwards;
+}
+
+/* ==========================================================================
+   Kanban Board Animations
+   ========================================================================== */
+
+/* Card enter animation - fade up with scale */
+@keyframes card-enter {
+	from {
+		opacity: 0;
+		transform: translateY(12px) scale(0.95);
 	}
-	50% {
-		opacity: 0.6;
-		transform: translateY(-20px) rotate(2deg);
+	to {
+		opacity: 1;
+		transform: translateY(0) scale(1);
 	}
 }
 
-@keyframes aurora-2 {
-	0%,
-	100% {
-		opacity: 0.2;
-		transform: translateX(0) rotate(0deg);
+.animate-card-enter {
+	animation: card-enter 0.35s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+	opacity: 0;
+}
+
+/* Card exit animation */
+@keyframes card-exit {
+	from {
+		opacity: 1;
+		transform: translateY(0) scale(1);
 	}
-	50% {
-		opacity: 0.5;
-		transform: translateX(30px) rotate(-2deg);
+	to {
+		opacity: 0;
+		transform: translateY(-8px) scale(0.95);
 	}
 }
 
-.landing-gradient-bg {
-	position: absolute;
-	inset: 0;
-	pointer-events: none;
+.animate-card-exit {
+	animation: card-exit 0.25s ease-out forwards;
+}
+
+/* Drop zone pulse animation */
+@keyframes drop-pulse {
+	0%,
+	100% {
+		box-shadow: 0 0 0 0 rgba(var(--primary), 0);
+	}
+	50% {
+		box-shadow: 0 0 20px 4px rgba(var(--primary), 0.15);
+	}
+}
+
+.animate-drop-pulse {
+	animation: drop-pulse 1.5s ease-in-out infinite;
+}
+
+/* Bounce settle after drop */
+@keyframes bounce-settle {
+	0% {
+		transform: scale(1.05);
+	}
+	40% {
+		transform: scale(0.97);
+	}
+	70% {
+		transform: scale(1.02);
+	}
+	100% {
+		transform: scale(1);
+	}
+}
+
+.animate-bounce-settle {
+	animation: bounce-settle 0.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+/* Slow spin for decorative elements */
+@keyframes spin-slow {
+	from {
+		transform: rotate(0deg);
+	}
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+.animate-spin-slow {
+	animation: spin-slow 20s linear infinite;
+}
+
+/* Kanban card specific transitions */
+.kanban-card {
+	transform-origin: center center;
+	will-change: transform, box-shadow;
+}
+
+/* Custom scrollbar for kanban columns */
+.scrollbar-thin {
+	scrollbar-width: thin;
+	scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+	width: 6px;
+	height: 6px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+	background: transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+	background-color: rgba(255, 255, 255, 0.1);
+	border-radius: 3px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+	background-color: rgba(255, 255, 255, 0.2);
+}
+
+/* ==========================================================================
+   Apple Design System - Kanban Board
+   Ultra minimalist, Apple.com inspired design
+   ========================================================================== */
+
+:root {
+	/* Apple Backgrounds */
+	--apple-bg: #ffffff;
+	--apple-bg-subtle: #fafafa;
+	--apple-bg-hover: #f5f5f7;
+	--apple-bg-active: #e8e8ed;
+
+	/* Apple Text */
+	--apple-text-primary: #1d1d1f;
+	--apple-text-secondary: #86868b;
+	--apple-text-tertiary: #a1a1a6;
+
+	/* Apple Borders */
+	--apple-border: #d2d2d7;
+	--apple-border-subtle: #e8e8ed;
+
+	/* Apple Priority Colors */
+	--apple-priority-critical: #ff3b30;
+	--apple-priority-high: #ff9500;
+	--apple-priority-medium: #ffcc00;
+	--apple-priority-low: #8e8e93;
+
+	/* Apple Status Colors */
+	--apple-status-backlog: #86868b;
+	--apple-status-todo: #007aff;
+	--apple-status-progress: #ff9500;
+	--apple-status-review: #af52de;
+	--apple-status-done: #34c759;
+}
+
+/* Apple Board Container */
+.apple-board {
+	background: var(--apple-bg);
+	min-height: 100%;
+	padding: 24px 32px;
+}
+
+/* Apple Swimlane */
+.apple-swimlane {
+	background: var(--apple-bg);
+	border-radius: 16px;
+	border: 1px solid var(--apple-border-subtle);
+	margin-bottom: 24px;
 	overflow: hidden;
 }
 
-.landing-gradient-bg::before {
-	content: "";
-	position: absolute;
-	top: -50%;
-	left: -50%;
-	width: 200%;
-	height: 200%;
-	background: conic-gradient(
-		from 0deg at 50% 50%,
-		transparent 0deg,
-		rgba(99, 102, 241, 0.15) 60deg,
-		transparent 120deg,
-		rgba(139, 92, 246, 0.1) 180deg,
-		transparent 240deg,
-		rgba(59, 130, 246, 0.12) 300deg,
-		transparent 360deg
-	);
-	animation: aurora 20s ease-in-out infinite;
+.apple-swimlane-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 16px 24px;
+	cursor: pointer;
+	transition: background-color 150ms ease;
+	user-select: none;
 }
 
-.landing-gradient-bg::after {
+.apple-swimlane-header:hover {
+	background: var(--apple-bg-hover);
+}
+
+.apple-swimlane-content {
+	overflow: hidden;
+	transition: all 400ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.apple-swimlane-collapsed {
+	max-height: 0;
+	opacity: 0;
+}
+
+.apple-swimlane-expanded {
+	max-height: 2000px;
+	opacity: 1;
+}
+
+/* Apple Column */
+.apple-column {
+	flex-shrink: 0;
+	width: 280px;
+	min-height: 120px;
+	display: flex;
+	flex-direction: column;
+}
+
+.apple-column-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 8px 12px;
+	border-bottom: 1px solid var(--apple-border-subtle);
+}
+
+.apple-column-title {
+	font-size: 12px;
+	font-weight: 600;
+	color: var(--apple-text-secondary);
+	text-transform: uppercase;
+	letter-spacing: 0.02em;
+}
+
+.apple-column-count {
+	font-size: 11px;
+	font-weight: 500;
+	color: var(--apple-text-tertiary);
+	background: var(--apple-bg-hover);
+	padding: 2px 8px;
+	border-radius: 10px;
+}
+
+.apple-column-body {
+	flex: 1;
+	padding: 12px;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+/* Apple Column Drop State */
+.apple-column-over {
+	background: rgba(0, 122, 255, 0.06);
+}
+
+.apple-column-over .apple-column-body::after {
 	content: "";
-	position: absolute;
-	top: 0;
-	left: 0;
-	right: 0;
-	height: 60%;
-	background: radial-gradient(
-		ellipse 100% 70% at 50% 0%,
-		rgba(99, 102, 241, 0.2) 0%,
-		rgba(139, 92, 246, 0.1) 30%,
-		transparent 70%
-	);
-	animation: aurora-2 15s ease-in-out infinite;
+	display: block;
+	height: 2px;
+	background: var(--apple-status-todo);
+	border-radius: 1px;
+	margin-top: 8px;
+	animation: apple-pulse 1.5s ease-in-out infinite;
+}
+
+/* Apple Card */
+.apple-card {
+	background: var(--apple-bg);
+	border-radius: 12px;
+	padding: 16px;
+	cursor: pointer;
+	border: 1px solid var(--apple-border-subtle);
+	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+	transition: all 200ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.apple-card:hover {
+	transform: translateY(-2px);
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+	border-color: var(--apple-border);
+}
+
+.apple-card-dragging {
+	opacity: 0.5;
+	transform: rotate(2deg) scale(1.02);
+	box-shadow: 0 16px 32px rgba(0, 0, 0, 0.12);
+}
+
+/* Apple Card Content */
+.apple-card-header {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-bottom: 8px;
+}
+
+.apple-card-title {
+	font-size: 14px;
+	font-weight: 600;
+	color: var(--apple-text-primary);
+	line-height: 1.4;
+	display: -webkit-box;
+	-webkit-line-clamp: 2;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+	margin-bottom: 12px;
+}
+
+.apple-card-meta {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+}
+
+.apple-card-key {
+	font-family: "SF Mono", ui-monospace, monospace;
+	font-size: 11px;
+	font-weight: 500;
+	color: var(--apple-text-tertiary);
+}
+
+.apple-card-points {
+	display: inline-flex;
+	align-items: center;
+	padding: 2px 8px;
+	border-radius: 6px;
+	background: var(--apple-bg-hover);
+	font-size: 11px;
+	font-weight: 600;
+	color: var(--apple-text-secondary);
+}
+
+.apple-card-sprint {
+	font-size: 11px;
+	color: var(--apple-text-tertiary);
+}
+
+/* Apple Priority Dots */
+.apple-priority-dot {
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	flex-shrink: 0;
+}
+
+.apple-priority-critical {
+	background: var(--apple-priority-critical);
+}
+
+.apple-priority-high {
+	background: var(--apple-priority-high);
+}
+
+.apple-priority-medium {
+	background: var(--apple-priority-medium);
+}
+
+.apple-priority-low {
+	background: var(--apple-priority-low);
+}
+
+/* Apple Drag Overlay (Frosted Glass) */
+.apple-drag-overlay {
+	border-radius: 12px;
+	padding: 16px;
+	background: rgba(255, 255, 255, 0.92);
+	backdrop-filter: blur(20px);
+	-webkit-backdrop-filter: blur(20px);
+	border: 1px solid rgba(255, 255, 255, 0.5);
+	box-shadow:
+		0 16px 32px rgba(0, 0, 0, 0.12),
+		0 0 0 1px rgba(0, 0, 0, 0.04);
+	transform: rotate(2deg) scale(1.02);
+}
+
+/* Apple Filter Pills */
+.apple-filter-bar {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+}
+
+.apple-filter-pill {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 8px 16px;
+	border-radius: 100px;
+	background: var(--apple-bg-hover);
+	color: var(--apple-text-primary);
+	font-size: 13px;
+	font-weight: 500;
+	cursor: pointer;
+	transition: all 150ms ease;
+	border: none;
+	user-select: none;
+}
+
+.apple-filter-pill:hover {
+	background: var(--apple-bg-active);
+}
+
+.apple-filter-pill-active {
+	background: var(--apple-text-primary);
+	color: var(--apple-bg);
+}
+
+.apple-filter-pill-active:hover {
+	background: var(--apple-text-secondary);
+}
+
+.apple-filter-clear {
+	font-size: 13px;
+	font-weight: 500;
+	color: var(--apple-status-todo);
+	cursor: pointer;
+	padding: 8px 12px;
+	border-radius: 8px;
+	transition: background 150ms ease;
+}
+
+.apple-filter-clear:hover {
+	background: rgba(0, 122, 255, 0.08);
+	text-decoration: none;
+}
+
+/* Apple Header */
+.apple-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 16px 32px;
+	background: var(--apple-bg);
+	border-bottom: 1px solid var(--apple-border-subtle);
+}
+
+.apple-header-title {
+	font-size: 28px;
+	font-weight: 700;
+	color: var(--apple-text-primary);
+	letter-spacing: -0.02em;
+}
+
+.apple-header-subtitle {
+	font-size: 14px;
+	color: var(--apple-text-secondary);
+	margin-top: 2px;
+}
+
+.apple-header-actions {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+}
+
+/* Apple Icon Button */
+.apple-icon-btn {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 36px;
+	height: 36px;
+	border-radius: 8px;
+	background: transparent;
+	color: var(--apple-text-secondary);
+	cursor: pointer;
+	transition: all 150ms ease;
+	border: none;
+}
+
+.apple-icon-btn:hover {
+	background: var(--apple-bg-hover);
+	color: var(--apple-text-primary);
+}
+
+/* Apple Back Button */
+.apple-back-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 8px 12px;
+	border-radius: 8px;
+	font-size: 14px;
+	font-weight: 500;
+	color: var(--apple-text-secondary);
+	cursor: pointer;
+	transition: all 150ms ease;
+	background: transparent;
+	border: none;
+}
+
+.apple-back-btn:hover {
+	background: var(--apple-bg-hover);
+	color: var(--apple-text-primary);
+	text-decoration: none;
+}
+
+/* Apple Badge */
+.apple-badge {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	padding: 4px 10px;
+	border-radius: 6px;
+	font-size: 12px;
+	font-weight: 600;
+	background: var(--apple-bg-hover);
+	color: var(--apple-text-secondary);
+}
+
+.apple-badge-primary {
+	background: var(--apple-text-primary);
+	color: var(--apple-bg);
+}
+
+/* Apple Epic Badge */
+.apple-epic-badge {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 28px;
+	height: 28px;
+	border-radius: 8px;
+	background: var(--apple-bg-hover);
+	font-size: 12px;
+	font-weight: 700;
+	color: var(--apple-text-primary);
+}
+
+/* Apple Empty State */
+.apple-empty-state {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	padding: 48px 24px;
+	text-align: center;
+}
+
+.apple-empty-icon {
+	width: 48px;
+	height: 48px;
+	border-radius: 12px;
+	background: var(--apple-bg-hover);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	margin-bottom: 16px;
+	color: var(--apple-text-tertiary);
+}
+
+.apple-empty-title {
+	font-size: 17px;
+	font-weight: 600;
+	color: var(--apple-text-primary);
+	margin-bottom: 4px;
+}
+
+.apple-empty-description {
+	font-size: 14px;
+	color: var(--apple-text-secondary);
+}
+
+/* Apple Animations */
+@keyframes apple-fade-in {
+	from {
+		opacity: 0;
+		transform: translateY(8px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+@keyframes apple-scale-in {
+	from {
+		opacity: 0;
+		transform: scale(0.96);
+	}
+	to {
+		opacity: 1;
+		transform: scale(1);
+	}
+}
+
+@keyframes apple-pulse {
+	0%,
+	100% {
+		opacity: 0.6;
+	}
+	50% {
+		opacity: 1;
+	}
+}
+
+.animate-apple-fade-in {
+	animation: apple-fade-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+	opacity: 0;
+}
+
+.animate-apple-scale-in {
+	animation: apple-scale-in 0.3s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+	opacity: 0;
+}
+
+/* Apple Stagger Animation Delays */
+.apple-stagger-1 {
+	animation-delay: 50ms;
+}
+.apple-stagger-2 {
+	animation-delay: 100ms;
+}
+.apple-stagger-3 {
+	animation-delay: 150ms;
+}
+.apple-stagger-4 {
+	animation-delay: 200ms;
+}
+.apple-stagger-5 {
+	animation-delay: 250ms;
+}
+.apple-stagger-6 {
+	animation-delay: 300ms;
+}
+.apple-stagger-7 {
+	animation-delay: 350ms;
+}
+.apple-stagger-8 {
+	animation-delay: 400ms;
+}
+
+/* Apple Scrollbar */
+.apple-scrollbar {
+	scrollbar-width: thin;
+	scrollbar-color: var(--apple-border) transparent;
+}
+
+.apple-scrollbar::-webkit-scrollbar {
+	width: 8px;
+	height: 8px;
+}
+
+.apple-scrollbar::-webkit-scrollbar-track {
+	background: transparent;
+}
+
+.apple-scrollbar::-webkit-scrollbar-thumb {
+	background: var(--apple-border);
+	border-radius: 4px;
+}
+
+.apple-scrollbar::-webkit-scrollbar-thumb:hover {
+	background: var(--apple-text-tertiary);
+}
+
+/* Apple Text Utilities */
+.apple-text-primary {
+	color: var(--apple-text-primary);
+}
+
+.apple-text-secondary {
+	color: var(--apple-text-secondary);
+}
+
+.apple-text-tertiary {
+	color: var(--apple-text-tertiary);
+}
+
+/* Apple Status Colors */
+.apple-status-backlog {
+	color: var(--apple-status-backlog);
+}
+
+.apple-status-todo {
+	color: var(--apple-status-todo);
+}
+
+.apple-status-progress {
+	color: var(--apple-status-progress);
+}
+
+.apple-status-review {
+	color: var(--apple-status-review);
+}
+
+.apple-status-done {
+	color: var(--apple-status-done);
 }

@@ -7,9 +7,12 @@ import { timing } from 'hono/timing'
 
 import { errorHandler } from './middleware/error-handler.js'
 import { rateLimiter } from './middleware/rate-limiter.js'
-import { brainstormRoutes } from './routes/brainstorm.js'
+import { briefingRoutes } from './routes/briefing.js'
 import { chatRoutes } from './routes/chat.js'
 import { healthRoutes } from './routes/health.js'
+import { kanbanRoutes } from './routes/kanban.js'
+import { prdRoutes } from './routes/prd.js'
+import { smRoutes } from './routes/sm.js'
 import { userRoutes } from './routes/users.js'
 
 const app = new Hono()
@@ -41,7 +44,10 @@ app.onError(errorHandler)
 app.route('/health', healthRoutes)
 app.route('/api/v1/users', userRoutes)
 app.route('/api/v1/chat', chatRoutes)
-app.route('/api/v1/brainstorm', brainstormRoutes)
+app.route('/api/v1/briefing', briefingRoutes)
+app.route('/api/v1/prd', prdRoutes)
+app.route('/api/v1/sm', smRoutes)
+app.route('/api/v1/kanban', kanbanRoutes)
 
 // 404 handler
 app.notFound((c) => {
@@ -53,4 +59,5 @@ const port = Number(process.env['PORT']) || 3000
 export default {
 	port,
 	fetch: app.fetch,
+	development: true,
 }

@@ -20,10 +20,18 @@ import {
 	SidebarTrigger,
 	useSidebar,
 } from '@repo/ui'
-import { ClipboardList, FileText, FolderKanban, Home, Kanban, Lightbulb, LogOut, Settings, User } from 'lucide-react'
+import {
+	ClipboardList,
+	FileText,
+	FolderKanban,
+	Home,
+	Kanban,
+	LayoutDashboard,
+	LogOut,
+	User,
+} from 'lucide-react'
 import type { ComponentType } from 'react'
 import { Link, useLocation } from 'wouter'
-import { ModeToggle } from './ModeToggle'
 
 interface MenuItem {
 	readonly title: string
@@ -31,14 +39,14 @@ interface MenuItem {
 	readonly icon: ComponentType<{ className?: string }>
 }
 
+// Basecamp-inspired navigation labels (question-driven)
 const menuItems: MenuItem[] = [
-	{ title: 'Home', href: '/', icon: Home },
-	{ title: 'Brainstorm', href: '/brainstorm', icon: Lightbulb },
-	{ title: 'Briefing', href: '/briefing', icon: FileText },
-	{ title: 'PM', href: '/pm', icon: FolderKanban },
-	{ title: 'Requisitos', href: '/requisitos', icon: ClipboardList },
-	{ title: 'Kanban', href: '/kanban', icon: Kanban },
-	{ title: 'Settings', href: '/settings', icon: Settings },
+	{ title: 'Onde comecar?', href: '/inicio', icon: Home },
+	{ title: 'Visao geral', href: '/dashboard', icon: LayoutDashboard },
+	{ title: 'Definir escopo', href: '/briefing', icon: FileText },
+	{ title: 'Requisitos do produto', href: '/pm', icon: FolderKanban },
+	{ title: 'Planejar entregas', href: '/requisitos', icon: ClipboardList },
+	{ title: 'Acompanhar tarefas', href: '/kanban', icon: Kanban },
 ]
 
 function SidebarLogo() {
@@ -79,8 +87,8 @@ export function AppSidebar() {
 	const { user } = useUser()
 
 	const isActive = (href: string) => {
-		if (href === '/') {
-			return location === '/'
+		if (href === '/dashboard') {
+			return location === '/dashboard'
 		}
 		return location.startsWith(href)
 	}
@@ -112,7 +120,7 @@ export function AppSidebar() {
 													<span>{item.title}</span>
 												</Link>
 											</SidebarMenuButton>
-											<SidebarTrigger className="sidebar-trigger text-muted-foreground" />
+											<SidebarTrigger className="sidebar-trigger text-muted-foreground group-data-[collapsible=icon]:hidden" />
 										</div>
 									) : (
 										<SidebarMenuButton asChild tooltip={item.title} isActive={isActive(item.href)}>
@@ -130,52 +138,41 @@ export function AppSidebar() {
 			</SidebarContent>
 
 			<SidebarFooter className="p-2">
-				<div className="flex items-center justify-between gap-2">
-					<DropdownMenu>
-						<DropdownMenuTrigger asChild>
-							<button
-								type="button"
-								className="flex items-center gap-2 rounded-md p-1.5 hover:bg-sidebar-accent"
-							>
-								<Avatar className="size-7">
-									<AvatarImage src={user?.imageUrl} alt={user?.fullName ?? 'Usuario'} />
-									<AvatarFallback>
-										<User className="size-3.5" />
-									</AvatarFallback>
-								</Avatar>
-								<span className="truncate text-sm group-data-[collapsible=icon]:hidden">
-									{user?.firstName ?? 'Usuario'}
-								</span>
-							</button>
-						</DropdownMenuTrigger>
-						<DropdownMenuContent side="top" align="start" className="w-56">
-							<DropdownMenuLabel className="font-normal">
-								<div className="flex flex-col space-y-1">
-									<p className="text-sm font-medium leading-none">{user?.fullName}</p>
-									<p className="text-xs leading-none text-muted-foreground">
-										{user?.primaryEmailAddress?.emailAddress}
-									</p>
-								</div>
-							</DropdownMenuLabel>
-							<DropdownMenuSeparator />
-							<DropdownMenuItem asChild>
-								<Link href="/settings">
-									<Settings className="mr-2 size-4" />
-									<span>Configurações</span>
-								</Link>
+				<DropdownMenu>
+					<DropdownMenuTrigger asChild>
+						<button
+							type="button"
+							className="flex w-full items-center gap-2 rounded-md p-1.5 hover:bg-sidebar-accent"
+						>
+							<Avatar className="size-7">
+								<AvatarImage src={user?.imageUrl} alt={user?.fullName ?? 'Usuario'} />
+								<AvatarFallback>
+									<User className="size-3.5" />
+								</AvatarFallback>
+							</Avatar>
+							<span className="truncate text-sm group-data-[collapsible=icon]:hidden">
+								{user?.firstName ?? 'Usuario'}
+							</span>
+						</button>
+					</DropdownMenuTrigger>
+					<DropdownMenuContent side="top" align="start" className="w-56">
+						<DropdownMenuLabel className="font-normal">
+							<div className="flex flex-col space-y-1">
+								<p className="text-sm font-medium leading-none">{user?.fullName}</p>
+								<p className="text-xs leading-none text-muted-foreground">
+									{user?.primaryEmailAddress?.emailAddress}
+								</p>
+							</div>
+						</DropdownMenuLabel>
+						<DropdownMenuSeparator />
+						<SignOutButton>
+							<DropdownMenuItem className="cursor-pointer text-destructive focus:text-destructive">
+								<LogOut className="mr-2 size-4" />
+								<span>Sair</span>
 							</DropdownMenuItem>
-							<DropdownMenuSeparator />
-							<SignOutButton>
-								<DropdownMenuItem className="cursor-pointer text-destructive focus:text-destructive">
-									<LogOut className="mr-2 size-4" />
-									<span>Sair</span>
-								</DropdownMenuItem>
-							</SignOutButton>
-						</DropdownMenuContent>
-					</DropdownMenu>
-
-					<ModeToggle />
-				</div>
+						</SignOutButton>
+					</DropdownMenuContent>
+				</DropdownMenu>
 			</SidebarFooter>
 		</Sidebar>
 	)

@@ -59,6 +59,33 @@ userRoutes.post('/', zValidator('json', CreateUserSchema), async (c) => {
 	return successResponse(c, newUser, 201)
 })
 
+// Sync user name from Clerk (called from frontend)
+userRoutes.patch(
+	'/me/sync',
+	authMiddleware,
+	zValidator('json', UpdateUserSchema.pick({ name: true })),
+	async (c) => {
+		const { userId } = getAuth(c)
+		const { name } = c.req.valid('json')
+
+		if (!name) {
+			return commonErrors.badRequest(c, 'Name is required')
+		}
+
+		const [updatedUser] = await db
+			.update(users)
+			.set({ name, updatedAt: new Date() })
+			.where(eq(users.clerkId, userId))
+			.returning()
+
+		if (!updatedUser) {
+			return commonErrors.notFound(c, 'User not found')
+		}
+
+		return successResponse(c, updatedUser)
+	}
+)
+
 // Update user
 userRoutes.patch('/:id', authMiddleware, zValidator('json', UpdateUserSchema), async (c) => {
 	const { userId } = getAuth(c)

@@ -1,6 +1,6 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { spawn, spawnSync } from 'bun'
-import { resolve } from 'path'
-import { readFileSync } from 'fs'
 
 // Load root .env file
 const envPath = resolve(import.meta.dir, '../.env')

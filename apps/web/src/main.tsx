@@ -5,7 +5,6 @@ import { createRoot } from 'react-dom/client'
 import { SWRConfig } from 'swr'
 import { App } from './App.js'
 import { ErrorBoundary } from './components/ErrorBoundary.js'
-import { ThemeProvider } from './components/ThemeProvider.js'
 import { fetcher } from './lib/api.js'
 import './styles/globals.css'
 
@@ -33,8 +32,8 @@ function AppWithProviders() {
 				localization={ptBR}
 				signInUrl="/sign-in"
 				signUpUrl="/sign-up"
-				afterSignInUrl="/brainstorm"
-				afterSignUpUrl="/brainstorm"
+				signInFallbackRedirectUrl="/inicio"
+				signUpFallbackRedirectUrl="/inicio"
 				afterSignOutUrl="/"
 			>
 				{content}
@@ -48,9 +47,7 @@ function AppWithProviders() {
 createRoot(rootElement).render(
 	<StrictMode>
 		<ErrorBoundary>
-			<ThemeProvider defaultTheme="light" storageKey="stack-vdev-theme">
-				<AppWithProviders />
-			</ThemeProvider>
+			<AppWithProviders />
 		</ErrorBoundary>
 	</StrictMode>
 )

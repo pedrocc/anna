@@ -4,14 +4,14 @@ import { useCallback, useState } from 'react'
 declare const __API_URL__: string | undefined
 const API_URL = __API_URL__ ?? 'http://localhost:3000'
 
-interface UseBrainstormChatOptions {
+interface UseBriefingChatOptions {
 	sessionId: string
 	onMessageComplete?: (content: string) => void
 	onError?: (error: Error) => void
 }
 
-interface UseBrainstormChatReturn {
-	sendMessage: (message: string) => Promise<void>
+interface UseBriefingChatReturn {
+	sendMessage: (message: string, action?: string) => Promise<void>
 	isStreaming: boolean
 	streamingContent: string
 	pendingUserMessage: string | null
@@ -19,11 +19,11 @@ interface UseBrainstormChatReturn {
 	clearError: () => void
 }
 
-export function useBrainstormChat({
+export function useBriefingChat({
 	sessionId,
 	onMessageComplete,
 	onError,
-}: UseBrainstormChatOptions): UseBrainstormChatReturn {
+}: UseBriefingChatOptions): UseBriefingChatReturn {
 	const { getToken } = useAuth()
 	const [isStreaming, setIsStreaming] = useState(false)
 	const [streamingContent, setStreamingContent] = useState('')
@@ -35,7 +35,7 @@ export function useBrainstormChat({
 	}, [])
 
 	const sendMessage = useCallback(
-		async (message: string) => {
+		async (message: string, action?: string) => {
 			setIsStreaming(true)
 			setStreamingContent('')
 			setPendingUserMessage(message)
@@ -44,7 +44,7 @@ export function useBrainstormChat({
 			try {
 				const token = await getToken()
 
-				const response = await fetch(`${API_URL}/api/v1/brainstorm/chat`, {
+				const response = await fetch(`${API_URL}/api/v1/briefing/chat`, {
 					method: 'POST',
 					headers: {
 						'Content-Type': 'application/json',
@@ -53,6 +53,7 @@ export function useBrainstormChat({
 					body: JSON.stringify({
 						sessionId,
 						message,
+						action,
 					}),
 				})
 
@@ -132,7 +133,7 @@ export function useBrainstormChat({
 }
 
 // Hook for generating document
-export function useBrainstormDocument(sessionId: string) {
+export function useBriefingDocument(sessionId: string) {
 	const { getToken } = useAuth()
 	const [isGenerating, setIsGenerating] = useState(false)
 	const [streamingContent, setStreamingContent] = useState('')
@@ -146,11 +147,13 @@ export function useBrainstormDocument(sessionId: string) {
 		try {
 			const token = await getToken()
 
-			const response = await fetch(`${API_URL}/api/v1/brainstorm/sessions/${sessionId}/document`, {
+			const response = await fetch(`${API_URL}/api/v1/briefing/sessions/${sessionId}/document`, {
 				method: 'POST',
 				headers: {
+					'Content-Type': 'application/json',
 					Authorization: `Bearer ${token}`,
 				},
+				body: JSON.stringify({}),
 			})
 
 			if (!response.ok) {

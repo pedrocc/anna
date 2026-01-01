@@ -9,8 +9,40 @@ export interface ChatMessageProps {
 	isStreaming?: boolean
 }
 
+// Clean up content: remove code fences and fix formatting issues
+function cleanMarkdownContent(text: string): string {
+	let cleanContent = text.trim()
+
+	// Remove ALL markdown code fences (```markdown, ```md, ```) anywhere in the content
+	// This handles cases where the model wraps parts of the response in code fences
+	cleanContent = cleanContent.replace(/```(?:markdown|md)?\s*\n/gi, '')
+	cleanContent = cleanContent.replace(/\n```\s*/g, '\n')
+	cleanContent = cleanContent.replace(/^```\s*/g, '')
+
+	// Remove leading indentation that causes code blocks (4+ spaces at start of lines)
+	// But preserve intentional list indentation (2 spaces)
+	const lines = cleanContent.split('\n')
+	const cleanedLines = lines.map((line) => {
+		// If line starts with 4+ spaces and is not empty, remove extra indentation
+		// Keep 2 spaces for nested lists
+		const match = /^( {4,})(.*)$/.exec(line)
+		if (match?.[2] !== undefined) {
+			// Check if it's a list item continuation
+			const content = match[2]
+			if (content.startsWith('- ') || content.startsWith('* ') || /^\d+\./.test(content)) {
+				return `  ${content}` // Keep as nested list
+			}
+			return content // Remove all leading spaces
+		}
+		return line
+	})
+
+	return cleanedLines.join('\n')
+}
+
 export function ChatMessage({ messageRole, content, isStreaming }: ChatMessageProps) {
 	const isUser = messageRole === 'user'
+	const cleanedContent = cleanMarkdownContent(content)
 
 	return (
 		<div className={cn('flex gap-3', isUser && 'flex-row-reverse')}>
@@ -51,6 +83,8 @@ export function ChatMessage({ messageRole, content, isStreaming }: ChatMessagePr
 							h1: ({ children }) => <h1 className="mb-2 text-lg font-bold">{children}</h1>,
 							h2: ({ children }) => <h2 className="mb-2 text-base font-bold">{children}</h2>,
 							h3: ({ children }) => <h3 className="mb-2 text-sm font-bold">{children}</h3>,
+							// Horizontal rule - just spacing, no visible line
+							hr: () => <div className="my-3" />,
 							// Table elements
 							table: ({ children }) => (
 								<div className="my-2 overflow-x-auto">
@@ -66,7 +100,7 @@ export function ChatMessage({ messageRole, content, isStreaming }: ChatMessagePr
 							td: ({ children }) => <td className="px-3 py-2">{children}</td>,
 						}}
 					>
-						{content}
+						{cleanedContent}
 					</ReactMarkdown>
 				</div>
 				{isStreaming && <span className="mt-1 inline-block h-4 w-1 animate-pulse bg-current" />}

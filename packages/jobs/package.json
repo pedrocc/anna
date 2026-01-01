@@ -14,8 +14,8 @@
     "test": "bun test"
   },
   "dependencies": {
-    "bullmq": "^5.30.0",
-    "ioredis": "^5.4.0",
+    "bullmq": "^5.66.4",
+    "ioredis": "^5.8.2",
     "@repo/shared": "workspace:*",
     "@repo/db": "workspace:*"
   },

@@ -138,6 +138,9 @@ async function handleCssRequest(pathname: string): Promise<Response | null> {
 	const filePath = join('.', pathname)
 	if (!existsSync(filePath)) return null
 
+	// Invalidate cache to always recompile in dev
+	tailwindCache = null
+
 	const compiled = await compileTailwindCSS(filePath)
 	if (compiled) {
 		return new Response(compiled, {
@@ -158,6 +161,7 @@ console.log(`🌐 Web server: http://localhost:${PORT}`)
 
 const _server = Bun.serve({
 	port: PORT,
+	development: true,
 	async fetch(req) {
 		const url = new URL(req.url)
 		const pathname = url.pathname

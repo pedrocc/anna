@@ -5,76 +5,32 @@ import { Link } from 'wouter'
 
 export function SignUpPage() {
 	return (
-		<div className="dark relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-[#0a0a0f] p-4 text-white">
-			{/* Animated background */}
-			<div
-				className="pointer-events-none absolute inset-0"
-				style={{
-					background: `
-						radial-gradient(ellipse 80% 50% at 50% -20%, rgba(120, 119, 198, 0.3), transparent),
-						radial-gradient(ellipse 60% 40% at 80% 50%, rgba(78, 81, 209, 0.2), transparent),
-						radial-gradient(ellipse 50% 30% at 20% 80%, rgba(99, 102, 241, 0.15), transparent)
-					`,
-				}}
-			/>
-
-			{/* Stars/dots animation */}
-			<div className="stars-container pointer-events-none absolute inset-0">
-				{[...Array(50)].map((_, i) => (
-					<div
-						key={`star-${i}`}
-						className="absolute rounded-full bg-white"
-						style={{
-							width: `${Math.random() * 3 + 1}px`,
-							height: `${Math.random() * 3 + 1}px`,
-							left: `${Math.random() * 100}%`,
-							top: `${Math.random() * 100}%`,
-							opacity: Math.random() * 0.5 + 0.2,
-							animation: `twinkle ${Math.random() * 3 + 2}s ease-in-out infinite`,
-							animationDelay: `${Math.random() * 2}s`,
-						}}
-					/>
-				))}
-			</div>
-
-			{/* CSS for twinkle animation */}
-			<style>{`
-				@keyframes twinkle {
-					0%, 100% { opacity: 0.2; transform: scale(1); }
-					50% { opacity: 0.8; transform: scale(1.5); }
-				}
-			`}</style>
-
-			<div className="relative z-10 mb-8 text-center">
+		<div className="flex min-h-screen flex-col items-center justify-center bg-[#f9fafb] p-4">
+			<div className="mb-8 text-center">
 				<Link
 					href="/"
-					className="inline-flex items-center gap-2 text-sm text-white/60 hover:text-white"
+					className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
 				>
 					<ArrowLeft className="h-4 w-4" />
 					Voltar
 				</Link>
 			</div>
 
-			<div className="relative z-10 mb-6 flex items-center gap-4">
-				<div
-					className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-xl bg-black"
-					style={{ border: '1px solid white' }}
-				>
-					<img src="/logo.png" alt="Anna Digital" className="h-10 w-10 object-contain" />
+			<div className="mb-8 flex items-center gap-3">
+				<div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-xl border border-border bg-white">
+					<img src="/logo.png" alt="Anna Digital" className="h-9 w-9 object-contain" />
 				</div>
-				<div className="h-10 w-px bg-white/20" />
 				<div className="flex flex-col">
-					<span className="text-2xl font-bold tracking-tight">
-						<span className="text-white">Anna </span>
-						<span className="text-white/50">Digital</span>
+					<span className="text-xl font-semibold tracking-tight text-foreground">
+						Anna <span className="text-muted-foreground">Digital</span>
 					</span>
-					<span className="text-[10px] font-medium uppercase tracking-widest text-white">
+					<span className="text-[9px] font-medium uppercase tracking-widest text-muted-foreground">
 						Uma plataforma Masterboi
 					</span>
 				</div>
 			</div>
 
-			<Card className="relative z-10 w-full max-w-md border-0 shadow-xl">
+			<Card className="w-full max-w-md border border-border bg-white shadow-sm">
 				<CardContent className="flex justify-center p-6">
 					<SignUp
 						appearance={{
@@ -96,9 +52,9 @@ export function SignUpPage() {
 				</CardContent>
 			</Card>
 
-			<p className="relative z-10 mt-6 text-center text-sm text-white/60">
+			<p className="mt-6 text-center text-sm text-muted-foreground">
 				Ja tem uma conta?{' '}
-				<Link href="/sign-in" className="font-medium text-white hover:underline">
+				<Link href="/sign-in" className="font-medium text-primary hover:underline">
 					Entrar
 				</Link>
 			</p>

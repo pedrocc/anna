@@ -39,22 +39,44 @@ export const authMiddleware = createMiddleware<{ Variables: AuthVariables }>(asy
 			where: eq(users.clerkId, clerkId),
 		})
 
-		if (!user) {
-			// Extract email from token claims or use placeholder
-			const email = (payload as { email?: string }).email ?? `${clerkId}@clerk.local`
-			const name = (payload as { name?: string }).name ?? 'User'
+		// Extract user info from Clerk token
+		const clerkPayload = payload as {
+			email?: string
+			name?: string
+			first_name?: string
+			last_name?: string
+			full_name?: string
+			firstName?: string
+			lastName?: string
+		}
+		const email = clerkPayload.email ?? `${clerkId}@clerk.local`
+		const name =
+			clerkPayload.name ??
+			clerkPayload.full_name ??
+			(clerkPayload.first_name || clerkPayload.firstName
+				? `${clerkPayload.first_name ?? clerkPayload.firstName ?? ''} ${clerkPayload.last_name ?? clerkPayload.lastName ?? ''}`.trim()
+				: null)
 
+		if (!user) {
 			const [newUser] = await db
 				.insert(users)
 				.values({
 					clerkId,
 					email,
-					name,
+					name: name || 'User',
 					role: 'user',
 				})
 				.returning()
 
 			user = newUser
+		} else if (user.name === 'User' && name) {
+			// Update user name if it was set to default and we now have a real name
+			const [updatedUser] = await db
+				.update(users)
+				.set({ name, updatedAt: new Date() })
+				.where(eq(users.clerkId, clerkId))
+				.returning()
+			user = updatedUser ?? user
 		}
 
 		if (user) {

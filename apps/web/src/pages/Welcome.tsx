@@ -1,276 +1,421 @@
 import { SignedIn, SignedOut, useUser } from '@clerk/clerk-react'
-import { Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle } from '@repo/ui'
+import { Button } from '@repo/ui'
 import {
 	ArrowRight,
-	Brain,
+	CheckCircle2,
+	ClipboardList,
 	FileText,
+	FolderKanban,
+	Kanban,
 	Lightbulb,
-	MessageCircle,
 	Sparkles,
-	Target,
-	Zap,
 } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { Link } from 'wouter'
 
-const steps = [
-	{
-		number: '01',
-		title: 'Crie seu projeto',
-		description:
-			'Dê um nome e descreva brevemente o que você quer explorar. Pode ser uma ideia de startup, um problema a resolver ou uma oportunidade a investigar.',
-		icon: Target,
-	},
-	{
-		number: '02',
-		title: 'Escolha a técnica',
-		description:
-			'Selecione entre 10 metodologias de brainstorming como SCAMPER, Six Thinking Hats, First Principles e outras técnicas consagradas de criatividade.',
-		icon: Brain,
-	},
-	{
-		number: '03',
-		title: 'Gere o documento',
-		description:
-			'Ao final da sessão, Anna compila automaticamente um documento executivo com todas as ideias, insights e próximos passos definidos.',
-		icon: FileText,
-	},
-]
+// Hook to detect if we're on desktop
+function useIsDesktop() {
+	const [isDesktop, setIsDesktop] = useState(false)
 
-const features = [
+	useEffect(() => {
+		const checkWidth = () => setIsDesktop(window.innerWidth >= 768)
+		checkWidth()
+		window.addEventListener('resize', checkWidth)
+		return () => window.removeEventListener('resize', checkWidth)
+	}, [])
+
+	return isDesktop
+}
+
+// ============================================================================
+// Data
+// ============================================================================
+
+const journeySteps = [
 	{
 		icon: Lightbulb,
-		title: '10 Técnicas de Criatividade',
-		description:
-			'SCAMPER, Six Hats, First Principles, Mind Mapping e mais metodologias comprovadas.',
+		title: 'Brainstorm',
+		description: 'Explore ideias com IA usando tecnicas como SCAMPER e Six Thinking Hats',
 	},
 	{
-		icon: MessageCircle,
-		title: 'Perguntas Provocativas',
-		description:
-			'Anna faz as perguntas certas para expandir seu pensamento e revelar novas perspectivas.',
+		icon: FileText,
+		title: 'Briefing',
+		description: 'Defina escopo, objetivos e publico-alvo do seu projeto',
 	},
 	{
-		icon: Zap,
-		title: 'Documentação Automática',
-		description:
-			'Suas ideias são organizadas e documentadas em tempo real, prontas para compartilhar.',
+		icon: FolderKanban,
+		title: 'PRD',
+		description: 'Documente requisitos funcionais e nao-funcionais',
+	},
+	{
+		icon: ClipboardList,
+		title: 'Planejamento',
+		description: 'Crie user stories e organize em epicos',
+	},
+	{
+		icon: Kanban,
+		title: 'Kanban',
+		description: 'Execute sprints e acompanhe o progresso',
 	},
 ]
 
-function HeroSignedIn() {
-	const { user } = useUser()
-	const firstName = user?.firstName ?? 'Explorador'
+const benefits = [
+	'Documentos profissionais gerados automaticamente',
+	'Metodologias de brainstorming estruturadas',
+	'Projetos com escopo bem definido',
+	'Do conceito ao Kanban em minutos',
+]
 
+// ============================================================================
+// Components
+// ============================================================================
+
+function Header() {
 	return (
-		<div className="text-center">
-			<Badge
-				variant="outline"
-				className="mb-8 border-white/20 bg-white/5 px-4 py-1.5 text-white/80"
-			>
-				<Sparkles className="mr-2 h-3.5 w-3.5" />
-				Bem-vindo de volta
-			</Badge>
-			<h1 className="mb-6 text-4xl font-bold tracking-tight md:text-5xl lg:text-6xl">
-				Olá, <span className="text-primary">{firstName}</span>
-			</h1>
-			<p className="mx-auto max-w-2xl text-lg leading-relaxed text-white/60 md:text-xl">
-				Anna é sua facilitadora de brainstorming com IA. Explore técnicas criativas, gere insights e
-				crie documentos executivos para seus projetos.
-			</p>
-			<div className="mt-10 flex flex-wrap justify-center gap-4">
-				<Button asChild size="lg" className="h-12 px-6 text-base shadow-lg">
-					<Link href="/brainstorm">
-						<Sparkles className="mr-2 h-5 w-5" />
-						Iniciar Brainstorming
-						<ArrowRight className="ml-2 h-5 w-5" />
+		<header className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-6 md:px-8 md:py-8">
+			<Link href="/" className="flex items-center gap-3 hover:no-underline">
+				<div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-xl border border-border bg-white">
+					<img src="/logo.png" alt="Anna Digital" className="h-9 w-9 object-contain" />
+				</div>
+				<div className="flex flex-col">
+					<span className="text-xl font-semibold tracking-tight text-foreground">
+						Anna <span className="text-muted-foreground">Digital</span>
+					</span>
+					<span className="text-[9px] font-medium uppercase tracking-widest text-muted-foreground">
+						Uma plataforma Masterboi
+					</span>
+				</div>
+			</Link>
+
+			<SignedOut>
+				<Button asChild className="px-5">
+					<Link href="/sign-in">
+						Entrar
+						<ArrowRight className="ml-2 h-4 w-4" />
 					</Link>
 				</Button>
-			</div>
-		</div>
+			</SignedOut>
+
+			<SignedIn>
+				<Button asChild className="px-5">
+					<Link href="/inicio">
+						Entrar
+						<ArrowRight className="ml-2 h-4 w-4" />
+					</Link>
+				</Button>
+			</SignedIn>
+		</header>
 	)
 }
 
-function HeroSignedOut() {
+function HeroSection() {
+	const { user } = useUser()
+	const firstName = user?.firstName
+
 	return (
-		<div className="text-center" style={{ paddingTop: '10vh' }}>
-			<h1 className="mb-6 text-4xl font-bold tracking-tight md:text-5xl lg:text-6xl">
-				Transforme suas <span className="text-white/50">ideias</span> em projetos
-			</h1>
-			<p className="mx-auto max-w-2xl text-lg leading-relaxed text-white/60 md:text-xl">
-				Anna é sua facilitadora de brainstorming com IA. Explore técnicas criativas, gere insights e
-				crie documentos executivos para seus projetos.
-			</p>
-		</div>
+		<section className="mx-auto max-w-4xl px-6 pb-20 pt-12 text-center md:px-8 md:pb-28 md:pt-20">
+			<div
+				className="animate-fade-in opacity-0"
+				style={{ animationDelay: '0ms', animationFillMode: 'forwards' }}
+			>
+				<SignedIn>
+					<p className="mb-4 text-lg text-muted-foreground">Ola, {firstName}</p>
+				</SignedIn>
+
+				<h1
+					className="mb-6 text-4xl font-semibold leading-tight tracking-tight text-foreground md:text-5xl lg:text-6xl"
+					style={{ fontFamily: 'Newsreader, Georgia, serif' }}
+				>
+					Transforme suas ideias em projetos
+				</h1>
+
+				<p className="mx-auto mb-10 max-w-2xl text-lg leading-relaxed text-muted-foreground md:text-xl">
+					Anna e sua facilitadora com IA que guia voce do brainstorming ate o documento executivo,
+					passando por briefing, PRD e planejamento.
+				</p>
+			</div>
+		</section>
 	)
 }
+
+function JourneySection() {
+	const isDesktop = useIsDesktop()
+
+	return (
+		<section id="jornada" className="bg-[#f9fafb] py-20 md:py-28">
+			<div className="mx-auto max-w-5xl px-6 md:px-8">
+				<div
+					className="animate-fade-in mb-16 text-center opacity-0"
+					style={{ animationDelay: '100ms', animationFillMode: 'forwards' }}
+				>
+					<h2
+						className="mb-4 text-3xl font-semibold tracking-tight text-foreground md:text-4xl"
+						style={{ fontFamily: 'Newsreader, Georgia, serif' }}
+					>
+						Uma jornada completa de produto
+					</h2>
+					<p className="mx-auto max-w-xl text-lg text-muted-foreground">
+						Da ideia inicial ao backlog pronto para desenvolvimento
+					</p>
+				</div>
+
+				{/* Journey Timeline */}
+				<div className="relative">
+					{/* Central vertical line - desktop only */}
+					{isDesktop && (
+						<div
+							className="absolute top-0 h-full w-px bg-border"
+							style={{ left: '50%', transform: 'translateX(-50%)' }}
+						/>
+					)}
+
+					<div
+						style={{ display: 'flex', flexDirection: 'column', gap: isDesktop ? '64px' : '24px' }}
+					>
+						{journeySteps.map((step, index) => {
+							const Icon = step.icon
+							const isLeft = index % 2 === 0
+
+							return (
+								<div
+									key={step.title}
+									className="animate-fade-in relative opacity-0"
+									style={{
+										animationDelay: `${200 + index * 100}ms`,
+										animationFillMode: 'forwards',
+									}}
+								>
+									{isDesktop ? (
+										/* Desktop Layout - Zigzag */
+										<div
+											style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+										>
+											{/* Left Side */}
+											<div
+												style={{
+													width: 'calc(50% - 40px)',
+													display: 'flex',
+													justifyContent: 'flex-end',
+												}}
+											>
+												{isLeft && (
+													<div className="max-w-sm rounded-xl border border-border bg-white p-6 text-right transition-colors hover:border-primary/30">
+														<div className="mb-3 flex flex-row-reverse items-center gap-3">
+															<div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
+																<Icon className="h-5 w-5 text-primary" />
+															</div>
+															<h3 className="text-lg font-semibold text-foreground">
+																{step.title}
+															</h3>
+														</div>
+														<p className="text-muted-foreground">{step.description}</p>
+													</div>
+												)}
+											</div>
+
+											{/* Center Node */}
+											<div
+												className="relative z-10 flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-full border-2 border-primary bg-white text-lg font-bold text-primary"
+												style={{ margin: '0 16px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}
+											>
+												{String(index + 1).padStart(2, '0')}
+											</div>
+
+											{/* Right Side */}
+											<div
+												style={{
+													width: 'calc(50% - 40px)',
+													display: 'flex',
+													justifyContent: 'flex-start',
+												}}
+											>
+												{!isLeft && (
+													<div className="max-w-sm rounded-xl border border-border bg-white p-6 text-left transition-colors hover:border-primary/30">
+														<div className="mb-3 flex items-center gap-3">
+															<div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
+																<Icon className="h-5 w-5 text-primary" />
+															</div>
+															<h3 className="text-lg font-semibold text-foreground">
+																{step.title}
+															</h3>
+														</div>
+														<p className="text-muted-foreground">{step.description}</p>
+													</div>
+												)}
+											</div>
+										</div>
+									) : (
+										/* Mobile Layout */
+										<div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px' }}>
+											{/* Node */}
+											<div className="relative z-10 flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full border-2 border-primary bg-white text-sm font-bold text-primary">
+												{String(index + 1).padStart(2, '0')}
+											</div>
+
+											{/* Card */}
+											<div className="flex-1 rounded-xl border border-border bg-white p-5">
+												<div className="mb-2 flex items-center gap-3">
+													<div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
+														<Icon className="h-4 w-4 text-primary" />
+													</div>
+													<h3 className="font-semibold text-foreground">{step.title}</h3>
+												</div>
+												<p className="text-sm text-muted-foreground">{step.description}</p>
+											</div>
+										</div>
+									)}
+								</div>
+							)
+						})}
+					</div>
+				</div>
+			</div>
+		</section>
+	)
+}
+
+function BenefitsSection() {
+	return (
+		<section className="py-20 md:py-28">
+			<div className="mx-auto max-w-5xl px-6 md:px-8">
+				<div className="grid gap-12 md:grid-cols-2 md:items-center">
+					{/* Left - Text */}
+					<div
+						className="animate-fade-in opacity-0"
+						style={{ animationDelay: '100ms', animationFillMode: 'forwards' }}
+					>
+						<h2
+							className="mb-6 text-3xl font-semibold tracking-tight text-foreground md:text-4xl"
+							style={{ fontFamily: 'Newsreader, Georgia, serif' }}
+						>
+							Tudo que voce precisa para tirar projetos do papel
+						</h2>
+						<p className="mb-8 text-lg text-muted-foreground">
+							Anna combina inteligencia artificial com metodologias consagradas de produto para
+							acelerar seu processo criativo.
+						</p>
+
+						<ul className="space-y-4">
+							{benefits.map((benefit, i) => (
+								<li
+									key={i}
+									className="flex items-start gap-3 text-foreground"
+									style={{
+										animationDelay: `${200 + i * 50}ms`,
+									}}
+								>
+									<CheckCircle2 className="mt-0.5 h-5 w-5 flex-shrink-0 text-green-600" />
+									{benefit}
+								</li>
+							))}
+						</ul>
+					</div>
+
+					{/* Right - Visual */}
+					<div
+						className="animate-fade-in opacity-0"
+						style={{ animationDelay: '200ms', animationFillMode: 'forwards' }}
+					>
+						<div className="rounded-2xl border border-border bg-[#f9fafb] p-8">
+							<div className="mb-6 flex items-center gap-4">
+								<div className="flex h-14 w-14 items-center justify-center rounded-xl bg-primary/10">
+									<Sparkles className="h-7 w-7 text-primary" />
+								</div>
+								<div>
+									<p className="font-semibold text-foreground">Anna AI</p>
+									<p className="text-sm text-muted-foreground">Sua facilitadora de produto</p>
+								</div>
+							</div>
+							<div className="space-y-3">
+								<div className="rounded-lg bg-white p-4 text-sm text-muted-foreground">
+									"Vamos estruturar sua ideia. Me conte mais sobre o problema que voce quer
+									resolver..."
+								</div>
+								<div className="rounded-lg bg-primary/5 p-4 text-sm text-foreground">
+									"Quero criar um app de delivery sustentavel para pequenos produtores locais"
+								</div>
+								<div className="rounded-lg bg-white p-4 text-sm text-muted-foreground">
+									"Otimo! Vou te guiar pelo processo de brainstorming usando a tecnica SCAMPER para
+									explorar diferentes angulos..."
+								</div>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+		</section>
+	)
+}
+
+function CTASection() {
+	return (
+		<section className="bg-[#f9fafb] py-20 md:py-28">
+			<div className="mx-auto max-w-3xl px-6 text-center md:px-8">
+				<div
+					className="animate-fade-in opacity-0"
+					style={{ animationDelay: '100ms', animationFillMode: 'forwards' }}
+				>
+					<h2
+						className="mb-6 text-3xl font-semibold tracking-tight text-foreground md:text-4xl"
+						style={{ fontFamily: 'Newsreader, Georgia, serif' }}
+					>
+						Pronto para comecar?
+					</h2>
+					<p className="mb-10 text-lg text-muted-foreground">
+						Entre e transforme suas ideias em projetos estruturados.
+					</p>
+
+					<SignedOut>
+						<Button asChild size="lg" className="h-12 px-8 text-base">
+							<Link href="/sign-in">
+								Entrar
+								<ArrowRight className="ml-2 h-5 w-5" />
+							</Link>
+						</Button>
+					</SignedOut>
+
+					<SignedIn>
+						<Button asChild size="lg" className="h-12 px-8 text-base">
+							<Link href="/inicio">
+								Acessar meus projetos
+								<ArrowRight className="ml-2 h-5 w-5" />
+							</Link>
+						</Button>
+					</SignedIn>
+				</div>
+			</div>
+		</section>
+	)
+}
+
+function Footer() {
+	return (
+		<footer className="border-t border-border bg-white py-8">
+			<div className="mx-auto max-w-6xl px-6 md:px-8">
+				<div className="flex flex-col items-center justify-between gap-4 text-sm text-muted-foreground md:flex-row">
+					<p>Anna Digital — Uma plataforma Masterboi</p>
+					<p>© {new Date().getFullYear()} Todos os direitos reservados</p>
+				</div>
+			</div>
+		</footer>
+	)
+}
+
+// ============================================================================
+// Main Component
+// ============================================================================
 
 export function WelcomePage() {
 	return (
-		<div className="dark welcome-page relative min-h-screen overflow-hidden bg-[#0a0a0f] text-white">
-			{/* Animated background */}
-			<div
-				className="pointer-events-none absolute inset-0"
-				style={{
-					background: `
-						radial-gradient(ellipse 80% 50% at 50% -20%, rgba(120, 119, 198, 0.3), transparent),
-						radial-gradient(ellipse 60% 40% at 80% 50%, rgba(78, 81, 209, 0.2), transparent),
-						radial-gradient(ellipse 50% 30% at 20% 80%, rgba(99, 102, 241, 0.15), transparent)
-					`,
-				}}
-			/>
-
-			{/* Stars/dots animation */}
-			<div className="stars-container pointer-events-none absolute inset-0">
-				{[...Array(50)].map((_, i) => (
-					<div
-						key={`star-${i}`}
-						className="absolute rounded-full bg-white"
-						style={{
-							width: `${Math.random() * 3 + 1}px`,
-							height: `${Math.random() * 3 + 1}px`,
-							left: `${Math.random() * 100}%`,
-							top: `${Math.random() * 100}%`,
-							opacity: Math.random() * 0.5 + 0.2,
-							animation: `twinkle ${Math.random() * 3 + 2}s ease-in-out infinite`,
-							animationDelay: `${Math.random() * 2}s`,
-						}}
-					/>
-				))}
-			</div>
-
-			{/* CSS for twinkle animation */}
-			<style>{`
-				@keyframes twinkle {
-					0%, 100% { opacity: 0.2; transform: scale(1); }
-					50% { opacity: 0.8; transform: scale(1.5); }
-				}
-			`}</style>
-
-			{/* Header com logo */}
-			<header className="relative flex items-center justify-between px-6 py-6 md:px-10 md:py-8">
-				<div className="flex items-center gap-4">
-					<div
-						className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-xl bg-black"
-						style={{ border: '1px solid white' }}
-					>
-						<img src="/logo.png" alt="Anna Digital" className="h-10 w-10 object-contain" />
-					</div>
-					<div className="h-10 w-px bg-white/20" />
-					<div className="flex flex-col">
-						<span className="text-2xl font-bold tracking-tight">
-							<span className="text-white">Anna </span>
-							<span className="text-white/50">Digital</span>
-						</span>
-						<span className="text-[10px] font-medium uppercase tracking-widest text-white">
-							Uma plataforma Masterboi
-						</span>
-					</div>
-				</div>
-				<SignedOut>
-					<Button
-						asChild
-						size="lg"
-						className="min-w-[160px] px-8 text-base font-semibold"
-						style={{ height: '48px' }}
-					>
-						<Link href="/sign-in">
-							Entrar
-							<ArrowRight className="ml-2 h-5 w-5" />
-						</Link>
-					</Button>
-				</SignedOut>
-			</header>
-
-			{/* Conteúdo */}
-			<div
-				className="relative mx-auto flex max-w-6xl flex-col justify-center px-6 pb-10"
-				style={{ minHeight: 'calc(100vh - 100px)' }}
-			>
-				{/* Hero Section */}
-				<div className="animate-fade-in-up">
-					<SignedIn>
-						<HeroSignedIn />
-					</SignedIn>
-					<SignedOut>
-						<HeroSignedOut />
-					</SignedOut>
-				</div>
-
-				{/* How it Works */}
-				<div className="mt-32">
-					<div className="mb-16 text-center">
-						<h2 className="text-3xl font-bold tracking-tight md:text-4xl">Como funciona</h2>
-						<p className="mx-auto mt-4 max-w-xl text-white/60">
-							Três passos para transformar suas ideias em documentos executivos
-						</p>
-					</div>
-
-					<div className="grid gap-8 md:grid-cols-3">
-						{steps.map((step, index) => (
-							<div
-								key={step.number}
-								className="group relative h-full"
-								style={{ animationDelay: `${index * 100}ms` }}
-							>
-								{/* Connector line for desktop */}
-								{index < steps.length - 1 && (
-									<div className="absolute right-0 top-12 hidden h-px w-8 translate-x-full bg-white/10 md:block" />
-								)}
-
-								<div className="relative h-full rounded-2xl border border-white/10 bg-white/5 p-8 backdrop-blur-sm transition-all duration-300 hover:border-white/20 hover:bg-white/10">
-									{/* Step number */}
-									<div className="mb-6 flex items-center gap-4">
-										<span className="text-5xl font-bold text-white/10">{step.number}</span>
-										<div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/20">
-											<step.icon className="h-6 w-6 text-primary" />
-										</div>
-									</div>
-
-									<h3 className="mb-3 text-xl font-semibold">{step.title}</h3>
-									<p className="leading-relaxed text-white/60">{step.description}</p>
-								</div>
-							</div>
-						))}
-					</div>
-				</div>
-
-				{/* Features */}
-				<div className="mt-32">
-					<div className="mb-16 text-center">
-						<h2 className="text-3xl font-bold tracking-tight md:text-4xl">Por que usar a Anna?</h2>
-						<p className="mx-auto mt-4 max-w-xl text-white/60">
-							Ferramentas pensadas para potencializar sua criatividade
-						</p>
-					</div>
-
-					<div className="grid gap-6 md:grid-cols-3">
-						{features.map((feature, index) => (
-							<Card
-								key={feature.title}
-								className="group border border-white/10 bg-white/5 backdrop-blur-sm transition-all duration-300 hover:border-white/20 hover:bg-white/10"
-								style={{ animationDelay: `${index * 100}ms` }}
-							>
-								<CardHeader>
-									<div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/20 transition-colors group-hover:bg-primary/30">
-										<feature.icon className="h-7 w-7 text-primary" />
-									</div>
-									<CardTitle className="text-xl text-white">{feature.title}</CardTitle>
-								</CardHeader>
-								<CardContent>
-									<CardDescription className="text-base leading-relaxed text-white/60">
-										{feature.description}
-									</CardDescription>
-								</CardContent>
-							</Card>
-						))}
-					</div>
-				</div>
-
-				{/* Footer */}
-				<footer className="mt-32 pb-8 text-center text-sm text-white/40">
-					<p>Anna - Sua facilitadora de brainstorming com IA</p>
-				</footer>
-			</div>
+		<div className="min-h-screen bg-white text-foreground">
+			<Header />
+			<main>
+				<HeroSection />
+				<JourneySection />
+				<BenefitsSection />
+				<CTASection />
+			</main>
+			<Footer />
 		</div>
 	)
 }
