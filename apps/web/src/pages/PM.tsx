@@ -41,7 +41,11 @@ export function PMPage() {
 	const [searchQuery, setSearchQuery] = useState('')
 
 	const sessions = data ?? []
-	const availableBriefings = briefingSessions ?? []
+	// Only show completed briefings - PRD requires a completed briefing
+	const completedBriefings = useMemo(
+		() => (briefingSessions ?? []).filter((b) => b.status === 'completed'),
+		[briefingSessions]
+	)
 
 	const filteredSessions = useMemo(() => {
 		if (!searchQuery.trim()) return sessions
@@ -75,8 +79,7 @@ export function PMPage() {
 				body: JSON.stringify({
 					projectName: projectName.trim(),
 					projectDescription: projectDescription.trim() || undefined,
-					briefingSessionId:
-						selectedBriefing && selectedBriefing !== 'none' ? selectedBriefing : undefined,
+					briefingSessionId: selectedBriefing || undefined,
 				}),
 			})
 
@@ -154,6 +157,45 @@ export function PMPage() {
 								</DialogHeader>
 
 								<div className="grid gap-4 py-4">
+									{/* Briefing primeiro - opcional */}
+									<div className="grid gap-2">
+										<Label htmlFor="briefing" className="text-foreground">
+											Vincular a um Briefing (opcional)
+										</Label>
+										{completedBriefings.length > 0 ? (
+											<>
+												<Select
+													value={selectedBriefing}
+													onValueChange={(value) => {
+														setSelectedBriefing(value)
+														// Auto-preencher nome do projeto com o nome do Briefing selecionado
+														const briefing = completedBriefings.find((b) => b.id === value)
+														if (briefing && !projectName) {
+															setProjectName(briefing.projectName)
+														}
+													}}
+												>
+													<SelectTrigger className="border-border">
+														<SelectValue placeholder="Selecione um briefing completo..." />
+													</SelectTrigger>
+													<SelectContent>
+														{completedBriefings.map((b) => (
+															<SelectItem key={b.id} value={b.id}>
+																{b.projectName}
+															</SelectItem>
+														))}
+													</SelectContent>
+												</Select>
+												<p className="text-xs text-muted-foreground">
+													O documento do briefing sera usado como base para o PRD.
+												</p>
+											</>
+										) : (
+											<p className="text-xs text-muted-foreground">
+												Nenhum briefing completo disponivel. Voce pode criar um PRD sem briefing.
+											</p>
+										)}
+									</div>
 									<div className="grid gap-2">
 										<Label htmlFor="name" className="text-foreground">
 											Nome do Projeto *
@@ -189,30 +231,6 @@ export function PMPage() {
 											className="border-border"
 										/>
 									</div>
-									{availableBriefings.length > 0 && (
-										<div className="grid gap-2">
-											<Label htmlFor="briefing" className="text-foreground">
-												Vincular a um Briefing (opcional)
-											</Label>
-											<Select value={selectedBriefing} onValueChange={setSelectedBriefing}>
-												<SelectTrigger className="border-border">
-													<SelectValue placeholder="Selecione um briefing..." />
-												</SelectTrigger>
-												<SelectContent>
-													<SelectItem value="none">Nenhum</SelectItem>
-													{availableBriefings.map((b) => (
-														<SelectItem key={b.id} value={b.id}>
-															{b.projectName}
-															{b.status === 'completed' && ' ✓'}
-														</SelectItem>
-													))}
-												</SelectContent>
-											</Select>
-											<p className="text-xs text-muted-foreground">
-												O conteudo do briefing sera usado como contexto para o PRD.
-											</p>
-										</div>
-									)}
 								</div>
 
 								<DialogFooter>

@@ -1,5 +1,6 @@
 import { zValidator } from '@hono/zod-validator'
 import {
+	briefingSessions,
 	db,
 	prdSessions,
 	smDocuments,
@@ -7,13 +8,14 @@ import {
 	smMessages,
 	smSessions,
 	smStories,
-	users,
 } from '@repo/db'
+import type { SmStep } from '@repo/shared'
 import {
 	CreateSmDocumentSchema,
 	CreateSmEpicSchema,
 	CreateSmSessionSchema,
 	CreateSmStorySchema,
+	EditSmMessageRequestSchema,
 	PaginationSchema,
 	SmChatRequestSchema,
 	UpdateSmDocumentSchema,
@@ -21,11 +23,19 @@ import {
 	UpdateSmSessionSchema,
 	UpdateSmStorySchema,
 } from '@repo/shared'
-import { and, asc, desc, eq, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, gte, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { streamSSE } from 'hono/streaming'
+import { getUserByClerkId } from '../lib/helpers.js'
 import { getOpenRouterClient, OpenRouterAPIError } from '../lib/openrouter.js'
 import { commonErrors, successResponse } from '../lib/response.js'
+import { enrichStoriesFromConversation } from '../lib/sm-enrichment.js'
+import {
+	cleanResponseForDisplay,
+	extractSmDataFromResponse,
+	transformEpicForInsert,
+	transformStoryForInsert,
+} from '../lib/sm-extraction.js'
 import {
 	buildSmDocumentPrompt,
 	buildSmSystemPrompt,
@@ -38,13 +48,65 @@ import { type AuthVariables, authMiddleware, getAuth } from '../middleware/auth.
 export const smRoutes = new Hono<{ Variables: AuthVariables }>()
 
 // ============================================
-// HELPER: Get user by clerkId
+// STEP COMPLETION PATTERNS (Auto-detect transitions)
 // ============================================
 
-async function getUserByClerkId(clerkId: string) {
-	return db.query.users.findFirst({
-		where: eq(users.clerkId, clerkId),
-	})
+// Padrões de linguagem natural para detecção automática de transições
+// Nota: patterns testados contra string normalizada (lowercase, sem acentos)
+const stepCompletionPatterns: Record<SmStep, RegExp[]> = {
+	init: [
+		// Marcador legado (compatibilidade)
+		/\[avancar:\s*epics\]/i,
+		// Padrões naturais
+		/vamos\s+(para\s+)?(os\s+)?epics/i,
+		/avanc(ar|ando)\s+para\s+(os\s+)?epics/i,
+		/comecar\s+(a\s+)?(definir\s+)?(os\s+)?epics/i,
+		/vamos\s+definir\s+(os\s+)?epics/i,
+		/podemos\s+avancar\s+para\s+(os\s+)?epics/i,
+	],
+	epics: [
+		/\[avancar:\s*stories\]/i,
+		/vamos\s+(para\s+)?(as\s+)?stories/i,
+		/vamos\s+(para\s+)?(as\s+)?user\s+stories/i,
+		/avanc(ar|ando)\s+para\s+(as\s+)?stories/i,
+		/vamos\s+criar\s+(as\s+)?stories/i,
+		/podemos\s+avancar\s+para\s+(as\s+)?stories/i,
+	],
+	stories: [
+		/\[avancar:\s*details\]/i,
+		/vamos\s+(para\s+)?(o\s+)?detalhamento/i,
+		/vamos\s+(para\s+)?(os\s+)?detalhes/i,
+		/avanc(ar|ando)\s+para\s+(o\s+)?detalhamento/i,
+		/vamos\s+detalhar/i,
+		/comecar\s+(o\s+)?detalhamento/i,
+		/podemos\s+avancar\s+para\s+(o\s+)?detalhamento/i,
+	],
+	details: [
+		/\[avancar:\s*planning\]/i,
+		/vamos\s+(para\s+)?(o\s+)?planning/i,
+		/vamos\s+(para\s+)?(o\s+)?sprint\s+planning/i,
+		/avanc(ar|ando)\s+para\s+(o\s+)?planning/i,
+		/vamos\s+planejar\s+(o\s+)?sprint/i,
+		/podemos\s+avancar\s+para\s+(o\s+)?planning/i,
+		/hora\s+do\s+(sprint\s+)?planning/i,
+	],
+	planning: [
+		/\[avancar:\s*review\]/i,
+		/vamos\s+(para\s+)?(a\s+)?revisao/i,
+		/vamos\s+(para\s+)?(a\s+)?review/i,
+		/avanc(ar|ando)\s+para\s+(a\s+)?revisao/i,
+		/vamos\s+revisar/i,
+		/podemos\s+avancar\s+para\s+(a\s+)?revisao/i,
+	],
+	review: [
+		/\[avancar:\s*complete\]/i,
+		/planejamento\s+(esta\s+)?completo/i,
+		/vamos\s+finalizar/i,
+		/podemos\s+finalizar/i,
+		/sessao\s+completa/i,
+		/concluindo\s+(o\s+)?planejamento/i,
+	],
+	complete: [], // Step final - não avança
 }
 
 // ============================================
@@ -115,8 +177,8 @@ smRoutes.get('/sessions/:id', authMiddleware, async (c) => {
 		return commonErrors.notFound(c, 'Session not found')
 	}
 
-	// Reverse messages to chronological order
-	const messagesChronological = session.messages.reverse()
+	// Reverse messages to chronological order (use spread to avoid mutating original)
+	const messagesChronological = [...session.messages].reverse()
 
 	return successResponse(c, {
 		...session,
@@ -150,7 +212,19 @@ smRoutes.post('/sessions', authMiddleware, zValidator('json', CreateSmSessionSch
 				features: prd.features ?? [],
 				functionalRequirements: prd.functionalRequirements ?? [],
 				nonFunctionalRequirements: prd.nonFunctionalRequirements ?? [],
-				personas: prd.personas ?? [],
+				// Personas com todos os campos (goals, painPoints)
+				personas: (prd.personas ?? []).map((p) => ({
+					id: p.id,
+					name: p.name,
+					description: p.description,
+					goals: p.goals,
+					painPoints: p.painPoints,
+				})),
+				// Novos campos para contexto expandido
+				successCriteria: prd.successCriteria ?? [],
+				userJourneys: prd.userJourneys ?? [],
+				outOfScope: prd.outOfScope ?? [],
+				mvpSuccessCriteria: prd.mvpSuccessCriteria ?? [],
 			}
 		}
 	}
@@ -172,7 +246,7 @@ smRoutes.post('/sessions', authMiddleware, zValidator('json', CreateSmSessionSch
 		return commonErrors.internalError(c, 'Failed to create session')
 	}
 
-	// Create welcome message from Bob
+	// Create welcome message from Bob with PRD context
 	const welcomeMessage = buildSmWelcomeMessage(data.projectName, data.projectDescription, hasPrd)
 
 	await db.insert(smMessages).values({
@@ -196,7 +270,7 @@ smRoutes.post('/sessions', authMiddleware, zValidator('json', CreateSmSessionSch
 		c,
 		{
 			...sessionWithMessages,
-			messages: sessionWithMessages?.messages.reverse() ?? [],
+			messages: [...(sessionWithMessages?.messages ?? [])].reverse(),
 		},
 		201
 	)
@@ -251,6 +325,70 @@ smRoutes.delete('/sessions/:id', authMiddleware, async (c) => {
 	}
 
 	return successResponse(c, { deleted: true })
+})
+
+// Rename session with cascade to linked PRD and Briefing sessions
+smRoutes.post('/sessions/:id/rename', authMiddleware, async (c) => {
+	const { userId } = getAuth(c)
+	const sessionId = c.req.param('id')
+	const body = await c.req.json<{ projectName: string }>()
+
+	if (!body.projectName?.trim()) {
+		return commonErrors.badRequest(c, 'Project name is required')
+	}
+
+	const newName = body.projectName.trim()
+
+	const user = await getUserByClerkId(userId)
+	if (!user) {
+		return commonErrors.notFound(c, 'User not found')
+	}
+
+	// Get current SM session to find linked PRD
+	const currentSession = await db.query.smSessions.findFirst({
+		where: and(eq(smSessions.id, sessionId), eq(smSessions.userId, user.id)),
+	})
+
+	if (!currentSession) {
+		return commonErrors.notFound(c, 'Session not found')
+	}
+
+	// Update SM session
+	await db
+		.update(smSessions)
+		.set({ projectName: newName, updatedAt: new Date() })
+		.where(eq(smSessions.id, sessionId))
+
+	// Update linked PRD session if exists
+	if (currentSession.prdSessionId) {
+		const prdSession = await db.query.prdSessions.findFirst({
+			where: and(eq(prdSessions.id, currentSession.prdSessionId), eq(prdSessions.userId, user.id)),
+		})
+
+		if (prdSession) {
+			await db
+				.update(prdSessions)
+				.set({ projectName: newName, updatedAt: new Date() })
+				.where(eq(prdSessions.id, currentSession.prdSessionId))
+
+			// Find linked briefing from PRD's inputDocuments and update it
+			const docs = prdSession.inputDocuments as Array<{ path?: string; type?: string }> | null
+			const briefingDoc = docs?.find((d) => d.type === 'briefing')
+			if (briefingDoc?.path) {
+				await db
+					.update(briefingSessions)
+					.set({ projectName: newName, updatedAt: new Date() })
+					.where(
+						and(eq(briefingSessions.id, briefingDoc.path), eq(briefingSessions.userId, user.id))
+					)
+			}
+		}
+	}
+
+	return successResponse(c, {
+		updated: true,
+		projectName: newName,
+	})
 })
 
 // ============================================
@@ -335,7 +473,7 @@ smRoutes.post('/chat', authMiddleware, zValidator('json', SmChatRequestSchema), 
 	)
 
 	// Build conversation history
-	const historyMessages = session.messages
+	const historyMessages = [...session.messages]
 		.reverse()
 		.filter((m) => m.role !== 'system')
 		.map((m) => ({
@@ -357,11 +495,12 @@ smRoutes.post('/chat', authMiddleware, zValidator('json', SmChatRequestSchema), 
 
 			const generator = client.chatStream({
 				messages: llmMessages,
-				model: 'deepseek/deepseek-chat-v3-0324',
+				model: 'deepseek/deepseek-v3.2',
 				temperature: 0.7,
-				max_tokens: 2048,
+				max_tokens: 16384, // DeepSeek V3 via OpenRouter max output
 			})
 
+			// Stream response diretamente ao cliente
 			for await (const chunk of generator) {
 				fullResponse += chunk
 				await stream.writeSSE({
@@ -369,124 +508,236 @@ smRoutes.post('/chat', authMiddleware, zValidator('json', SmChatRequestSchema), 
 				})
 			}
 
-			// Save assistant response
+			// Extract structured data from AI response BEFORE saving
+			const extractedData = extractSmDataFromResponse(fullResponse)
+
+			// Save assistant response with SM_DATA block removed for clean display
+			const cleanedResponse = cleanResponseForDisplay(fullResponse)
 			await db.insert(smMessages).values({
 				sessionId,
 				role: 'assistant',
-				content: fullResponse,
+				content: cleanedResponse,
 				step: session.currentStep,
 			})
+			if (extractedData) {
+				try {
+					// Map to track epic number -> epic id for story linking
+					const epicIdMap = new Map<number, string>()
 
-			// Auto-detect step transitions
-			let newStep = session.currentStep
-			const newStepsCompleted = [...(session.stepsCompleted ?? [])]
+					// Process epics first (so stories can reference them)
+					if (extractedData.epics && extractedData.epics.length > 0) {
+						for (const epicData of extractedData.epics) {
+							if (extractedData.action === 'create') {
+								// Check if epic with this number already exists
+								const existingEpic = await db.query.smEpics.findFirst({
+									where: and(
+										eq(smEpics.sessionId, sessionId),
+										eq(smEpics.number, epicData.number)
+									),
+								})
 
-			// Normalize text for comparison
+								if (existingEpic) {
+									// Update existing epic
+									await db
+										.update(smEpics)
+										.set({
+											title: epicData.title,
+											description: epicData.description,
+											businessValue: epicData.businessValue,
+											priority: epicData.priority ?? 'medium',
+											functionalRequirementCodes: epicData.functionalRequirementCodes ?? [],
+											updatedAt: new Date(),
+										})
+										.where(eq(smEpics.id, existingEpic.id))
+									epicIdMap.set(epicData.number, existingEpic.id)
+								} else {
+									// Create new epic
+									const [newEpic] = await db
+										.insert(smEpics)
+										.values(transformEpicForInsert(epicData, sessionId))
+										.returning()
+									if (newEpic) {
+										epicIdMap.set(epicData.number, newEpic.id)
+									}
+								}
+							} else if (extractedData.action === 'update') {
+								// Update existing epic by number
+								const existingEpic = await db.query.smEpics.findFirst({
+									where: and(
+										eq(smEpics.sessionId, sessionId),
+										eq(smEpics.number, epicData.number)
+									),
+								})
+								if (existingEpic) {
+									await db
+										.update(smEpics)
+										.set({
+											title: epicData.title,
+											description: epicData.description,
+											businessValue: epicData.businessValue,
+											priority: epicData.priority ?? existingEpic.priority,
+											functionalRequirementCodes:
+												epicData.functionalRequirementCodes ??
+												existingEpic.functionalRequirementCodes,
+											updatedAt: new Date(),
+										})
+										.where(eq(smEpics.id, existingEpic.id))
+									epicIdMap.set(epicData.number, existingEpic.id)
+								}
+							}
+						}
+					}
+
+					// Process stories (after epics so we can link them)
+					if (extractedData.stories && extractedData.stories.length > 0) {
+						for (const storyData of extractedData.stories) {
+							// Find the epic for this story
+							let epicId = epicIdMap.get(storyData.epicNumber)
+							if (!epicId) {
+								// Try to find existing epic
+								const existingEpic = await db.query.smEpics.findFirst({
+									where: and(
+										eq(smEpics.sessionId, sessionId),
+										eq(smEpics.number, storyData.epicNumber)
+									),
+								})
+								if (existingEpic) {
+									epicId = existingEpic.id
+								}
+							}
+
+							if (!epicId) {
+								// Skip story if no epic found
+								console.warn(
+									`[SM Extraction] Skipping story ${storyData.epicNumber}-${storyData.storyNumber}: Epic ${storyData.epicNumber} not found`
+								)
+								continue
+							}
+
+							const storyKey = `${storyData.epicNumber}-${storyData.storyNumber}`
+
+							if (extractedData.action === 'create') {
+								// Check if story already exists
+								const existingStory = await db.query.smStories.findFirst({
+									where: and(
+										eq(smStories.sessionId, sessionId),
+										eq(smStories.storyKey, storyKey)
+									),
+								})
+
+								if (existingStory) {
+									// Update existing story
+									await db
+										.update(smStories)
+										.set({
+											title: storyData.title,
+											asA: storyData.asA,
+											iWant: storyData.iWant,
+											soThat: storyData.soThat,
+											priority: storyData.priority ?? existingStory.priority,
+											updatedAt: new Date(),
+										})
+										.where(eq(smStories.id, existingStory.id))
+								} else {
+									// Create new story
+									await db
+										.insert(smStories)
+										.values(transformStoryForInsert(storyData, sessionId, epicId))
+								}
+							} else if (extractedData.action === 'update') {
+								// Update existing story
+								const existingStory = await db.query.smStories.findFirst({
+									where: and(
+										eq(smStories.sessionId, sessionId),
+										eq(smStories.storyKey, storyKey)
+									),
+								})
+
+								if (existingStory) {
+									const updateData = transformStoryForInsert(storyData, sessionId, epicId)
+									await db
+										.update(smStories)
+										.set({
+											title: updateData.title,
+											asA: updateData.asA,
+											iWant: updateData.iWant,
+											soThat: updateData.soThat,
+											acceptanceCriteria: updateData.acceptanceCriteria,
+											tasks: updateData.tasks,
+											devNotes: updateData.devNotes,
+											storyPoints: updateData.storyPoints,
+											priority: updateData.priority,
+											updatedAt: new Date(),
+										})
+										.where(eq(smStories.id, existingStory.id))
+								}
+							}
+						}
+					}
+				} catch (extractError) {
+					console.error('[SM Extraction] Failed to persist extracted data:', extractError)
+					// Continue without failing the chat - extraction is best-effort
+				}
+			}
+
+			// Auto-detecção de transição de etapa (igual ao PRD)
 			const normalizedResponse = fullResponse
 				.toLowerCase()
 				.normalize('NFD')
 				.replace(/[\u0300-\u036f]/g, '')
 
-			// Check for explicit action to advance
-			if (action === 'advance_step') {
+			const currentPatterns = stepCompletionPatterns[session.currentStep] ?? []
+			const shouldAdvance =
+				session.currentStep !== 'complete' &&
+				currentPatterns.some((pattern) => pattern.test(normalizedResponse))
+
+			let newStep = session.currentStep
+			if (shouldAdvance) {
 				const nextStep = getNextStep(session.currentStep)
 				if (nextStep) {
 					newStep = nextStep
-					if (!newStepsCompleted.includes(session.currentStep)) {
-						newStepsCompleted.push(session.currentStep)
+					const stepsCompleted = [...(session.stepsCompleted ?? [])]
+					if (!stepsCompleted.includes(session.currentStep)) {
+						stepsCompleted.push(session.currentStep)
 					}
-				}
-			} else {
-				// Auto-detect transitions based on keywords
-				const transitionKeywords: Record<string, string[]> = {
-					epics: [
-						'vamos definir os **epics',
-						'agrupamentos logicos',
-						'definir epics',
-						'agora os epics',
-					],
-					stories: [
-						'vamos criar as **user stories',
-						'criar stories',
-						'user stories para cada epic',
-						'agora as stories',
-					],
-					details: [
-						'vamos **detalhar',
-						'acceptance criteria',
-						'tasks e dev notes',
-						'detalhar stories',
-					],
-					planning: [
-						'sprint planning',
-						'organizar em sprints',
-						'planejar sprints',
-						'alocacao em sprints',
-					],
-					review: [
-						'revisao final',
-						'validar planejamento',
-						'vamos fazer uma **revisao',
-						'checklist de validacao',
-					],
-					complete: [
-						'planejamento completo',
-						'gerar documentacao',
-						'vamos **gerar',
-						'documentacao final',
-					],
-				}
-
-				for (const [targetStep, keywords] of Object.entries(transitionKeywords)) {
-					if (keywords.some((kw) => normalizedResponse.includes(kw))) {
-						const targetIndex = SM_STEPS_ORDER.indexOf(targetStep as typeof newStep)
-						const currentIndex = SM_STEPS_ORDER.indexOf(session.currentStep)
-
-						if (targetIndex === currentIndex + 1) {
-							if (!newStepsCompleted.includes(session.currentStep)) {
-								newStepsCompleted.push(session.currentStep)
-							}
-							newStep = targetStep as typeof newStep
-							break
-						}
-					}
+					await db
+						.update(smSessions)
+						.set({
+							currentStep: nextStep,
+							stepsCompleted,
+							...(nextStep === 'complete' && { status: 'completed', completedAt: new Date() }),
+							updatedAt: new Date(),
+						})
+						.where(eq(smSessions.id, sessionId))
 				}
 			}
 
-			// Update session
-			const updateData: {
-				updatedAt: Date
-				currentStep?: typeof newStep
-				stepsCompleted?: string[]
-				status?: 'completed'
-				completedAt?: Date
-				totalEpics?: number
-				totalStories?: number
-				totalStoryPoints?: number
-			} = {
-				updatedAt: new Date(),
-			}
+			// Update session with totals (fetch fresh counts from DB after extraction)
+			const [updatedEpics, updatedStories] = await Promise.all([
+				db.query.smEpics.findMany({
+					where: eq(smEpics.sessionId, sessionId),
+				}),
+				db.query.smStories.findMany({
+					where: eq(smStories.sessionId, sessionId),
+				}),
+			])
 
+			await db
+				.update(smSessions)
+				.set({
+					updatedAt: new Date(),
+					totalEpics: updatedEpics.length,
+					totalStories: updatedStories.length,
+					totalStoryPoints: updatedStories.reduce((sum, s) => sum + (s.storyPoints ?? 0), 0),
+				})
+				.where(eq(smSessions.id, sessionId))
+
+			// Enviar stepUpdate se houve avanço
 			if (newStep !== session.currentStep) {
-				updateData.currentStep = newStep
-				updateData.stepsCompleted = newStepsCompleted
+				await stream.writeSSE({
+					data: JSON.stringify({ stepUpdate: newStep }),
+				})
 			}
-
-			// Update totals
-			updateData.totalEpics = session.epics.length
-			updateData.totalStories = session.stories.length
-			updateData.totalStoryPoints = session.stories.reduce(
-				(sum, s) => sum + (s.storyPoints ?? 0),
-				0
-			)
-
-			// Mark as completed if reaching complete step
-			if (newStep === 'complete' && session.status !== 'completed') {
-				updateData.status = 'completed'
-				updateData.completedAt = new Date()
-			}
-
-			await db.update(smSessions).set(updateData).where(eq(smSessions.id, sessionId))
 
 			await stream.writeSSE({ data: '[DONE]' })
 		} catch (error) {
@@ -506,6 +757,234 @@ smRoutes.post('/chat', authMiddleware, zValidator('json', SmChatRequestSchema), 
 		}
 	})
 })
+
+// ============================================
+// MESSAGE EDIT ENDPOINT
+// ============================================
+
+smRoutes.post(
+	'/messages/:messageId/edit',
+	authMiddleware,
+	zValidator('json', EditSmMessageRequestSchema),
+	async (c) => {
+		const { userId } = getAuth(c)
+		const messageId = c.req.param('messageId')
+		const { content } = c.req.valid('json')
+
+		const user = await getUserByClerkId(userId)
+		if (!user) {
+			return commonErrors.notFound(c, 'User not found')
+		}
+
+		// 1. Get the message to edit
+		const message = await db.query.smMessages.findFirst({
+			where: eq(smMessages.id, messageId),
+		})
+
+		if (!message) {
+			return commonErrors.notFound(c, 'Message not found')
+		}
+
+		// 2. Validate it's a user message
+		if (message.role !== 'user') {
+			return commonErrors.badRequest(c, 'Can only edit user messages')
+		}
+
+		// 3. Get session and verify ownership
+		const session = await db.query.smSessions.findFirst({
+			where: and(eq(smSessions.id, message.sessionId), eq(smSessions.userId, user.id)),
+		})
+
+		if (!session) {
+			return commonErrors.forbidden(c, 'Access denied')
+		}
+
+		const sessionId = message.sessionId
+		const editedStep = message.step
+		const messageTimestamp = message.createdAt
+
+		// 4. Delete all messages from this point onwards (inclusive)
+		await db
+			.delete(smMessages)
+			.where(and(eq(smMessages.sessionId, sessionId), gte(smMessages.createdAt, messageTimestamp)))
+
+		// 5. Delete epics and stories created after this message
+		// First get epics to delete
+		const epicsToDelete = await db.query.smEpics.findMany({
+			where: and(eq(smEpics.sessionId, sessionId), gte(smEpics.createdAt, messageTimestamp)),
+		})
+
+		// Delete stories for those epics
+		for (const epic of epicsToDelete) {
+			await db.delete(smStories).where(eq(smStories.epicId, epic.id))
+		}
+
+		// Delete the epics
+		if (epicsToDelete.length > 0) {
+			await db
+				.delete(smEpics)
+				.where(and(eq(smEpics.sessionId, sessionId), gte(smEpics.createdAt, messageTimestamp)))
+		}
+
+		// Also delete stories created after message timestamp that might belong to older epics
+		await db
+			.delete(smStories)
+			.where(and(eq(smStories.sessionId, sessionId), gte(smStories.createdAt, messageTimestamp)))
+
+		// 6. Check if we need to rollback the step
+		const currentStepIndex = SM_STEPS_ORDER.indexOf(session.currentStep)
+		const editedStepIndex = SM_STEPS_ORDER.indexOf(editedStep)
+
+		if (currentStepIndex > editedStepIndex) {
+			// Rollback to the edited step
+			const newStepsCompleted = (session.stepsCompleted ?? []).filter(
+				(s) => SM_STEPS_ORDER.indexOf(s as SmStep) < editedStepIndex
+			)
+
+			await db
+				.update(smSessions)
+				.set({
+					currentStep: editedStep,
+					stepsCompleted: newStepsCompleted,
+					status: 'active',
+					completedAt: null,
+					updatedAt: new Date(),
+				})
+				.where(eq(smSessions.id, sessionId))
+		}
+
+		// 7. Insert the new edited user message
+		await db.insert(smMessages).values({
+			sessionId,
+			role: 'user',
+			content,
+			step: editedStep,
+		})
+
+		// 8. Refresh session data for LLM context
+		const updatedSession = await db.query.smSessions.findFirst({
+			where: eq(smSessions.id, sessionId),
+			with: {
+				messages: {
+					orderBy: [desc(smMessages.createdAt)],
+					limit: 50,
+				},
+				epics: {
+					orderBy: [asc(smEpics.number)],
+				},
+				stories: {
+					orderBy: [asc(smStories.epicNumber), asc(smStories.storyNumber)],
+				},
+			},
+		})
+
+		if (!updatedSession) {
+			return commonErrors.internalError(c, 'Failed to refresh session')
+		}
+
+		// Build epics context
+		const epicsContext = updatedSession.epics.map((e) => ({
+			number: e.number,
+			title: e.title,
+			description: e.description,
+			status: e.status,
+			storiesCount: updatedSession.stories.filter((s) => s.epicId === e.id).length,
+		}))
+
+		// Build stories context
+		const storiesContext = updatedSession.stories.map((s) => ({
+			storyKey: s.storyKey,
+			title: s.title,
+			status: s.status,
+			storyPoints: s.storyPoints,
+		}))
+
+		// 9. Build system prompt with session context
+		const systemPrompt = buildSmSystemPrompt(
+			{
+				projectName: updatedSession.projectName,
+				projectDescription: updatedSession.projectDescription,
+				prdContext: updatedSession.prdContext ?? undefined,
+				sprintConfig: updatedSession.sprintConfig ?? undefined,
+				stepsCompleted: updatedSession.stepsCompleted ?? [],
+				totalEpics: updatedSession.totalEpics,
+				totalStories: updatedSession.totalStories,
+				epics: epicsContext,
+				stories: storiesContext,
+			},
+			updatedSession.currentStep,
+			undefined
+		)
+
+		// Build conversation history
+		const historyMessages = [...updatedSession.messages]
+			.reverse()
+			.filter((m) => m.role !== 'system')
+			.map((m) => ({
+				role: m.role as 'user' | 'assistant',
+				content: m.content,
+			}))
+
+		const llmMessages = [{ role: 'system' as const, content: systemPrompt }, ...historyMessages]
+
+		// 10. Stream response
+		return streamSSE(c, async (stream) => {
+			try {
+				const client = getOpenRouterClient()
+				let fullResponse = ''
+
+				const generator = client.chatStream({
+					messages: llmMessages,
+					model: 'deepseek/deepseek-v3.2',
+					temperature: 0.7,
+					max_tokens: 16384,
+				})
+
+				for await (const chunk of generator) {
+					fullResponse += chunk
+					await stream.writeSSE({
+						data: JSON.stringify({ content: chunk }),
+					})
+				}
+
+				// Save assistant response
+				await db.insert(smMessages).values({
+					sessionId,
+					role: 'assistant',
+					content: fullResponse,
+					step: updatedSession.currentStep,
+				})
+
+				// Update session with totals
+				await db
+					.update(smSessions)
+					.set({
+						updatedAt: new Date(),
+						totalEpics: updatedSession.epics.length,
+						totalStories: updatedSession.stories.length,
+						totalStoryPoints: updatedSession.stories.reduce((sum, s) => sum + (s.storyPoints ?? 0), 0),
+					})
+					.where(eq(smSessions.id, sessionId))
+
+				await stream.writeSSE({ data: '[DONE]' })
+			} catch (error) {
+				if (error instanceof OpenRouterAPIError) {
+					await stream.writeSSE({
+						data: JSON.stringify({
+							error: { code: error.code, message: error.message },
+						}),
+					})
+				} else {
+					await stream.writeSSE({
+						data: JSON.stringify({
+							error: { message: 'Failed to generate response' },
+						}),
+					})
+				}
+			}
+		})
+	}
+)
 
 // ============================================
 // EPIC ENDPOINTS
@@ -778,6 +1257,54 @@ smRoutes.delete('/stories/:id', authMiddleware, async (c) => {
 })
 
 // ============================================
+// ENRICHMENT ENDPOINTS
+// ============================================
+
+/**
+ * Enrich stories with AC, Tasks, DevNotes extracted from conversation
+ * Called before document generation or when accessing backlog
+ */
+smRoutes.post('/sessions/:id/enrich', authMiddleware, async (c) => {
+	const { userId } = getAuth(c)
+	const sessionId = c.req.param('id')
+
+	const user = await getUserByClerkId(userId)
+	if (!user) {
+		return commonErrors.notFound(c, 'User not found')
+	}
+
+	const session = await db.query.smSessions.findFirst({
+		where: and(eq(smSessions.id, sessionId), eq(smSessions.userId, user.id)),
+		with: {
+			stories: {
+				columns: { id: true, storyKey: true, title: true },
+			},
+		},
+	})
+
+	if (!session) {
+		return commonErrors.notFound(c, 'Session not found')
+	}
+
+	if (session.stories.length === 0) {
+		return successResponse(c, { enriched: 0, failed: 0, message: 'No stories to enrich' })
+	}
+
+	try {
+		console.log(`[SM] Starting enrichment for session ${sessionId} with ${session.stories.length} stories`)
+		const result = await enrichStoriesFromConversation(sessionId, session.stories)
+		console.log(`[SM] Enrichment completed: ${result.enriched} enriched, ${result.failed} failed`)
+		return successResponse(c, {
+			...result,
+			message: `Enriched ${result.enriched} stories`,
+		})
+	} catch (error) {
+		console.error('[SM] Failed to enrich stories:', error)
+		return commonErrors.badRequest(c, 'Failed to enrich stories')
+	}
+})
+
+// ============================================
 // DOCUMENT ENDPOINTS
 // ============================================
 
@@ -814,12 +1341,58 @@ smRoutes.post(
 			return commonErrors.notFound(c, 'Session not found')
 		}
 
+		// Enrich stories with AC, Tasks, DevNotes before generating document
+		if (session.stories.length > 0) {
+			try {
+				console.log(`[SM] Enriching ${session.stories.length} stories before document generation`)
+				await enrichStoriesFromConversation(
+					sessionId,
+					session.stories.map((s) => ({
+						id: s.id,
+						storyKey: s.storyKey,
+						title: s.title,
+					}))
+				)
+
+				// Reload stories after enrichment to get updated data
+				const enrichedSession = await db.query.smSessions.findFirst({
+					where: eq(smSessions.id, sessionId),
+					with: {
+						epics: { orderBy: [asc(smEpics.number)] },
+						stories: { orderBy: [asc(smStories.epicNumber), asc(smStories.storyNumber)] },
+					},
+				})
+
+				if (enrichedSession) {
+					// Update the session object with enriched data
+					Object.assign(session, {
+						epics: enrichedSession.epics,
+						stories: enrichedSession.stories,
+					})
+				}
+				console.log('[SM] Stories enriched successfully')
+			} catch (error) {
+				console.error('[SM] Failed to enrich stories (continuing with document generation):', error)
+				// Don't fail the document generation if enrichment fails
+			}
+		}
+
 		// Check if document of this type already exists
 		const existingDoc = await db.query.smDocuments.findFirst({
 			where: and(eq(smDocuments.sessionId, sessionId), eq(smDocuments.type, docType)),
 			orderBy: [desc(smDocuments.version)],
 		})
 		const nextVersion = existingDoc ? existingDoc.version + 1 : 1
+
+		// Mark generation as started BEFORE streaming
+		await db
+			.update(smSessions)
+			.set({
+				generationStatus: 'generating',
+				generationStartedAt: new Date(),
+				generationError: null,
+			})
+			.where(eq(smSessions.id, sessionId))
 
 		// Stream document generation
 		return streamSSE(c, async (stream) => {
@@ -861,9 +1434,9 @@ smRoutes.post(
 
 				const generator = client.chatStream({
 					messages: [{ role: 'user', content: prompt }],
-					model: 'deepseek/deepseek-chat-v3-0324',
+					model: 'deepseek/deepseek-v3.2',
 					temperature: 0.5,
-					max_tokens: 8192,
+					max_tokens: 16384, // DeepSeek V3 via OpenRouter max output
 				})
 
 				for await (const chunk of generator) {
@@ -895,7 +1468,7 @@ smRoutes.post(
 					})
 					.returning()
 
-				// Also update session
+				// Also update session + mark generation as completed
 				await db
 					.update(smSessions)
 					.set({
@@ -903,6 +1476,7 @@ smRoutes.post(
 						documentTitle: docTitles[docType],
 						currentStep: 'complete',
 						status: 'completed',
+						generationStatus: 'completed',
 						completedAt: new Date(),
 						updatedAt: new Date(),
 					})
@@ -916,6 +1490,19 @@ smRoutes.post(
 				})
 				await stream.writeSSE({ data: '[DONE]' })
 			} catch (error) {
+				const errorMessage =
+					error instanceof OpenRouterAPIError ? error.message : 'Failed to generate document'
+
+				// Mark generation as failed
+				await db
+					.update(smSessions)
+					.set({
+						generationStatus: 'failed',
+						generationError: errorMessage,
+						updatedAt: new Date(),
+					})
+					.where(eq(smSessions.id, sessionId))
+
 				if (error instanceof OpenRouterAPIError) {
 					await stream.writeSSE({
 						data: JSON.stringify({

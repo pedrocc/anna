@@ -1,39 +1,131 @@
 import { zValidator } from '@hono/zod-validator'
-import { briefingSessions, db, prdDocuments, prdMessages, prdSessions, users } from '@repo/db'
+import {
+	briefingDocuments,
+	briefingSessions,
+	db,
+	prdDocuments,
+	prdMessages,
+	prdSessions,
+	smSessions,
+} from '@repo/db'
+import type { PrdStep } from '@repo/shared'
 import {
 	CreatePrdDocumentSchema,
 	CreatePrdSessionSchema,
+	EditPrdMessageRequestSchema,
 	PaginationSchema,
 	PrdChatRequestSchema,
 	UpdatePrdDocumentSchema,
 	UpdatePrdSessionSchema,
 } from '@repo/shared'
-import { and, desc, eq, sql } from 'drizzle-orm'
+import { and, desc, eq, gte, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { streamSSE } from 'hono/streaming'
+import { getUserByClerkId } from '../lib/helpers.js'
 import { getOpenRouterClient, OpenRouterAPIError } from '../lib/openrouter.js'
 import {
+	buildBriefingAnalysisPrompt,
+	buildExtractionPrompt,
 	buildPrdDocumentPrompt,
 	buildPrdSystemPrompt,
 	buildPrdWelcomeMessage,
 	getNextStep,
 	getStepInfo,
 	PRD_STEPS_ORDER,
-	shouldSkipStep,
 } from '../lib/prd-prompts.js'
 import { commonErrors, successResponse } from '../lib/response.js'
 import { type AuthVariables, authMiddleware, getAuth } from '../middleware/auth.js'
 
 export const prdRoutes = new Hono<{ Variables: AuthVariables }>()
 
-// ============================================
-// HELPER: Get user by clerkId
-// ============================================
-
-async function getUserByClerkId(clerkId: string) {
-	return db.query.users.findFirst({
-		where: eq(users.clerkId, clerkId),
-	})
+// Step completion patterns for auto-detection (seguindo padrão do Briefing)
+// Patterns são testados contra resposta normalizada (lowercase, sem acentos)
+// IMPORTANTE: Os patterns devem estar alinhados com as frases de transição definidas em prd-prompts.ts
+const stepCompletionPatterns: Record<PrdStep, RegExp[]> = {
+	init: [
+		/vamos\s+(para|comecar|iniciar)\s+(a\s+)?descoberta/i,
+		/avanc(ar|ando)\s+para\s+descoberta/i,
+		/proxim[ao]\s+(etapa|passo).*descoberta/i,
+		/fase\s+discovery/i,
+		/etapa\s+de\s+descoberta/i,
+	],
+	discovery: [
+		/vamos\s+(para|definir)\s+(os\s+)?criterios\s+de\s+sucesso/i,
+		/avanc(ar|ando)\s+para\s+(criterios|sucesso)/i,
+		/proxim[ao]\s+(etapa|passo).*sucesso/i,
+		/criterios\s+de\s+sucesso\s*\(step\s*3\)/i,
+		/step\s*3.*sucesso/i,
+		/agora\s+vamos\s+definir\s+(os\s+)?criterios\s+de\s+sucesso/i,
+	],
+	success: [
+		/vamos\s+(para\s+)?(mapear\s+)?(as\s+)?jornadas/i,
+		/avanc(ar|ando)\s+para\s+jornadas/i,
+		/proxim[ao]\s+(etapa|passo).*jornadas/i,
+		/mapeamento\s+de\s+(usuarios|jornadas)/i,
+		/step\s*4.*jornadas/i,
+		/agora\s+vamos\s+mapear\s+(as\s+)?jornadas/i,
+	],
+	journeys: [
+		/vamos\s+(para\s+)?(explorar\s+)?(os\s+)?requisitos\s+de\s+dominio/i,
+		/avanc(ar|ando)\s+para\s+dominio/i,
+		/proxim[ao]\s+(etapa|passo).*dominio/i,
+		/podemos\s+pular.*dominio/i,
+		/exploracao\s+de\s+dominio/i,
+		/step\s*5.*dominio/i,
+		/precisamos\s+explorar\s+requisitos\s+(especificos\s+)?(do\s+)?dominio/i,
+	],
+	domain: [
+		/vamos\s+(para\s+)?(verificar\s+)?(se\s+ha\s+)?inovacao/i,
+		/avanc(ar|ando)\s+para\s+inovacao/i,
+		/proxim[ao]\s+etapa.*inovacao/i,
+		/descoberta\s+de\s+inovacao/i,
+		/step\s*6.*inovacao/i,
+		/requisitos\s+de\s+dominio\s+documentados/i,
+		/agora\s+(vamos\s+)?(para\s+)?inovacao/i,
+	],
+	innovation: [
+		/deep\s+dive\s+(no\s+)?tipo\s+de\s+projeto/i,
+		/avanc(ar|ando)\s+para\s+(project.?type|tipo)/i,
+		/vamos\s+(para\s+)?(o\s+)?tipo\s+de\s+projeto/i,
+		/detalhes\s+tecnicos/i,
+		/step\s*7.*tipo/i,
+		/inovacoes\s+mapeadas/i,
+		/agora\s+vamos\s+(fazer\s+)?(um\s+)?deep\s+dive/i,
+	],
+	project_type: [
+		/vamos\s+(para\s+)?(definir\s+)?(o\s+)?escopo/i,
+		/avanc(ar|ando)\s+para\s+escopo/i,
+		/proxim[ao]\s+(etapa|passo).*escopo/i,
+		/mvp\s+e\s+priorizacao/i,
+		/step\s*8.*escopo/i,
+		/detalhes\s+tecnicos\s+documentados/i,
+		/agora\s+vamos\s+definir\s+(o\s+)?escopo\s+mvp/i,
+	],
+	scoping: [
+		/vamos\s+(para\s+)?(sintetizar\s+)?(os\s+)?requisitos\s+funcionais/i,
+		/avanc(ar|ando)\s+para\s+(funcionais|requisitos)/i,
+		/requisitos\s+funcionais\s*\(fr/i,
+		/step\s*9.*funcionais/i,
+		/escopo\s+definido/i,
+		/agora\s+vamos\s+sintetizar\s+(os\s+)?requisitos\s+funcionais/i,
+	],
+	functional: [
+		/vamos\s+(para\s+)?(os\s+)?requisitos\s+nao.?funcionais/i,
+		/avanc(ar|ando)\s+para\s+nao.?funcionais/i,
+		/requisitos\s+nao.?funcionais\s*\(nfr/i,
+		/step\s*10.*nao.?funcionais/i,
+		/requisitos\s+funcionais\s+definidos/i,
+		/agora\s+(os\s+)?requisitos\s+nao.?funcionais/i,
+	],
+	nonfunctional: [
+		/prd\s+(esta\s+)?(quase\s+)?completo/i,
+		/vamos\s+para\s+(a\s+)?conclusao/i,
+		/todas\s+(as\s+)?etapas\s+(foram\s+)?concluidas/i,
+		/step\s*11.*conclusao/i,
+		/documento\s+concluido/i,
+		/pronto\s+para\s+validacao/i,
+	],
+	complete: [],
 }
 
 // ============================================
@@ -98,8 +190,8 @@ prdRoutes.get('/sessions/:id', authMiddleware, async (c) => {
 		return commonErrors.notFound(c, 'Session not found')
 	}
 
-	// Reverse messages to chronological order
-	const messagesChronological = session.messages.reverse()
+	// Reverse messages to chronological order (use spread to avoid mutating original)
+	const messagesChronological = [...session.messages].reverse()
 
 	return successResponse(c, {
 		...session,
@@ -121,16 +213,41 @@ prdRoutes.post(
 			return commonErrors.notFound(c, 'User not found')
 		}
 
-		// Check for linked briefing session
-		let hasBriefing = false
+		// Briefing is optional - fetch if provided
+		let briefing: typeof briefingSessions.$inferSelect | undefined
+		let briefingContent: string | null = null
+
 		if (data.briefingSessionId) {
-			const briefing = await db.query.briefingSessions.findFirst({
+			briefing = await db.query.briefingSessions.findFirst({
 				where: and(
 					eq(briefingSessions.id, data.briefingSessionId),
 					eq(briefingSessions.userId, user.id)
 				),
 			})
-			hasBriefing = !!briefing
+
+			if (!briefing) {
+				return commonErrors.notFound(c, 'Briefing session not found')
+			}
+
+			if (briefing.status !== 'completed') {
+				return commonErrors.badRequest(c, 'Briefing must be completed before creating a PRD')
+			}
+
+			// Get the latest document from the briefing
+			const latestDocument = await db.query.briefingDocuments.findFirst({
+				where: eq(briefingDocuments.sessionId, data.briefingSessionId),
+				orderBy: [desc(briefingDocuments.version)],
+			})
+
+			// Use document content or fallback to session documentContent
+			briefingContent = latestDocument?.content ?? briefing.documentContent
+
+			if (!briefingContent) {
+				return commonErrors.badRequest(
+					c,
+					'Briefing does not have a generated document. Please generate the document first.'
+				)
+			}
 		}
 
 		// Create session
@@ -140,11 +257,11 @@ prdRoutes.post(
 				userId: user.id,
 				projectName: data.projectName,
 				projectDescription: data.projectDescription,
-				inputDocuments: data.briefingSessionId
+				inputDocuments: briefing
 					? [
 							{
-								name: 'Briefing Session',
-								path: data.briefingSessionId,
+								name: briefing.projectName,
+								path: data.briefingSessionId!,
 								type: 'briefing' as const,
 								loadedAt: new Date().toISOString(),
 							},
@@ -157,11 +274,11 @@ prdRoutes.post(
 			return commonErrors.internalError(c, 'Failed to create session')
 		}
 
-		// Create welcome message from Anna
+		// 1. Create welcome message from Anna
 		const welcomeMessage = buildPrdWelcomeMessage(
 			data.projectName,
 			data.projectDescription,
-			hasBriefing
+			!!briefingContent
 		)
 
 		await db.insert(prdMessages).values({
@@ -170,6 +287,47 @@ prdRoutes.post(
 			content: welcomeMessage,
 			step: 'init',
 		})
+
+		// If briefing is provided, add its content and generate AI analysis
+		if (briefingContent) {
+			// 2. Insert briefing document as user message
+			await db.insert(prdMessages).values({
+				sessionId: newSession.id,
+				role: 'user',
+				content: `**Documento do Briefing:**\n\n${briefingContent}`,
+				step: 'init',
+			})
+
+			// 3. Generate Anna's analysis of the briefing
+			const openRouter = getOpenRouterClient()
+			const analysisPrompt = buildBriefingAnalysisPrompt(briefingContent, data.projectName)
+
+			let annaAnalysis = ''
+			try {
+				const response = await openRouter.chat({
+					model: 'deepseek/deepseek-chat-v3-0324',
+					messages: [
+						{ role: 'system', content: analysisPrompt.systemPrompt },
+						{ role: 'user', content: analysisPrompt.userPrompt },
+					],
+					temperature: 0.7,
+					max_tokens: 4096,
+				})
+				annaAnalysis = response.choices[0]?.message?.content ?? ''
+			} catch {
+				// Fallback message if AI generation fails
+				annaAnalysis = `Recebi o briefing do projeto **"${data.projectName}"**. Vou analisar o documento e preparar as proximas etapas do PRD.
+
+Com base no briefing, vamos avancar para a etapa de **Descoberta**. Me conte: qual e o tipo de projeto que estamos construindo? (API, Mobile App, SaaS, etc.)`
+			}
+
+			await db.insert(prdMessages).values({
+				sessionId: newSession.id,
+				role: 'assistant',
+				content: annaAnalysis,
+				step: 'init',
+			})
+		}
 
 		// Get session with messages
 		const sessionWithMessages = await db.query.prdSessions.findFirst({
@@ -185,7 +343,7 @@ prdRoutes.post(
 			c,
 			{
 				...sessionWithMessages,
-				messages: sessionWithMessages?.messages.reverse() ?? [],
+				messages: [...(sessionWithMessages?.messages ?? [])].reverse(),
 			},
 			201
 		)
@@ -241,6 +399,60 @@ prdRoutes.delete('/sessions/:id', authMiddleware, async (c) => {
 	}
 
 	return successResponse(c, { deleted: true })
+})
+
+// Rename session with cascade to linked Briefing and SM sessions
+prdRoutes.post('/sessions/:id/rename', authMiddleware, async (c) => {
+	const { userId } = getAuth(c)
+	const sessionId = c.req.param('id')
+	const body = await c.req.json<{ projectName: string }>()
+
+	if (!body.projectName?.trim()) {
+		return commonErrors.badRequest(c, 'Project name is required')
+	}
+
+	const newName = body.projectName.trim()
+
+	const user = await getUserByClerkId(userId)
+	if (!user) {
+		return commonErrors.notFound(c, 'User not found')
+	}
+
+	// Get current PRD session to find linked briefing
+	const currentSession = await db.query.prdSessions.findFirst({
+		where: and(eq(prdSessions.id, sessionId), eq(prdSessions.userId, user.id)),
+	})
+
+	if (!currentSession) {
+		return commonErrors.notFound(c, 'Session not found')
+	}
+
+	// Update PRD session
+	await db
+		.update(prdSessions)
+		.set({ projectName: newName, updatedAt: new Date() })
+		.where(eq(prdSessions.id, sessionId))
+
+	// Find linked briefing from inputDocuments and update it
+	const docs = currentSession.inputDocuments as Array<{ path?: string; type?: string }> | null
+	const briefingDoc = docs?.find((d) => d.type === 'briefing')
+	if (briefingDoc?.path) {
+		await db
+			.update(briefingSessions)
+			.set({ projectName: newName, updatedAt: new Date() })
+			.where(and(eq(briefingSessions.id, briefingDoc.path), eq(briefingSessions.userId, user.id)))
+	}
+
+	// Update all SM sessions linked to this PRD
+	await db
+		.update(smSessions)
+		.set({ projectName: newName, updatedAt: new Date() })
+		.where(and(eq(smSessions.prdSessionId, sessionId), eq(smSessions.userId, user.id)))
+
+	return successResponse(c, {
+		updated: true,
+		projectName: newName,
+	})
 })
 
 // ============================================
@@ -317,7 +529,7 @@ prdRoutes.post('/chat', authMiddleware, zValidator('json', PrdChatRequestSchema)
 	)
 
 	// Build conversation history (reverse to chronological, then map)
-	const historyMessages = session.messages
+	const historyMessages = [...session.messages]
 		.reverse()
 		.filter((m) => m.role !== 'system')
 		.map((m) => ({
@@ -339,9 +551,9 @@ prdRoutes.post('/chat', authMiddleware, zValidator('json', PrdChatRequestSchema)
 
 			const generator = client.chatStream({
 				messages: llmMessages,
-				model: 'deepseek/deepseek-chat-v3-0324',
+				model: 'deepseek/deepseek-v3.2',
 				temperature: 0.7,
-				max_tokens: 2048,
+				max_tokens: 16384, // DeepSeek V3 via OpenRouter max output
 			})
 
 			for await (const chunk of generator) {
@@ -359,143 +571,52 @@ prdRoutes.post('/chat', authMiddleware, zValidator('json', PrdChatRequestSchema)
 				step: session.currentStep,
 			})
 
-			// Auto-detect step transitions based on Anna's response
-			let newStep = session.currentStep
-			const newStepsCompleted = [...(session.stepsCompleted ?? [])]
-
-			// Normalize text for comparison (lowercase, remove accents)
+			// Auto-advance step based on AI response content (padrão Briefing)
 			const normalizedResponse = fullResponse
 				.toLowerCase()
 				.normalize('NFD')
 				.replace(/[\u0300-\u036f]/g, '')
 
-			// Check for explicit action to advance or skip step
-			if (action === 'advance_step' || action === 'skip_step') {
-				const skipOptional = action === 'skip_step'
-				const nextStep = getNextStep(session.currentStep, skipOptional)
+			const currentPatterns = stepCompletionPatterns[session.currentStep] ?? []
+			const shouldAdvance =
+				session.currentStep !== 'complete' &&
+				currentPatterns.some((pattern) => pattern.test(normalizedResponse))
+
+			let newStep = session.currentStep
+			if (shouldAdvance) {
+				const nextStep = getNextStep(session.currentStep)
 				if (nextStep) {
 					newStep = nextStep
-					if (!newStepsCompleted.includes(session.currentStep)) {
-						newStepsCompleted.push(session.currentStep)
+					const stepsCompleted = [...(session.stepsCompleted ?? [])]
+					if (!stepsCompleted.includes(session.currentStep)) {
+						stepsCompleted.push(session.currentStep)
 					}
-				}
-			} else {
-				// Auto-detect transitions based on keywords in response
-				const transitionKeywords: Record<string, string[]> = {
-					discovery: [
-						'vamos para a **descoberta',
-						'classificar o projeto',
-						'descoberta de projeto',
-						'tipo de projeto',
-					],
-					success: [
-						'criterios de sucesso',
-						'vamos definir os **criterios',
-						'como medir sucesso',
-						'criterios de **sucesso',
-					],
-					journeys: [
-						'jornadas de usuario',
-						'mapeamento de usuarios',
-						'vamos mapear as **jornadas',
-						'personas e jornadas',
-					],
-					domain: [
-						'explorar requisitos especificos do dominio',
-						'requisitos de dominio',
-						'domain-especifica',
-						'exploracao de dominio',
-					],
-					innovation: [
-						'descoberta de inovacao',
-						'aspectos inovadores',
-						'vamos verificar se ha **inovacao',
-						'inovacao a explorar',
-					],
-					project_type: [
-						'deep dive',
-						'project-type especifico',
-						'detalhes tecnicos',
-						'vamos fazer um **deep dive',
-					],
-					scoping: [
-						'escopo mvp',
-						'priorizacao de features',
-						'vamos definir o **escopo',
-						'mvp e priorizacao',
-					],
-					functional: [
-						'requisitos funcionais',
-						'sintese de requisitos',
-						'vamos sintetizar os **requisitos funcionais',
-						'fr-',
-					],
-					nonfunctional: [
-						'requisitos nao-funcionais',
-						'atributos de qualidade',
-						'vamos para os **requisitos nao-funcionais',
-						'nfr-',
-					],
-					complete: [
-						'prd esta completo',
-						'concluimos o prd',
-						'vamos para a **conclusao',
-						'gerar o documento',
-						'prd completo',
-					],
-				}
-
-				for (const [targetStep, keywords] of Object.entries(transitionKeywords)) {
-					if (keywords.some((kw) => normalizedResponse.includes(kw))) {
-						const targetIndex = PRD_STEPS_ORDER.indexOf(targetStep as typeof newStep)
-						const currentIndex = PRD_STEPS_ORDER.indexOf(session.currentStep)
-
-						// Only advance if target is next step (or skipping optional)
-						if (targetIndex === currentIndex + 1) {
-							if (!newStepsCompleted.includes(session.currentStep)) {
-								newStepsCompleted.push(session.currentStep)
-							}
-							newStep = targetStep as typeof newStep
-							break
-						}
-						// Allow skipping optional steps
-						if (targetIndex > currentIndex + 1) {
-							const skippedStep = PRD_STEPS_ORDER[currentIndex + 1]
-							if (skippedStep && shouldSkipStep(skippedStep, session)) {
-								if (!newStepsCompleted.includes(session.currentStep)) {
-									newStepsCompleted.push(session.currentStep)
-								}
-								newStep = targetStep as typeof newStep
-								break
-							}
-						}
-					}
+					await db
+						.update(prdSessions)
+						.set({
+							currentStep: nextStep,
+							stepsCompleted,
+							...(nextStep === 'complete' && { status: 'completed', completedAt: new Date() }),
+							updatedAt: new Date(),
+						})
+						.where(eq(prdSessions.id, sessionId))
 				}
 			}
 
-			// Update session
-			const updateData: {
-				updatedAt: Date
-				currentStep?: typeof newStep
-				stepsCompleted?: string[]
-				status?: 'completed'
-				completedAt?: Date
-			} = {
-				updatedAt: new Date(),
+			// Update session timestamp if no step change
+			if (!shouldAdvance) {
+				await db
+					.update(prdSessions)
+					.set({ updatedAt: new Date() })
+					.where(eq(prdSessions.id, sessionId))
 			}
 
+			// Send step update event if step changed
 			if (newStep !== session.currentStep) {
-				updateData.currentStep = newStep
-				updateData.stepsCompleted = newStepsCompleted
+				await stream.writeSSE({
+					data: JSON.stringify({ stepUpdate: newStep }),
+				})
 			}
-
-			// Mark as completed if reaching complete step
-			if (newStep === 'complete' && session.status !== 'completed') {
-				updateData.status = 'completed'
-				updateData.completedAt = new Date()
-			}
-
-			await db.update(prdSessions).set(updateData).where(eq(prdSessions.id, sessionId))
 
 			await stream.writeSSE({ data: '[DONE]' })
 		} catch (error) {
@@ -517,6 +638,239 @@ prdRoutes.post('/chat', authMiddleware, zValidator('json', PrdChatRequestSchema)
 })
 
 // ============================================
+// MESSAGE EDIT ENDPOINT
+// ============================================
+
+prdRoutes.post(
+	'/messages/:messageId/edit',
+	authMiddleware,
+	zValidator('json', EditPrdMessageRequestSchema),
+	async (c) => {
+		const { userId } = getAuth(c)
+		const messageId = c.req.param('messageId')
+		const { content } = c.req.valid('json')
+
+		const user = await getUserByClerkId(userId)
+		if (!user) {
+			return commonErrors.notFound(c, 'User not found')
+		}
+
+		// 1. Get the message to edit
+		const message = await db.query.prdMessages.findFirst({
+			where: eq(prdMessages.id, messageId),
+		})
+
+		if (!message) {
+			return commonErrors.notFound(c, 'Message not found')
+		}
+
+		// 2. Validate it's a user message
+		if (message.role !== 'user') {
+			return commonErrors.badRequest(c, 'Can only edit user messages')
+		}
+
+		// 3. Get session and verify ownership
+		const session = await db.query.prdSessions.findFirst({
+			where: and(eq(prdSessions.id, message.sessionId), eq(prdSessions.userId, user.id)),
+		})
+
+		if (!session) {
+			return commonErrors.forbidden(c, 'Access denied')
+		}
+
+		const sessionId = message.sessionId
+		const editedStep = message.step
+		const messageTimestamp = message.createdAt
+
+		// 4. Delete all messages from this point onwards (inclusive)
+		await db
+			.delete(prdMessages)
+			.where(and(eq(prdMessages.sessionId, sessionId), gte(prdMessages.createdAt, messageTimestamp)))
+
+		// 5. Check if we need to rollback the step
+		const currentStepIndex = PRD_STEPS_ORDER.indexOf(session.currentStep)
+		const editedStepIndex = PRD_STEPS_ORDER.indexOf(editedStep)
+
+		if (currentStepIndex > editedStepIndex) {
+			// Rollback to the edited step
+			const newStepsCompleted = (session.stepsCompleted ?? []).filter(
+				(s) => PRD_STEPS_ORDER.indexOf(s as PrdStep) < editedStepIndex
+			)
+
+			await db
+				.update(prdSessions)
+				.set({
+					currentStep: editedStep,
+					stepsCompleted: newStepsCompleted,
+					status: 'active',
+					completedAt: null,
+					updatedAt: new Date(),
+				})
+				.where(eq(prdSessions.id, sessionId))
+		}
+
+		// 6. Insert the new edited user message
+		await db.insert(prdMessages).values({
+			sessionId,
+			role: 'user',
+			content,
+			step: editedStep,
+		})
+
+		// 7. Refresh session data for LLM context
+		const updatedSession = await db.query.prdSessions.findFirst({
+			where: eq(prdSessions.id, sessionId),
+			with: {
+				messages: {
+					orderBy: [desc(prdMessages.createdAt)],
+					limit: 50,
+				},
+			},
+		})
+
+		if (!updatedSession) {
+			return commonErrors.internalError(c, 'Failed to refresh session')
+		}
+
+		// 8. Build system prompt with session context
+		const systemPrompt = buildPrdSystemPrompt(
+			{
+				projectName: updatedSession.projectName,
+				projectDescription: updatedSession.projectDescription,
+				projectType: updatedSession.projectType,
+				domain: updatedSession.domain,
+				domainComplexity: updatedSession.domainComplexity,
+				executiveSummary: updatedSession.executiveSummary,
+				differentiators: updatedSession.differentiators ?? [],
+				successCriteria: updatedSession.successCriteria ?? [],
+				personas: updatedSession.personas ?? [],
+				userJourneys: updatedSession.userJourneys ?? [],
+				domainConcerns: updatedSession.domainConcerns ?? [],
+				regulatoryRequirements: updatedSession.regulatoryRequirements ?? [],
+				skipDomainStep: updatedSession.skipDomainStep,
+				innovations: updatedSession.innovations ?? [],
+				skipInnovationStep: updatedSession.skipInnovationStep,
+				projectTypeDetails: updatedSession.projectTypeDetails ?? {},
+				projectTypeQuestions: updatedSession.projectTypeQuestions ?? {},
+				features: updatedSession.features ?? [],
+				outOfScope: updatedSession.outOfScope ?? [],
+				mvpSuccessCriteria: updatedSession.mvpSuccessCriteria ?? [],
+				functionalRequirements: updatedSession.functionalRequirements ?? [],
+				nonFunctionalRequirements: updatedSession.nonFunctionalRequirements ?? [],
+				stepsCompleted: updatedSession.stepsCompleted ?? [],
+				inputDocuments: updatedSession.inputDocuments ?? [],
+			},
+			updatedSession.currentStep,
+			undefined
+		)
+
+		// Build conversation history
+		const historyMessages = [...updatedSession.messages]
+			.reverse()
+			.filter((m) => m.role !== 'system')
+			.map((m) => ({
+				role: m.role as 'user' | 'assistant',
+				content: m.content,
+			}))
+
+		const llmMessages = [{ role: 'system' as const, content: systemPrompt }, ...historyMessages]
+
+		// 9. Stream response
+		return streamSSE(c, async (stream) => {
+			try {
+				const client = getOpenRouterClient()
+				let fullResponse = ''
+
+				const generator = client.chatStream({
+					messages: llmMessages,
+					model: 'deepseek/deepseek-v3.2',
+					temperature: 0.7,
+					max_tokens: 16384,
+				})
+
+				for await (const chunk of generator) {
+					fullResponse += chunk
+					await stream.writeSSE({
+						data: JSON.stringify({ content: chunk }),
+					})
+				}
+
+				// Save assistant response
+				await db.insert(prdMessages).values({
+					sessionId,
+					role: 'assistant',
+					content: fullResponse,
+					step: updatedSession.currentStep,
+				})
+
+				// Auto-advance step based on AI response content (padrão Briefing)
+				const normalizedResponse = fullResponse
+					.toLowerCase()
+					.normalize('NFD')
+					.replace(/[\u0300-\u036f]/g, '')
+
+				const currentPatterns = stepCompletionPatterns[updatedSession.currentStep] ?? []
+				const shouldAdvance =
+					updatedSession.currentStep !== 'complete' &&
+					currentPatterns.some((pattern) => pattern.test(normalizedResponse))
+
+				let newStep = updatedSession.currentStep
+				if (shouldAdvance) {
+					const nextStep = getNextStep(updatedSession.currentStep)
+					if (nextStep) {
+						newStep = nextStep
+						const stepsCompleted = [...(updatedSession.stepsCompleted ?? [])]
+						if (!stepsCompleted.includes(updatedSession.currentStep)) {
+							stepsCompleted.push(updatedSession.currentStep)
+						}
+						await db
+							.update(prdSessions)
+							.set({
+								currentStep: nextStep,
+								stepsCompleted,
+								...(nextStep === 'complete' && { status: 'completed', completedAt: new Date() }),
+								updatedAt: new Date(),
+							})
+							.where(eq(prdSessions.id, sessionId))
+					}
+				}
+
+				// Update session timestamp if no step change
+				if (!shouldAdvance) {
+					await db
+						.update(prdSessions)
+						.set({ updatedAt: new Date() })
+						.where(eq(prdSessions.id, sessionId))
+				}
+
+				// Send step update event if step changed
+				if (newStep !== updatedSession.currentStep) {
+					await stream.writeSSE({
+						data: JSON.stringify({ stepUpdate: newStep }),
+					})
+				}
+
+				await stream.writeSSE({ data: '[DONE]' })
+			} catch (error) {
+				if (error instanceof OpenRouterAPIError) {
+					await stream.writeSSE({
+						data: JSON.stringify({
+							error: { code: error.code, message: error.message },
+						}),
+					})
+				} else {
+					await stream.writeSSE({
+						data: JSON.stringify({
+							error: { message: 'Failed to generate response' },
+						}),
+					})
+				}
+			}
+		})
+	}
+)
+
+// ============================================
 // DOCUMENT ENDPOINTS
 // ============================================
 
@@ -536,14 +890,22 @@ prdRoutes.post(
 			return commonErrors.notFound(c, 'User not found')
 		}
 
-		// Get session with all data
+		// Get session with all data and messages
 		const session = await db.query.prdSessions.findFirst({
 			where: and(eq(prdSessions.id, sessionId), eq(prdSessions.userId, user.id)),
+			with: {
+				messages: {
+					orderBy: [desc(prdMessages.createdAt)],
+				},
+			},
 		})
 
 		if (!session) {
 			return commonErrors.notFound(c, 'Session not found')
 		}
+
+		// Get messages in chronological order for document generation
+		const messagesChronological = [...(session.messages ?? [])].reverse()
 
 		// Check if document of this type already exists - get latest version
 		const existingDoc = await db.query.prdDocuments.findFirst({
@@ -552,48 +914,80 @@ prdRoutes.post(
 		})
 		const nextVersion = existingDoc ? existingDoc.version + 1 : 1
 
+		// Mark generation as started BEFORE streaming
+		await db
+			.update(prdSessions)
+			.set({
+				generationStatus: 'generating',
+				generationStartedAt: new Date(),
+				generationError: null,
+			})
+			.where(eq(prdSessions.id, sessionId))
+
 		// Stream document generation
+		console.log('[PRD Document] Starting document generation for session:', sessionId)
+		console.log('[PRD Document] Messages count:', messagesChronological.length)
+
 		return streamSSE(c, async (stream) => {
+			console.log('[PRD Document] SSE stream started')
 			try {
 				const client = getOpenRouterClient()
 				let fullDocument = ''
 
-				const prompt = buildPrdDocumentPrompt({
-					projectName: session.projectName,
-					projectDescription: session.projectDescription,
-					projectType: session.projectType,
-					domain: session.domain,
-					domainComplexity: session.domainComplexity,
-					executiveSummary: session.executiveSummary,
-					differentiators: session.differentiators ?? [],
-					successCriteria: session.successCriteria ?? [],
-					personas: session.personas ?? [],
-					userJourneys: session.userJourneys ?? [],
-					domainConcerns: session.domainConcerns ?? [],
-					regulatoryRequirements: session.regulatoryRequirements ?? [],
-					innovations: session.innovations ?? [],
-					projectTypeDetails: session.projectTypeDetails ?? {},
-					projectTypeQuestions: session.projectTypeQuestions ?? {},
-					features: session.features ?? [],
-					outOfScope: session.outOfScope ?? [],
-					mvpSuccessCriteria: session.mvpSuccessCriteria ?? [],
-					functionalRequirements: session.functionalRequirements ?? [],
-					nonFunctionalRequirements: session.nonFunctionalRequirements ?? [],
-				})
+				const prompt = buildPrdDocumentPrompt(
+					{
+						projectName: session.projectName,
+						projectDescription: session.projectDescription,
+						projectType: session.projectType,
+						domain: session.domain,
+						domainComplexity: session.domainComplexity,
+						executiveSummary: session.executiveSummary,
+						differentiators: session.differentiators ?? [],
+						successCriteria: session.successCriteria ?? [],
+						personas: session.personas ?? [],
+						userJourneys: session.userJourneys ?? [],
+						domainConcerns: session.domainConcerns ?? [],
+						regulatoryRequirements: session.regulatoryRequirements ?? [],
+						innovations: session.innovations ?? [],
+						projectTypeDetails: session.projectTypeDetails ?? {},
+						projectTypeQuestions: session.projectTypeQuestions ?? {},
+						features: session.features ?? [],
+						outOfScope: session.outOfScope ?? [],
+						mvpSuccessCriteria: session.mvpSuccessCriteria ?? [],
+						functionalRequirements: session.functionalRequirements ?? [],
+						nonFunctionalRequirements: session.nonFunctionalRequirements ?? [],
+					},
+					messagesChronological.map((m) => ({ role: m.role, content: m.content })),
+					user.name
+				)
+
+				console.log('[PRD Document] Prompt length:', prompt.length)
+				console.log('[PRD Document] Calling OpenRouter...')
 
 				const generator = client.chatStream({
 					messages: [{ role: 'user', content: prompt }],
-					model: 'deepseek/deepseek-chat-v3-0324',
+					model: 'deepseek/deepseek-v3.2',
 					temperature: 0.5,
-					max_tokens: 8192, // PRD needs more tokens
+					max_tokens: 16384, // DeepSeek V3 via OpenRouter max output for comprehensive PRD documents
 				})
 
+				console.log('[PRD Document] Generator created, starting iteration...')
+				let chunkCount = 0
 				for await (const chunk of generator) {
+					chunkCount++
+					if (chunkCount === 1) {
+						console.log('[PRD Document] First chunk received')
+					} else if (chunkCount % 100 === 0) {
+						console.log(`[PRD Document] Chunk ${chunkCount}, doc length: ${fullDocument.length}`)
+					}
 					fullDocument += chunk
 					await stream.writeSSE({
 						data: JSON.stringify({ content: chunk }),
 					})
 				}
+				console.log(
+					`[PRD Document] Loop finished. Total chunks: ${chunkCount}, final length: ${fullDocument.length}`
+				)
 
 				// Define title based on document type
 				const docTitles: Record<string, string> = {
@@ -618,7 +1012,7 @@ prdRoutes.post(
 					})
 					.returning()
 
-				// Also update session
+				// Also update session + mark generation as completed
 				await db
 					.update(prdSessions)
 					.set({
@@ -626,10 +1020,76 @@ prdRoutes.post(
 						documentTitle: docTitles[docType],
 						currentStep: 'complete',
 						status: 'completed',
+						generationStatus: 'completed',
 						completedAt: new Date(),
 						updatedAt: new Date(),
 					})
 					.where(eq(prdSessions.id, sessionId))
+
+				// Extract structured data from document (non-blocking)
+				try {
+					console.log('[PRD Document] Starting structured data extraction...')
+					const extractionPrompt = buildExtractionPrompt(fullDocument)
+
+					const extractionResponse = await client.chat({
+						messages: [
+							{
+								role: 'system',
+								content:
+									'Você é um especialista em análise de documentos PRD. Extraia dados estruturados em JSON válido. Responda APENAS com JSON, sem explicações.',
+							},
+							{ role: 'user', content: extractionPrompt },
+						],
+						model: 'deepseek/deepseek-chat', // Modelo mais barato para extração
+						temperature: 0.1, // Baixa temperatura para output consistente
+						max_tokens: 8192,
+					})
+
+					const jsonContent = extractionResponse.choices[0]?.message?.content
+					if (jsonContent) {
+						// Tentar parsear o JSON (pode ter markdown wrapper)
+						let cleanJson = jsonContent.trim()
+						// Remover possíveis wrappers de markdown
+						if (cleanJson.startsWith('```json')) {
+							cleanJson = cleanJson.slice(7)
+						} else if (cleanJson.startsWith('```')) {
+							cleanJson = cleanJson.slice(3)
+						}
+						if (cleanJson.endsWith('```')) {
+							cleanJson = cleanJson.slice(0, -3)
+						}
+						cleanJson = cleanJson.trim()
+
+						const extractedData = JSON.parse(cleanJson)
+						console.log('[PRD Document] Extraction successful:', {
+							features: extractedData.features?.length ?? 0,
+							frs: extractedData.functionalRequirements?.length ?? 0,
+							personas: extractedData.personas?.length ?? 0,
+						})
+
+						// Update session with structured data
+						await db
+							.update(prdSessions)
+							.set({
+								executiveSummary: extractedData.executiveSummary ?? null,
+								personas: extractedData.personas ?? [],
+								features: extractedData.features ?? [],
+								functionalRequirements: extractedData.functionalRequirements ?? [],
+								nonFunctionalRequirements: extractedData.nonFunctionalRequirements ?? [],
+								successCriteria: extractedData.successCriteria ?? [],
+								outOfScope: extractedData.outOfScope ?? [],
+								mvpSuccessCriteria: extractedData.mvpSuccessCriteria ?? [],
+								userJourneys: extractedData.userJourneys ?? [],
+								updatedAt: new Date(),
+							})
+							.where(eq(prdSessions.id, sessionId))
+
+						console.log('[PRD Document] Structured data saved to database')
+					}
+				} catch (extractionError) {
+					// Log but don't fail - extraction is optional
+					console.error('[PRD Document] Extraction failed:', extractionError)
+				}
 
 				await stream.writeSSE({
 					data: JSON.stringify({
@@ -637,8 +1097,24 @@ prdRoutes.post(
 						document: newDoc,
 					}),
 				})
+				console.log('[PRD Document] Stream complete. Total chunks:', chunkCount)
+				console.log('[PRD Document] Full document length:', fullDocument.length)
 				await stream.writeSSE({ data: '[DONE]' })
 			} catch (error) {
+				console.error('[PRD Document] Error:', error)
+				const errorMessage =
+					error instanceof OpenRouterAPIError ? error.message : 'Failed to generate document'
+
+				// Mark generation as failed
+				await db
+					.update(prdSessions)
+					.set({
+						generationStatus: 'failed',
+						generationError: errorMessage,
+						updatedAt: new Date(),
+					})
+					.where(eq(prdSessions.id, sessionId))
+
 				if (error instanceof OpenRouterAPIError) {
 					await stream.writeSSE({
 						data: JSON.stringify({

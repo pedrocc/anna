@@ -16,6 +16,8 @@ export const BriefingStepSchema = z.enum([
 
 export const BriefingStatusSchema = z.enum(['active', 'paused', 'completed', 'archived'])
 
+export const BriefingGenerationStatusSchema = z.enum(['idle', 'generating', 'completed', 'failed'])
+
 export const BriefingMessageRoleSchema = z.enum(['system', 'user', 'assistant'])
 
 export const BriefingDocumentTypeSchema = z.enum([
@@ -156,6 +158,11 @@ export const BriefingSessionSchema = z
 		status: BriefingStatusSchema,
 		stepsCompleted: z.array(BriefingStepSchema),
 
+		// Generation state (persisted for page reload)
+		generationStatus: BriefingGenerationStatusSchema,
+		generationStartedAt: z.date().optional().nullable(),
+		generationError: z.string().optional().nullable(),
+
 		// Final document (Step 6)
 		documentContent: z.string().optional().nullable(),
 		documentTitle: z.string().optional().nullable(),
@@ -244,6 +251,10 @@ export const BriefingChatRequestSchema = z.object({
 		.optional(),
 })
 
+export const EditBriefingMessageRequestSchema = z.object({
+	content: z.string().min(1).max(10000),
+})
+
 // ============================================
 // DOCUMENT SCHEMAS
 // ============================================
@@ -282,6 +293,7 @@ export const GenerateBriefingDocumentSchema = z.object({
 
 export type BriefingStep = z.infer<typeof BriefingStepSchema>
 export type BriefingStatus = z.infer<typeof BriefingStatusSchema>
+export type BriefingGenerationStatus = z.infer<typeof BriefingGenerationStatusSchema>
 export type BriefingMessageRole = z.infer<typeof BriefingMessageRoleSchema>
 export type BriefingStepInfo = z.infer<typeof BriefingStepInfoSchema>
 export type BriefingPrimaryUser = z.infer<typeof BriefingPrimaryUserSchema>
@@ -299,6 +311,7 @@ export type CreateBriefingSession = z.infer<typeof CreateBriefingSessionSchema>
 export type UpdateBriefingSession = z.infer<typeof UpdateBriefingSessionSchema>
 export type BriefingMessage = z.infer<typeof BriefingMessageSchema>
 export type BriefingChatRequest = z.infer<typeof BriefingChatRequestSchema>
+export type EditBriefingMessageRequest = z.infer<typeof EditBriefingMessageRequestSchema>
 export type BriefingDocumentType = z.infer<typeof BriefingDocumentTypeSchema>
 export type BriefingDocument = z.infer<typeof BriefingDocumentSchema>
 export type CreateBriefingDocument = z.infer<typeof CreateBriefingDocumentSchema>

@@ -47,7 +47,7 @@ export function SignInPage() {
 						}}
 						routing="path"
 						path="/sign-in"
-						fallbackRedirectUrl="/brainstorm"
+						fallbackRedirectUrl="/inicio"
 					/>
 				</CardContent>
 			</Card>

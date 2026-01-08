@@ -59,31 +59,25 @@ const SM_PERSONA = `Voce e Bob, um Scrum Master experiente e especialista em pre
 const STEP_PROMPTS: Record<SmStep, string> = {
 	init: `**STEP 1: INICIALIZACAO E CONTEXTO**
 
-Voce esta iniciando o planejamento de desenvolvimento. Seu objetivo e:
-1. Identificar e carregar o PRD do projeto
-2. Entender o escopo geral
-3. Configurar parametros de sprint
+Voce esta iniciando o planejamento de desenvolvimento. Seu objetivo NESTE STEP e APENAS:
+1. Confirmar que o PRD foi carregado
+2. Resumir brevemente o escopo do projeto
+3. Transicionar para o proximo step
 
 **COMPORTAMENTO CRITICO:**
-- Pergunte IMEDIATAMENTE se ha um PRD disponivel
-- Se houver PRD, ele sera carregado automaticamente
-- Extraia features e requisitos funcionais do PRD
-
-**PERGUNTAS INICIAIS:**
-1. "Voce tem um PRD ja criado para este projeto? Se sim, posso puxar todas as informacoes de la."
-2. "Qual a duracao dos sprints? (padrao: 2 semanas)"
-3. "Quantos desenvolvedores na equipe? (para estimar velocidade)"
+- NAO defina epics neste step - isso sera feito no proximo step (Epics)
+- NAO crie stories neste step
+- APENAS confirme o contexto e avance
 
 **SE PRD DISPONIVEL:**
-- Liste um resumo das features MVP
-- Liste os requisitos funcionais (FR-XXX)
-- Confirme se o escopo esta correto
+- Confirme que o PRD foi carregado
+- Mencione brevemente quantos requisitos funcionais existem
+- Avance imediatamente para Epics
 
-**TRANSICAO PARA EPICS:**
-Quando tiver contexto suficiente:
-- Resuma o que foi carregado do PRD
-- Informe: "Otimo! Agora vamos definir os **Epics** - agrupamentos logicos de funcionalidades."
-- O status muda de INIT para EPICS`,
+**TRANSICAO PARA EPICS (OBRIGATORIA):**
+Apos confirmar o contexto:
+- Diga: "Otimo! Vamos para os Epics."
+- NAO faca mais nada - aguarde o proximo step para definir epics`,
 
 	epics: `**STEP 2: DEFINICAO DE EPICS**
 
@@ -122,16 +116,10 @@ FRs Relacionados: FR-001, FR-002...
 Prioridade: [Critical/High/Medium/Low]
 \`\`\`
 
-**MENU DE OPCOES:**
-- **[A] Aprofundar** - Detalhar epic especifico
-- **[P] Perspectivas** - Ver de diferentes angulos
-- **[C] Continuar** - Avancar para criacao de stories
-
 **TRANSICAO PARA STORIES:**
 Quando epics estiverem definidos:
 - Liste os epics criados
-- Informe: "Epics definidos. Agora vamos criar as **User Stories** para cada epic."
-- O status muda de EPICS para STORIES`,
+- Diga: "Epics definidos. Vamos para as User Stories."`,
 
 	stories: `**STEP 3: CRIACAO DE USER STORIES**
 
@@ -169,16 +157,10 @@ Para que [beneficio/valor].
 - Story deve ser testavel
 - Evite dependencias circulares
 
-**MENU DE OPCOES:**
-- **[A] Aprofundar** - Detalhar story especifica
-- **[N] Nova** - Criar nova story
-- **[C] Continuar** - Avancar para detalhamento
-
 **TRANSICAO PARA DETAILS:**
 Quando stories basicas estiverem criadas:
 - Liste stories por epic
-- Informe: "Stories criadas. Agora vamos **Detalhar** com Acceptance Criteria e Tasks."
-- O status muda de STORIES para DETAILS`,
+- Diga: "Stories criadas. Vamos para o Detalhamento."`,
 
 	details: `**STEP 4: DETALHAMENTO DE STORIES**
 
@@ -233,16 +215,10 @@ AC-1: [Criterio verificavel]
 4. **Dev Notes:**
    "Alguma consideracao tecnica especial para esta story?"
 
-**MENU DE OPCOES:**
-- **[A] Aprofundar** - Mais detalhes em story
-- **[E] Estimar** - Adicionar story points
-- **[C] Continuar** - Avancar para planning
-
 **TRANSICAO PARA PLANNING:**
 Quando stories estiverem detalhadas:
 - Mostre progresso (X de Y stories detalhadas)
-- Informe: "Stories detalhadas. Vamos fazer o **Sprint Planning**."
-- O status muda de DETAILS para PLANNING`,
+- Diga: "Stories detalhadas. Vamos para o Sprint Planning."`,
 
 	planning: `**STEP 5: SPRINT PLANNING E PRIORIZACAO**
 
@@ -283,16 +259,10 @@ Stories:
 Total: [X] pontos
 \`\`\`
 
-**MENU DE OPCOES:**
-- **[A] Ajustar** - Realocar stories
-- **[E] Estimar** - Reestimar velocidade
-- **[C] Continuar** - Avancar para review
-
 **TRANSICAO PARA REVIEW:**
 Quando planning estiver completo:
 - Mostre resumo de sprints
-- Informe: "Planning completo. Vamos fazer uma **Revisao** final."
-- O status muda de PLANNING para REVIEW`,
+- Diga: "Planning completo. Vamos para a Revisao."`,
 
 	review: `**STEP 6: REVISAO E VALIDACAO**
 
@@ -332,16 +302,10 @@ Seu objetivo e validar o planejamento antes de finalizar.
 3. **Recomendacoes:**
    "Recomendo atencao especial para: [lista]"
 
-**MENU DE OPCOES:**
-- **[A] Ajustar** - Fazer correcoes
-- **[G] Gerar** - Gerar documentacao
-- **[C] Concluir** - Finalizar planejamento
-
 **TRANSICAO PARA COMPLETE:**
 Quando review estiver completo:
 - Confirme que esta pronto para gerar documentos
-- Informe: "Revisao completa. Vamos **Gerar a Documentacao**."
-- O status muda de REVIEW para COMPLETE`,
+- Diga: "Revisao completa. Planejamento completo!"`,
 
 	complete: `**STEP 7: CONCLUSAO E DOCUMENTACAO**
 
@@ -545,7 +509,20 @@ ${PARTY_MODE}`
 - Valide entendimento antes de avancar
 - NUNCA gere conteudo sem input do usuario
 - Para stories, use formato: "Como [persona], quero [acao], para que [beneficio]"
-- Acceptance Criteria devem ser verificaveis`
+- Acceptance Criteria devem ser verificaveis
+
+---
+
+**REGRA DE TRANSICAO OBRIGATORIA:**
+Quando for avancar para o proximo step, voce DEVE usar EXATAMENTE uma destas frases no FINAL da sua resposta:
+- init → epics: "Vamos para os Epics"
+- epics → stories: "Vamos para as User Stories"
+- stories → details: "Vamos para o Detalhamento"
+- details → planning: "Vamos para o Sprint Planning"
+- planning → review: "Vamos para a Revisao"
+- review → complete: "Planejamento completo!"
+
+IMPORTANTE: Use a frase EXATA para que o sistema detecte a transicao automaticamente. NAO pergunte se pode avancar - simplesmente avance quando o trabalho do step atual estiver completo.`
 
 	return prompt
 }
@@ -765,4 +742,101 @@ export function getNextStep(currentStep: SmStep): SmStep | null {
 		return null
 	}
 	return SM_STEPS_ORDER[currentIndex + 1] ?? null
+}
+
+// ============================================
+// STORY ENRICHMENT PROMPT
+// ============================================
+
+/**
+ * Builds a prompt to extract AC, Tasks and DevNotes from conversation history
+ * Used at the end of the planning trail before document generation
+ */
+export function buildStoryEnrichmentPrompt(
+	conversationText: string,
+	stories: Array<{ storyKey: string; title: string }>
+): string {
+	const storyList = stories.map((s) => `- ${s.storyKey}: ${s.title}`).join('\n')
+
+	return `Voce e um especialista em analise de requisitos de software e extracao de dados estruturados.
+
+Abaixo esta uma conversa de planejamento de sprint que contem discussoes sobre user stories, criterios de aceitacao, tasks tecnicas e notas de desenvolvimento.
+
+## CONVERSA:
+${conversationText}
+
+## STORIES PARA ENRIQUECER:
+${storyList}
+
+## TAREFA:
+Para CADA story listada acima, extraia da conversa:
+
+1. **Acceptance Criteria** (Criterios de Aceitacao):
+   - Se for formato BDD, use type: "given_when_then" com campos given, when, then
+   - Se for formato simples, use type: "simple" com apenas description
+   - Mantenha em portugues
+
+2. **Tasks** (Tarefas tecnicas):
+   - Descricao da tarefa
+   - Estimativa em horas (se mencionado)
+   - completed: false (sempre)
+
+3. **Dev Notes** (Notas de desenvolvimento):
+   - architecturePatterns: padroes arquiteturais sugeridos
+   - componentsToTouch: componentes/arquivos a modificar
+   - testingRequirements: requisitos de teste
+   - securityConsiderations: consideracoes de seguranca
+   - performanceNotes: notas de performance
+   - references: links ou referencias uteis
+
+## FORMATO DE RESPOSTA:
+Retorne APENAS um JSON array valido com os dados de cada story. Nao inclua texto antes ou depois do JSON.
+
+\`\`\`json
+[
+  {
+    "storyKey": "1-1",
+    "acceptanceCriteria": [
+      {
+        "id": "ac-1-1-1",
+        "description": "Descricao completa do criterio em portugues",
+        "type": "given_when_then",
+        "given": "DADO que...",
+        "when": "QUANDO...",
+        "then": "ENTAO..."
+      },
+      {
+        "id": "ac-1-1-2",
+        "description": "Criterio simples em portugues",
+        "type": "simple"
+      }
+    ],
+    "tasks": [
+      {
+        "id": "task-1-1-1",
+        "description": "Implementar componente X",
+        "estimatedHours": 4,
+        "completed": false
+      }
+    ],
+    "devNotes": {
+      "architecturePatterns": ["Repository Pattern", "Service Layer"],
+      "componentsToTouch": ["src/components/Login.tsx", "src/api/auth.ts"],
+      "testingRequirements": ["Testar fluxo com token expirado"],
+      "securityConsiderations": ["Usar httpOnly cookies"],
+      "performanceNotes": [],
+      "references": []
+    }
+  }
+]
+\`\`\`
+
+## REGRAS IMPORTANTES:
+- Gere IDs unicos para cada AC e Task no formato "ac-{epicNumber}-{storyNumber}-{index}" ou "task-{epicNumber}-{storyNumber}-{index}"
+- Se nao houver informacao sobre um campo, use array vazio []
+- Extraia APENAS informacoes que foram DISCUTIDAS na conversa
+- NAO invente dados que nao estao na conversa
+- Mantenha todo o texto em portugues
+- Se uma story nao tiver informacoes detalhadas na conversa, ainda inclua ela no array mas com arrays vazios
+- Retorne TODAS as stories listadas, mesmo que sem dados detalhados`
 }

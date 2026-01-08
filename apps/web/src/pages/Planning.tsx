@@ -69,7 +69,7 @@ export function PlanningPage() {
 	}, [sessions])
 
 	const handleCreateSession = async () => {
-		if (!projectName.trim()) return
+		if (!projectName.trim() || !selectedPrd) return
 
 		setIsCreating(true)
 		try {
@@ -83,7 +83,7 @@ export function PlanningPage() {
 				body: JSON.stringify({
 					projectName: projectName.trim(),
 					projectDescription: projectDescription.trim() || undefined,
-					prdSessionId: selectedPrd && selectedPrd !== 'none' ? selectedPrd : undefined,
+					prdSessionId: selectedPrd,
 				}),
 			})
 
@@ -156,11 +156,60 @@ export function PlanningPage() {
 										Novo Planejamento
 									</DialogTitle>
 									<DialogDescription className="text-muted-foreground">
-										Crie epics e user stories a partir de um PRD existente ou do zero.
+										Crie epics e user stories a partir de um PRD existente.
 									</DialogDescription>
 								</DialogHeader>
 
 								<div className="grid gap-4 py-4">
+									{/* PRD primeiro - obrigatório */}
+									<div className="grid gap-2">
+										<Label htmlFor="prd" className="text-foreground">
+											PRD de Referência *
+										</Label>
+										{availablePrds.length > 0 ? (
+											<>
+												<Select value={selectedPrd} onValueChange={(value) => {
+													setSelectedPrd(value)
+													// Auto-preencher nome do projeto com o nome do PRD selecionado
+													const prd = availablePrds.find(p => p.id === value)
+													if (prd && !projectName) {
+														setProjectName(prd.projectName)
+													}
+												}}>
+													<SelectTrigger className="border-border">
+														<SelectValue placeholder="Selecione um PRD..." />
+													</SelectTrigger>
+													<SelectContent>
+														{availablePrds.map((p) => (
+															<SelectItem key={p.id} value={p.id}>
+																{p.projectName}
+															</SelectItem>
+														))}
+													</SelectContent>
+												</Select>
+												<p className="text-xs text-muted-foreground">
+													O planejamento sera baseado nos requisitos e features do PRD selecionado.
+												</p>
+											</>
+										) : (
+											<div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+												<p className="text-sm text-amber-800">
+													Voce precisa ter pelo menos um PRD concluido para criar um planejamento.
+												</p>
+												<Button
+													variant="link"
+													className="h-auto p-0 text-sm text-amber-700 underline"
+													onClick={() => {
+														setDialogOpen(false)
+														navigate('/pm')
+													}}
+												>
+													Criar um PRD primeiro
+												</Button>
+											</div>
+										)}
+									</div>
+
 									<div className="grid gap-2">
 										<Label htmlFor="name" className="text-foreground">
 											Nome do Projeto *
@@ -172,7 +221,7 @@ export function PlanningPage() {
 												setProjectName(e.target.value)
 											}
 											onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
-												if (e.key === 'Enter' && projectName.trim() && !isCreating) {
+												if (e.key === 'Enter' && projectName.trim() && selectedPrd && !isCreating) {
 													e.preventDefault()
 													handleCreateSession()
 												}
@@ -196,30 +245,6 @@ export function PlanningPage() {
 											className="border-border"
 										/>
 									</div>
-									{availablePrds.length > 0 && (
-										<div className="grid gap-2">
-											<Label htmlFor="prd" className="text-foreground">
-												Vincular a um PRD (recomendado)
-											</Label>
-											<Select value={selectedPrd} onValueChange={setSelectedPrd}>
-												<SelectTrigger className="border-border">
-													<SelectValue placeholder="Selecione um PRD..." />
-												</SelectTrigger>
-												<SelectContent>
-													<SelectItem value="none">Nenhum - criar do zero</SelectItem>
-													{availablePrds.map((p) => (
-														<SelectItem key={p.id} value={p.id}>
-															{p.projectName}
-														</SelectItem>
-													))}
-												</SelectContent>
-											</Select>
-											<p className="text-xs text-muted-foreground">
-												Vincular a um PRD permite puxar automaticamente features e requisitos
-												funcionais.
-											</p>
-										</div>
-									)}
 								</div>
 
 								<DialogFooter>
@@ -228,7 +253,7 @@ export function PlanningPage() {
 									</Button>
 									<Button
 										onClick={handleCreateSession}
-										disabled={!projectName.trim() || isCreating}
+										disabled={!projectName.trim() || !selectedPrd || isCreating}
 										className="gap-2"
 									>
 										{isCreating ? (

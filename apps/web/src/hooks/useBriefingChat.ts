@@ -7,6 +7,7 @@ const API_URL = __API_URL__ ?? 'http://localhost:3000'
 interface UseBriefingChatOptions {
 	sessionId: string
 	onMessageComplete?: (content: string) => void
+	onStepUpdate?: (newStep: string) => void
 	onError?: (error: Error) => void
 }
 
@@ -22,6 +23,7 @@ interface UseBriefingChatReturn {
 export function useBriefingChat({
 	sessionId,
 	onMessageComplete,
+	onStepUpdate,
 	onError,
 }: UseBriefingChatOptions): UseBriefingChatReturn {
 	const { getToken } = useAuth()
@@ -95,6 +97,9 @@ export function useBriefingChat({
 								fullContent += parsed.content
 								setStreamingContent(fullContent)
 							}
+							if (parsed.stepUpdate) {
+								onStepUpdate?.(parsed.stepUpdate)
+							}
 							if (parsed.error) {
 								throw new Error(parsed.error.message)
 							}
@@ -119,7 +124,7 @@ export function useBriefingChat({
 				setPendingUserMessage(null)
 			}
 		},
-		[sessionId, getToken, onMessageComplete, onError]
+		[sessionId, getToken, onMessageComplete, onStepUpdate, onError]
 	)
 
 	return {

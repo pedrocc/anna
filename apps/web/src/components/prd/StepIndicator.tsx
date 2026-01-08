@@ -73,18 +73,28 @@ export function StepIndicator({ currentStep, stepsCompleted, hasDocument }: Step
 						<div
 							className={cn(
 								'flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium transition-all duration-200',
-								isCompleted && 'bg-primary/15 text-primary',
-								isCurrent && 'bg-primary text-primary-foreground shadow-sm shadow-primary/25',
-								!isCompleted && !isCurrent && 'text-muted-foreground/60',
-								step.optional && !isCompleted && !isCurrent && 'opacity-60'
+								// Steps opcionais (domain, innovation) - amarelo
+								step.optional && isCompleted && 'bg-amber-500/15 text-amber-600',
+								step.optional &&
+									isCurrent &&
+									'bg-amber-500 text-white shadow-sm shadow-amber-500/25',
+								step.optional && !isCompleted && !isCurrent && 'text-amber-500/60',
+								// Steps normais - cor primária
+								!step.optional && isCompleted && 'bg-primary/15 text-primary',
+								!step.optional &&
+									isCurrent &&
+									'bg-primary text-primary-foreground shadow-sm shadow-primary/25',
+								!step.optional && !isCompleted && !isCurrent && 'text-muted-foreground/60'
 							)}
 							title={step.label + (step.optional ? ' (opcional)' : '')}
 						>
 							<div
 								className={cn(
 									'flex h-4 w-4 items-center justify-center rounded-full transition-colors',
-									isCompleted && 'bg-primary/20',
-									isCurrent && 'bg-primary-foreground/20',
+									step.optional && isCompleted && 'bg-amber-500/20',
+									step.optional && isCurrent && 'bg-white/20',
+									!step.optional && isCompleted && 'bg-primary/20',
+									!step.optional && isCurrent && 'bg-primary-foreground/20',
 									!isCompleted && !isCurrent && 'bg-muted-foreground/10'
 								)}
 							>

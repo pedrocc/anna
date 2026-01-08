@@ -8,10 +8,19 @@ import {
 	AlertDialogHeader,
 	AlertDialogTitle,
 	Button,
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
+	DropdownMenuSeparator,
 	DropdownMenuTrigger,
+	Input,
+	Label,
 	Spinner,
 	Tabs,
 	TabsContent,
@@ -19,22 +28,28 @@ import {
 	TabsTrigger,
 } from '@repo/ui'
 import {
+	AlertTriangle,
 	ArrowLeft,
 	ChevronLeft,
 	ClipboardList,
 	FileText,
 	MessageSquare,
+	Pencil,
 	Settings,
 	Trash2,
 } from 'lucide-react'
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Link, useLocation, useParams } from 'wouter'
 import { DocumentViewer } from '../components/brainstorm'
 import { DocumentList } from '../components/briefing'
 import { ChatInterface, StepIndicator } from '../components/sm'
 import { BacklogDocumentViewer } from '../components/sm/BacklogDocumentViewer'
+import { useMessageEdit } from '../hooks/useMessageEdit'
 import { useSmChat, useSmDocument } from '../hooks/useSmChat'
 import { api, type SmDocumentFromAPI, useSmSession } from '../lib/api-client'
+
+// Timeout em milissegundos para considerar uma geração como abandonada (10 minutos)
+const GENERATION_TIMEOUT_MS = 10 * 60 * 1000
 
 export function PlanningSessionPage() {
 	const { id } = useParams<{ id: string }>()
@@ -42,14 +57,66 @@ export function PlanningSessionPage() {
 	const { data: session, error, isLoading, mutate } = useSmSession(id ?? null)
 	const [activeTab, setActiveTab] = useState<string>('chat')
 	const [isSavingDoc, setIsSavingDoc] = useState(false)
+	const [isDeletingDoc, setIsDeletingDoc] = useState(false)
 	const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+	const [showRenameDialog, setShowRenameDialog] = useState(false)
+	const [newProjectName, setNewProjectName] = useState('')
+	const [isRenaming, setIsRenaming] = useState(false)
 	const [isDeleting, setIsDeleting] = useState(false)
-	const [isAdvancing, setIsAdvancing] = useState(false)
 	const [selectedDocument, setSelectedDocument] = useState<SmDocumentFromAPI | null>(null)
+	const [initialTabSet, setInitialTabSet] = useState(false)
+
+	// Verifica se a geração está em andamento baseado no status persistido
+	const isGenerationInProgress = session?.generationStatus === 'generating'
+	const generationFailed = session?.generationStatus === 'failed'
+
+	// Verifica se a geração excedeu o timeout (abandonada)
+	const isGenerationTimedOut =
+		isGenerationInProgress &&
+		session?.generationStartedAt &&
+		Date.now() - new Date(session.generationStartedAt).getTime() > GENERATION_TIMEOUT_MS
+
+	// Polling para atualizar a sessão enquanto a geração está em andamento
+	useEffect(() => {
+		if (!isGenerationInProgress || isGenerationTimedOut) return
+
+		const interval = setInterval(() => {
+			mutate()
+		}, 3000) // Polling a cada 3 segundos
+
+		return () => clearInterval(interval)
+	}, [isGenerationInProgress, isGenerationTimedOut, mutate])
+
+	// Set initial tab to documents if documents exist
+	useEffect(() => {
+		if (!initialTabSet && session?.documents && session.documents.length > 0) {
+			setActiveTab('document')
+			setInitialTabSet(true)
+		}
+	}, [session?.documents, initialTabSet])
 
 	const handleMessageComplete = useCallback(() => {
 		mutate()
 	}, [mutate])
+
+	const { generateDocument, isGenerating } = useSmDocument(id ?? '')
+
+	const handleStepUpdate = useCallback(
+		(newStep: string) => {
+			mutate()
+			// Se avançou para 'complete', gera o documento automaticamente
+			if (newStep === 'complete') {
+				setTimeout(() => {
+					generateDocument().then(() => {
+						mutate()
+						setSelectedDocument(null)
+						setActiveTab('document')
+					})
+				}, 500)
+			}
+		},
+		[mutate, generateDocument]
+	)
 
 	const {
 		sendMessage,
@@ -60,9 +127,24 @@ export function PlanningSessionPage() {
 	} = useSmChat({
 		sessionId: id ?? '',
 		onMessageComplete: handleMessageComplete,
+		onStepUpdate: handleStepUpdate,
 	})
 
-	const { generateDocument, isGenerating } = useSmDocument(id ?? '')
+	const {
+		editMessage,
+		isEditing,
+		streamingContent: editStreamingContent,
+	} = useMessageEdit({
+		module: 'sm',
+		onMessageComplete: handleMessageComplete,
+	})
+
+	const handleEditMessage = useCallback(
+		async (messageId: string, content: string) => {
+			await editMessage(messageId, content)
+		},
+		[editMessage]
+	)
 
 	const handleGenerateDocument = async () => {
 		try {
@@ -85,6 +167,18 @@ export function PlanningSessionPage() {
 		}
 	}
 
+	const handleDeleteDocument = async () => {
+		if (!selectedDocument) return
+		setIsDeletingDoc(true)
+		try {
+			await api.sm.deleteDocumentById(selectedDocument.id)
+			await mutate()
+			setSelectedDocument(null)
+		} finally {
+			setIsDeletingDoc(false)
+		}
+	}
+
 	const handleSelectDocument = (doc: SmDocumentFromAPI) => {
 		setSelectedDocument(doc)
 	}
@@ -104,46 +198,28 @@ export function PlanningSessionPage() {
 		}
 	}
 
-	const handleAdvanceStep = async () => {
-		if (!id) return
-		setIsAdvancing(true)
+	const handleRenameSession = async () => {
+		if (!id || !newProjectName.trim()) return
+		setIsRenaming(true)
 		try {
-			const updated = await api.sm.advanceStep(id)
+			await api.sm.renameSession(id, newProjectName.trim())
 			await mutate()
-
-			const newStep = updated?.currentStep
-
-			// Se avançou para 'complete', gera o documento automaticamente
-			if (newStep === 'complete') {
-				setTimeout(() => {
-					handleGenerateDocument()
-				}, 500)
-				return
-			}
-
-			const stepMessages: Record<string, string> = {
-				epics: 'Vamos definir os epics. Quais agrupamentos de funcionalidades você identifica?',
-				stories: 'Vamos criar as user stories. Qual epic vamos detalhar primeiro?',
-				details: 'Vamos detalhar as stories com Acceptance Criteria e Tasks.',
-				planning: 'Vamos fazer o Sprint Planning. Como organizar as stories em sprints?',
-				review: 'Vamos revisar o planejamento. Está tudo correto?',
-			}
-
-			const message = newStep ? stepMessages[newStep] : undefined
-			if (message) {
-				setTimeout(() => {
-					sendMessage(message)
-				}, 500)
-			}
+			setShowRenameDialog(false)
+			setNewProjectName('')
 		} catch (_err) {
 		} finally {
-			setIsAdvancing(false)
+			setIsRenaming(false)
 		}
+	}
+
+	const openRenameDialog = () => {
+		setNewProjectName(session?.projectName ?? '')
+		setShowRenameDialog(true)
 	}
 
 	if (isLoading) {
 		return (
-			<div className="flex h-[calc(100vh-4rem)] items-center justify-center bg-[#f9fafb]">
+			<div className="flex h-svh items-center justify-center bg-[#f9fafb]">
 				<Spinner className="h-8 w-8" />
 			</div>
 		)
@@ -151,7 +227,7 @@ export function PlanningSessionPage() {
 
 	if (error || !session) {
 		return (
-			<div className="flex h-[calc(100vh-4rem)] flex-col items-center justify-center gap-4 bg-[#f9fafb]">
+			<div className="flex h-svh flex-col items-center justify-center gap-4 bg-[#f9fafb]">
 				<p className="text-muted-foreground">Erro ao carregar sessão</p>
 				<Button asChild variant="outline">
 					<Link href="/requisitos">
@@ -166,10 +242,16 @@ export function PlanningSessionPage() {
 	const messages = session.messages ?? []
 	const documents = session.documents ?? []
 	const hasDocuments = documents.length > 0
-	const showDocumentButton = session.currentStep === 'review' || session.currentStep === 'complete'
+	const isComplete = session.currentStep === 'complete'
+	// Esconde o botão quando já está completo E já tem documento gerado
+	const showDocumentButton =
+		(session.currentStep === 'review' || isComplete) && !(isComplete && hasDocuments)
+
+	// Combina o estado local (isGenerating) com o estado persistido (isGenerationInProgress)
+	const isDocumentGenerating = isGenerating || (isGenerationInProgress && !isGenerationTimedOut)
 
 	return (
-		<div className="flex h-[calc(100vh-4rem)] flex-col overflow-hidden bg-[#f9fafb]">
+		<div className="flex h-svh flex-col overflow-hidden bg-[#f9fafb]">
 			{/* Header */}
 			<div className="shrink-0 border-b border-border bg-white px-6 py-4">
 				<div className="mx-auto flex max-w-7xl items-center justify-between">
@@ -183,10 +265,10 @@ export function PlanningSessionPage() {
 
 						<div className="flex items-center gap-3">
 							<div
-								className="flex h-8 w-8 items-center justify-center rounded-lg bg-green-50"
-								style={{ border: '1px solid #22c55e20' }}
+								className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50"
+								style={{ border: '1px solid #1d6ce020' }}
 							>
-								<ClipboardList className="h-4 w-4 text-green-500" />
+								<ClipboardList className="h-4 w-4 text-primary" />
 							</div>
 							<div>
 								<h1 className="text-lg font-semibold text-foreground">{session.projectName}</h1>
@@ -208,13 +290,12 @@ export function PlanningSessionPage() {
 						{showDocumentButton && (
 							<Button
 								onClick={handleGenerateDocument}
-								disabled={isGenerating}
+								disabled={isDocumentGenerating}
 								variant={hasDocuments ? 'ghost' : 'default'}
 								size="sm"
 								className="gap-2"
-								style={!hasDocuments ? { background: '#22c55e', color: 'white' } : undefined}
 							>
-								{isGenerating ? (
+								{isDocumentGenerating ? (
 									<>
 										<Spinner className="h-4 w-4" />
 										Gerando...
@@ -235,6 +316,11 @@ export function PlanningSessionPage() {
 								</Button>
 							</DropdownMenuTrigger>
 							<DropdownMenuContent align="end" className="border border-border bg-white">
+								<DropdownMenuItem onClick={openRenameDialog}>
+									<Pencil className="mr-2 h-4 w-4" />
+									Renomear Projeto
+								</DropdownMenuItem>
+								<DropdownMenuSeparator />
 								<DropdownMenuItem
 									className="text-red-500 focus:text-red-500"
 									onClick={() => setShowDeleteDialog(true)}
@@ -259,19 +345,19 @@ export function PlanningSessionPage() {
 						<TabsList className="h-12 w-fit gap-1 bg-transparent p-0">
 							<TabsTrigger
 								value="chat"
-								className="gap-2 rounded-none border-b-2 border-transparent px-4 py-3 text-muted-foreground data-[state=active]:border-green-500 data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
+								className="gap-2 rounded-none border-b-2 border-transparent px-4 py-3 text-muted-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
 							>
 								<MessageSquare className="h-4 w-4" />
 								Chat
 							</TabsTrigger>
 							<TabsTrigger
 								value="document"
-								className="gap-2 rounded-none border-b-2 border-transparent px-4 py-3 text-muted-foreground data-[state=active]:border-green-500 data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
+								className="gap-2 rounded-none border-b-2 border-transparent px-4 py-3 text-muted-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
 							>
 								<FileText className="h-4 w-4" />
 								Documentos
 								{hasDocuments && (
-									<span className="ml-1 rounded-full bg-green-100 px-1.5 text-xs font-medium text-green-600">
+									<span className="ml-1 rounded-full bg-primary/10 px-1.5 text-xs font-medium text-primary">
 										{documents.length}
 									</span>
 								)}
@@ -287,12 +373,16 @@ export function PlanningSessionPage() {
 					<ChatInterface
 						messages={messages}
 						onSendMessage={sendMessage}
-						onAdvanceStep={handleAdvanceStep}
+						onGenerateDocument={handleGenerateDocument}
+						onEditMessage={handleEditMessage}
 						isStreaming={isStreaming}
 						streamingContent={streamingContent}
 						pendingUserMessage={pendingUserMessage}
 						currentStep={session.currentStep}
-						isAdvancing={isAdvancing}
+						isGenerating={isDocumentGenerating}
+						isEditing={isEditing}
+						editStreamingContent={editStreamingContent}
+						hasDocuments={hasDocuments}
 					/>
 				</TabsContent>
 
@@ -331,7 +421,9 @@ export function PlanningSessionPage() {
 										content={selectedDocument.content}
 										title={selectedDocument.title}
 										onSave={handleSaveDocument}
+										onDelete={handleDeleteDocument}
 										isSaving={isSavingDoc}
+										isDeleting={isDeletingDoc}
 									/>
 								)}
 							</div>
@@ -348,7 +440,7 @@ export function PlanningSessionPage() {
 										handleSelectDocument as Parameters<typeof DocumentList>[0]['onSelectDocument']
 									}
 									onGenerateNew={handleGenerateDocument}
-									isGenerating={isGenerating}
+									isGenerating={isDocumentGenerating}
 								/>
 							</div>
 						</div>
@@ -362,6 +454,53 @@ export function PlanningSessionPage() {
 					{chatError.message}
 				</div>
 			)}
+
+			{/* Rename dialog */}
+			<Dialog open={showRenameDialog} onOpenChange={setShowRenameDialog}>
+				<DialogContent className="border border-border bg-white">
+					<DialogHeader>
+						<DialogTitle className="text-foreground">Renomear Projeto</DialogTitle>
+						<DialogDescription className="text-muted-foreground">
+							O nome será atualizado em todos os módulos vinculados (Briefing, PRD e Planejamento).
+						</DialogDescription>
+					</DialogHeader>
+					<div className="grid gap-4 py-4">
+						<div className="grid gap-2">
+							<Label htmlFor="projectName" className="text-foreground">
+								Nome do Projeto
+							</Label>
+							<Input
+								id="projectName"
+								value={newProjectName}
+								onChange={(e) => setNewProjectName(e.target.value)}
+								onKeyDown={(e) => {
+									if (e.key === 'Enter' && newProjectName.trim() && !isRenaming) {
+										e.preventDefault()
+										handleRenameSession()
+									}
+								}}
+								placeholder="Nome do projeto"
+								className="border-border"
+							/>
+						</div>
+					</div>
+					<DialogFooter>
+						<Button variant="outline" onClick={() => setShowRenameDialog(false)} disabled={isRenaming}>
+							Cancelar
+						</Button>
+						<Button onClick={handleRenameSession} disabled={!newProjectName.trim() || isRenaming}>
+							{isRenaming ? (
+								<>
+									<Spinner className="mr-2 h-4 w-4" />
+									Salvando...
+								</>
+							) : (
+								'Salvar'
+							)}
+						</Button>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
 
 			{/* Delete confirmation dialog */}
 			<AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>

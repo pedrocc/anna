@@ -22,6 +22,13 @@ export const prdStepEnum = pgEnum('prd_step', [
 
 export const prdStatusEnum = pgEnum('prd_status', ['active', 'paused', 'completed', 'archived'])
 
+export const prdGenerationStatusEnum = pgEnum('prd_generation_status', [
+	'idle', // Nenhuma geração em andamento
+	'generating', // Geração em progresso
+	'completed', // Geração concluída com sucesso
+	'failed', // Geração falhou
+])
+
 export const prdMessageRoleEnum = pgEnum('prd_message_role', ['system', 'user', 'assistant'])
 
 export const prdDocumentTypeEnum = pgEnum('prd_document_type', [
@@ -213,6 +220,11 @@ export const prdSessions = pgTable(
 		currentStep: prdStepEnum('current_step').default('init').notNull(),
 		status: prdStatusEnum('status').default('active').notNull(),
 		stepsCompleted: jsonb('steps_completed').$type<string[]>().default([]),
+
+		// Generation state (persisted for page reload)
+		generationStatus: prdGenerationStatusEnum('generation_status').default('idle').notNull(),
+		generationStartedAt: timestamp('generation_started_at', { withTimezone: true }),
+		generationError: text('generation_error'),
 
 		// Final document (Step 11)
 		documentContent: text('document_content'),

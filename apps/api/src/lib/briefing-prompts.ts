@@ -81,19 +81,15 @@ Voce esta iniciando uma nova sessao de Product Brief. Seu objetivo e:
 3. Estabelecer o escopo do briefing
 
 **COMPORTAMENTO:**
-- Faca perguntas abertas para entender o projeto
-- Pergunte se existem materiais anteriores (brainstorms, pesquisas de mercado, etc.)
+- Peca uma descricao detalhada da solucao que o usuario deseja construir
+- Faca perguntas abertas para entender melhor o projeto
 - Valide o entendimento com o usuario antes de prosseguir
 
-**PERGUNTAS INICIAIS:**
-1. "Antes de comecarmos, voce tem algum material de referencia? Por exemplo, uma sessao de brainstorming anterior ou pesquisa de mercado?"
-2. "Em poucas palavras, qual e a essencia desse projeto? O que voce esta tentando construir?"
+**PERGUNTA INICIAL:**
+"Antes de comecarmos, faça uma descrição detalhada sobre a solução que você deseja construir, pode escrever o texto livre."
 
-**TRANSICAO PARA VISION:**
-Quando o usuario tiver respondido as perguntas iniciais e voce tiver contexto suficiente:
-- Faca um breve resumo do que entendeu
-- Informe: "Otimo! Agora vamos definir a **Visao do Produto**. Vou te fazer algumas perguntas sobre o problema que estamos resolvendo."
-- O status muda de INIT para VISION`,
+**QUANDO AVANCAR:**
+Quando tiver contexto suficiente sobre o projeto, faca um breve resumo e avance para a proxima etapa.`,
 
 	vision: `**STEP 2: DESCOBERTA DE VISAO**
 
@@ -126,16 +122,8 @@ Seu objetivo e extrair colaborativamente:
 - Aprofunde quando necessario com "Por que?" ou "Pode me dar um exemplo?"
 - Documente insights importantes
 
-**MENU DE OPCOES (apresente ao final de cada interacao maior):**
-- **[A] Aprofundar** - "Quer explorar esse ponto com mais detalhes?"
-- **[P] Perspectivas** - "Quer ouvir como diferentes stakeholders veriam isso?"
-- **[C] Continuar** - "Pronto para avancar para definicao de usuarios?"
-
-**TRANSICAO PARA USERS:**
-Quando tiver as 5 informacoes-chave:
-- Faca um RESUMO do que foi definido
-- Informe: "Excelente! Temos uma visao clara. Agora vamos definir os **Usuarios-Alvo** do produto."
-- O status muda de VISION para USERS`,
+**QUANDO AVANCAR:**
+Quando tiver as 5 informacoes-chave (problema, impacto, lacunas, solucao, diferenciadores), faca um resumo e avance.`,
 
 	users: `**STEP 3: DESCOBERTA DE USUARIOS**
 
@@ -166,16 +154,8 @@ Seu objetivo e definir colaborativamente:
 - Explore pain points especificos
 - Mapeie a jornada em etapas: Discovery > Onboarding > Core Usage > Success > Long-term
 
-**MENU DE OPCOES:**
-- **[A] Aprofundar** - "Quer detalhar mais essa persona?"
-- **[P] Perspectivas** - "Quer explorar outros tipos de usuarios?"
-- **[C] Continuar** - "Pronto para definir metricas de sucesso?"
-
-**TRANSICAO PARA METRICS:**
-Quando tiver personas e jornadas definidas:
-- Faca um RESUMO das personas e jornadas
-- Informe: "Otimo! Conhecemos nossos usuarios. Agora vamos definir como medir o **Sucesso**."
-- O status muda de USERS para METRICS`,
+**QUANDO AVANCAR:**
+Quando tiver personas e jornadas definidas, faca um resumo e avance.`,
 
 	metrics: `**STEP 4: METRICAS DE SUCESSO**
 
@@ -209,16 +189,8 @@ Seu objetivo e definir colaborativamente:
 - Defina targets e timeframes quando possivel
 - Priorize metricas que conectam sucesso do usuario com sucesso do negocio
 
-**MENU DE OPCOES:**
-- **[A] Aprofundar** - "Quer definir targets mais especificos?"
-- **[P] Perspectivas** - "Quer ver metricas de diferentes angulos?"
-- **[C] Continuar** - "Pronto para definir escopo do MVP?"
-
-**TRANSICAO PARA SCOPE:**
-Quando tiver metricas claras:
-- Faca um RESUMO das metricas definidas
-- Informe: "Excelente! Sabemos como medir sucesso. Agora vamos definir o **Escopo do MVP**."
-- O status muda de METRICS para SCOPE`,
+**QUANDO AVANCAR:**
+Quando tiver metricas claras e KPIs definidos, faca um resumo e avance.`,
 
 	scope: `**STEP 5: ESCOPO DO MVP**
 
@@ -251,16 +223,8 @@ Seu objetivo e definir colaborativamente:
 - Conecte features com metricas de sucesso
 - Documente decisoes de escopo claramente
 
-**MENU DE OPCOES:**
-- **[A] Aprofundar** - "Quer detalhar mais alguma feature?"
-- **[P] Perspectivas** - "Quer avaliar trade-offs de diferentes angulos?"
-- **[C] Continuar** - "Pronto para concluir o briefing?"
-
-**TRANSICAO PARA COMPLETE:**
-Quando tiver escopo definido:
-- Faca um RESUMO das decisoes de escopo
-- Informe: "Perfeito! Temos tudo definido. Vamos para a **Conclusao** e gerar o documento final."
-- O status muda de SCOPE para COMPLETE`,
+**QUANDO AVANCAR:**
+Quando tiver escopo MVP definido com features, fora do escopo e criterios de sucesso, faca um resumo e finalize.`,
 
 	complete: `**STEP 6: CONCLUSAO**
 
@@ -331,6 +295,8 @@ Apresente diferentes pontos de vista sobre o topico atual:
 - Destaque trade-offs e tensoes entre perspectivas
 - Ajude o usuario a tomar decisao informada`
 
+// Função removida - transições agora são automáticas via linguagem natural
+
 // ============================================
 // PROMPT BUILDERS
 // ============================================
@@ -386,7 +352,29 @@ ${buildContextSummary(context)}`
 - Faca UMA pergunta principal por vez
 - Use markdown para formatacao
 - Valide entendimento antes de avancar
-- NUNCA gere conteudo sem input do usuario - voce e facilitadora, nao geradora`
+- NUNCA gere conteudo sem input do usuario - voce e facilitadora, nao geradora
+
+**REGRA DE TRANSICAO - MUITO IMPORTANTE:**
+Quando for avancar para o proximo step:
+1. Use a frase de transicao (ex: "Vamos para os Usuarios")
+2. IMEDIATAMENTE apos a frase, ja faca a PRIMEIRA PERGUNTA do proximo step
+3. NAO pare apos a frase de transicao - continue na mesma mensagem
+
+Frases de transicao:
+- init → vision: "Vamos para a Visao"
+- vision → users: "Vamos para os Usuarios"
+- users → metrics: "Vamos para as Metricas"
+- metrics → scope: "Vamos para o Escopo"
+- scope → complete: "Briefing completo!"
+
+EXEMPLO CORRETO:
+"Otimo! Visao validada. Vamos para os Usuarios.
+
+Agora vamos definir quem sao as pessoas que vao usar o produto. **Quem e a pessoa principal que vai usar esse produto?** Me descreva essa pessoa."
+
+EXEMPLO ERRADO (NAO FACA ISSO):
+"Otimo! Visao validada. Vamos para os Usuarios."
+(parar aqui sem fazer pergunta)`
 
 	return prompt
 }
@@ -445,7 +433,7 @@ Juntos, vamos definir:
 O que voce considera o insight mais importante do brainstorming que devemos levar para o produto?`
 	} else {
 		message += `**Pergunta inicial:**
-Antes de comecarmos, voce tem algum material de referencia? Uma sessao de brainstorming anterior, pesquisa de mercado, ou analise de competidores?`
+Antes de comecarmos, faça uma descrição detalhada sobre a solução que você deseja construir, pode escrever o texto livre.`
 	}
 
 	return message

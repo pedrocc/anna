@@ -5,6 +5,7 @@ import { requestId } from 'hono/request-id'
 import { secureHeaders } from 'hono/secure-headers'
 import { timing } from 'hono/timing'
 
+import { commonErrors } from './lib/response.js'
 import { errorHandler } from './middleware/error-handler.js'
 import { rateLimiter } from './middleware/rate-limiter.js'
 import { briefingRoutes } from './routes/briefing.js'
@@ -51,7 +52,7 @@ app.route('/api/v1/kanban', kanbanRoutes)
 
 // 404 handler
 app.notFound((c) => {
-	return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Route not found' } }, 404)
+	return commonErrors.notFound(c, 'Route not found')
 })
 
 const port = Number(process.env['PORT']) || 3000
@@ -60,4 +61,5 @@ export default {
 	port,
 	fetch: app.fetch,
 	development: true,
+	idleTimeout: 120, // 2 minutes for SSE streams
 }

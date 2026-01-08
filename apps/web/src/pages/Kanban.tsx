@@ -116,7 +116,7 @@ export function KanbanPage() {
 											animationFillMode: 'forwards',
 										}}
 									>
-										<ProjectCard project={project} />
+										<ProjectCard project={project} onDeleted={() => mutate()} />
 									</div>
 								))}
 							</div>

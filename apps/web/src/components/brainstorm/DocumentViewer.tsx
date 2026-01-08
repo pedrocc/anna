@@ -34,17 +34,7 @@ import {
 } from 'docx'
 import { saveAs } from 'file-saver'
 import html2pdf from 'html2pdf.js'
-import {
-	Copy,
-	Download,
-	Edit,
-	Eye,
-	FileText,
-	FileTextIcon,
-	MoreVertical,
-	Save,
-	Trash2,
-} from 'lucide-react'
+import { Copy, Download, Edit, Eye, FileText, FileTextIcon, Save, Trash2 } from 'lucide-react'
 import { type ChangeEvent, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -205,22 +195,15 @@ export function DocumentViewer({
 					)}
 
 					{onDelete && (
-						<DropdownMenu>
-							<DropdownMenuTrigger asChild>
-								<Button variant="ghost" size="sm">
-									<MoreVertical className="h-4 w-4" />
-								</Button>
-							</DropdownMenuTrigger>
-							<DropdownMenuContent align="end" className="border border-border bg-white">
-								<DropdownMenuItem
-									onClick={() => setShowDeleteDialog(true)}
-									className="text-red-500 focus:text-red-500"
-								>
-									<Trash2 className="mr-2 h-4 w-4" />
-									Apagar documento
-								</DropdownMenuItem>
-							</DropdownMenuContent>
-						</DropdownMenu>
+						<Button
+							variant="outline"
+							size="sm"
+							onClick={() => setShowDeleteDialog(true)}
+							className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+							title="Apagar documento"
+						>
+							<Trash2 className="h-4 w-4" />
+						</Button>
 					)}
 				</div>
 			</div>

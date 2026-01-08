@@ -22,6 +22,13 @@ export const briefingStatusEnum = pgEnum('briefing_status', [
 	'archived',
 ])
 
+export const briefingGenerationStatusEnum = pgEnum('briefing_generation_status', [
+	'idle', // Nenhuma geração em andamento
+	'generating', // Geração em progresso
+	'completed', // Geração concluída com sucesso
+	'failed', // Geração falhou
+])
+
 export const briefingMessageRoleEnum = pgEnum('briefing_message_role', [
 	'system',
 	'user',
@@ -131,6 +138,11 @@ export const briefingSessions = pgTable(
 		currentStep: briefingStepEnum('current_step').default('init').notNull(),
 		status: briefingStatusEnum('status').default('active').notNull(),
 		stepsCompleted: jsonb('steps_completed').$type<string[]>().default([]),
+
+		// Generation state (persisted for page reload)
+		generationStatus: briefingGenerationStatusEnum('generation_status').default('idle').notNull(),
+		generationStartedAt: timestamp('generation_started_at', { withTimezone: true }),
+		generationError: text('generation_error'),
 
 		// Final document (Step 6)
 		documentContent: text('document_content'),

@@ -22,9 +22,9 @@ interface SessionCardProps {
 }
 
 const statusConfig: Record<BriefingStatus, { label: string; color: string }> = {
-	active: { label: 'Em andamento', color: '#22c55e' },
-	paused: { label: 'Pausado', color: '#f59e0b' },
-	completed: { label: 'Concluido', color: '#1d6ce0' },
+	active: { label: 'Em andamento', color: '#f59e0b' },
+	paused: { label: 'Pausado', color: '#6b7280' },
+	completed: { label: 'Concluido', color: '#22c55e' },
 	archived: { label: 'Arquivado', color: '#71717a' },
 }
 
@@ -91,6 +91,9 @@ export function SessionCard({ session }: SessionCardProps) {
 						</p>
 					)}
 
+					{/* Spacer - empurra conteúdo abaixo para o fim do card */}
+					<div className="flex-1" />
+
 					{/* Step */}
 					<div className="mb-3 flex items-center gap-2">
 						<span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
@@ -109,14 +112,11 @@ export function SessionCard({ session }: SessionCardProps) {
 						</div>
 						<div className="h-1.5 w-full overflow-hidden rounded-full bg-border">
 							<div
-								className="h-full rounded-full bg-primary transition-all duration-500"
+								className={`h-full rounded-full transition-all duration-500 ${progress === 100 ? 'bg-green-500' : 'bg-amber-500'}`}
 								style={{ width: `${progress}%` }}
 							/>
 						</div>
 					</div>
-
-					{/* Spacer */}
-					<div className="flex-1" />
 
 					{/* Footer */}
 					<div className="flex items-center gap-4 text-xs text-muted-foreground">

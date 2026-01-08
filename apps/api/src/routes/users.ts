@@ -5,6 +5,7 @@ import { eq, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { commonErrors, successResponse } from '../lib/response.js'
 import { type AuthVariables, authMiddleware, getAuth, requireAdmin } from '../middleware/auth.js'
+import { verifyClerkWebhook } from '../middleware/webhook.js'
 
 export const userRoutes = new Hono<{ Variables: AuthVariables }>()
 
@@ -51,7 +52,8 @@ userRoutes.get(
 )
 
 // Create user (webhook from Clerk)
-userRoutes.post('/', zValidator('json', CreateUserSchema), async (c) => {
+// Uses verifyClerkWebhook middleware to validate webhook signature
+userRoutes.post('/', verifyClerkWebhook, zValidator('json', CreateUserSchema), async (c) => {
 	const data = c.req.valid('json')
 
 	const [newUser] = await db.insert(users).values(data).returning()

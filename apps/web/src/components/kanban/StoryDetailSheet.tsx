@@ -2,17 +2,30 @@ import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@repo/ui'
 import {
 	Calendar,
 	CheckCircle2,
+	CheckSquare,
 	Circle,
 	Clock,
+	Code2,
 	Eye,
+	FileText,
+	Link2,
+	ListChecks,
 	Loader2,
 	Pencil,
 	Save,
+	Shield,
 	Target,
-	X,
+	TestTube2,
+	Zap,
 } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
-import { api, type KanbanStory } from '@/lib/api-client'
+import {
+	api,
+	type KanbanAcceptanceCriteria,
+	type KanbanDevNotes,
+	type KanbanStory,
+	type KanbanTask,
+} from '@/lib/api-client'
 
 interface StoryDetailSheetProps {
 	story: KanbanStory | null
@@ -50,6 +63,291 @@ const PRIORITIES = [
 	{ value: 'medium', label: 'Média' },
 	{ value: 'low', label: 'Baixa' },
 ]
+
+// Section header component
+function SectionHeader({
+	icon: Icon,
+	title,
+	count,
+}: {
+	icon: typeof Circle
+	title: string
+	count?: number
+}) {
+	return (
+		<div className="flex items-center gap-2 mb-4">
+			<Icon className="h-4 w-4" style={{ color: 'var(--apple-text-tertiary)' }} />
+			<h3
+				className="text-[12px] font-semibold uppercase tracking-wide"
+				style={{ color: 'var(--apple-text-tertiary)' }}
+			>
+				{title}
+			</h3>
+			{count !== undefined && count > 0 && (
+				<span
+					className="text-[11px] font-medium px-1.5 py-0.5 rounded-full"
+					style={{
+						background: 'var(--apple-bg-hover)',
+						color: 'var(--apple-text-secondary)',
+					}}
+				>
+					{count}
+				</span>
+			)}
+		</div>
+	)
+}
+
+// Acceptance Criteria component
+function AcceptanceCriteriaSection({ criteria }: { criteria: KanbanAcceptanceCriteria[] }) {
+	if (!criteria || criteria.length === 0) return null
+
+	return (
+		<div className="mb-8">
+			<SectionHeader icon={CheckSquare} title="Critérios de Aceitação" count={criteria.length} />
+			<div className="space-y-3">
+				{criteria.map((ac) => (
+					<div
+						key={ac.id}
+						className="p-4 rounded-xl"
+						style={{
+							background: 'var(--apple-bg-hover)',
+							border: '1px solid var(--apple-border-subtle)',
+						}}
+					>
+						{ac.type === 'given_when_then' ? (
+							<div className="space-y-2">
+								{ac.given && (
+									<div className="flex gap-2">
+										<span
+											className="text-[11px] font-bold uppercase shrink-0 w-16"
+											style={{ color: 'var(--apple-accent)' }}
+										>
+											DADO
+										</span>
+										<span
+											className="text-[14px] leading-relaxed"
+											style={{ color: 'var(--apple-text-primary)' }}
+										>
+											{ac.given}
+										</span>
+									</div>
+								)}
+								{ac.when && (
+									<div className="flex gap-2">
+										<span
+											className="text-[11px] font-bold uppercase shrink-0 w-16"
+											style={{ color: 'var(--apple-accent)' }}
+										>
+											QUANDO
+										</span>
+										<span
+											className="text-[14px] leading-relaxed"
+											style={{ color: 'var(--apple-text-primary)' }}
+										>
+											{ac.when}
+										</span>
+									</div>
+								)}
+								{ac.then && (
+									<div className="flex gap-2">
+										<span
+											className="text-[11px] font-bold uppercase shrink-0 w-16"
+											style={{ color: 'var(--apple-accent)' }}
+										>
+											ENTÃO
+										</span>
+										<span
+											className="text-[14px] leading-relaxed"
+											style={{ color: 'var(--apple-text-primary)' }}
+										>
+											{ac.then}
+										</span>
+									</div>
+								)}
+							</div>
+						) : (
+							<p
+								className="text-[14px] leading-relaxed"
+								style={{ color: 'var(--apple-text-primary)' }}
+							>
+								{ac.description}
+							</p>
+						)}
+					</div>
+				))}
+			</div>
+		</div>
+	)
+}
+
+// Tasks component
+function TasksSection({ tasks }: { tasks: KanbanTask[] }) {
+	if (!tasks || tasks.length === 0) return null
+
+	const totalHours = tasks.reduce((sum, t) => sum + (t.estimatedHours || 0), 0)
+	const completedCount = tasks.filter((t) => t.completed).length
+
+	return (
+		<div className="mb-8">
+			<SectionHeader icon={ListChecks} title="Tasks" count={tasks.length} />
+			<div className="space-y-2">
+				{tasks.map((task) => (
+					<div
+						key={task.id}
+						className="flex items-start gap-3 p-3 rounded-lg"
+						style={{
+							background: task.completed ? 'transparent' : 'var(--apple-bg-hover)',
+							opacity: task.completed ? 0.6 : 1,
+						}}
+					>
+						<div
+							className="w-5 h-5 rounded-md flex items-center justify-center shrink-0 mt-0.5"
+							style={{
+								background: task.completed ? 'var(--apple-accent)' : 'var(--apple-bg)',
+								border: task.completed ? 'none' : '2px solid var(--apple-border)',
+							}}
+						>
+							{task.completed && <CheckCircle2 className="h-3.5 w-3.5 text-white" />}
+						</div>
+						<div className="flex-1 min-w-0">
+							<p
+								className="text-[14px] leading-relaxed"
+								style={{
+									color: 'var(--apple-text-primary)',
+									textDecoration: task.completed ? 'line-through' : 'none',
+								}}
+							>
+								{task.description}
+							</p>
+							{task.estimatedHours && (
+								<span
+									className="text-[12px] mt-1 inline-block"
+									style={{ color: 'var(--apple-text-tertiary)' }}
+								>
+									~{task.estimatedHours}h
+								</span>
+							)}
+						</div>
+					</div>
+				))}
+			</div>
+			{totalHours > 0 && (
+				<div
+					className="mt-4 pt-3 flex items-center justify-between text-[13px]"
+					style={{ borderTop: '1px solid var(--apple-border-subtle)' }}
+				>
+					<span style={{ color: 'var(--apple-text-secondary)' }}>
+						{completedCount}/{tasks.length} concluídas
+					</span>
+					<span style={{ color: 'var(--apple-text-secondary)' }}>
+						Total estimado: <strong>~{totalHours}h</strong>
+					</span>
+				</div>
+			)}
+		</div>
+	)
+}
+
+// Dev Notes component
+function DevNotesSection({ devNotes }: { devNotes: KanbanDevNotes }) {
+	if (!devNotes) return null
+
+	const sections = [
+		{
+			key: 'architecturePatterns',
+			icon: Code2,
+			title: 'Padrões Arquiteturais',
+			items: devNotes.architecturePatterns,
+		},
+		{
+			key: 'componentsToTouch',
+			icon: FileText,
+			title: 'Componentes a Modificar',
+			items: devNotes.componentsToTouch,
+		},
+		{
+			key: 'testingRequirements',
+			icon: TestTube2,
+			title: 'Requisitos de Teste',
+			items: devNotes.testingRequirements,
+		},
+		{
+			key: 'securityConsiderations',
+			icon: Shield,
+			title: 'Segurança',
+			items: devNotes.securityConsiderations,
+		},
+		{
+			key: 'performanceNotes',
+			icon: Zap,
+			title: 'Performance',
+			items: devNotes.performanceNotes,
+		},
+		{ key: 'references', icon: Link2, title: 'Referências', items: devNotes.references },
+	].filter((s) => s.items && s.items.length > 0)
+
+	if (sections.length === 0) return null
+
+	return (
+		<div className="mb-8">
+			<SectionHeader icon={Code2} title="Notas de Desenvolvimento" />
+			<div className="space-y-4">
+				{sections.map(({ key, icon: Icon, title, items }) => (
+					<div key={key}>
+						<div className="flex items-center gap-2 mb-2">
+							<Icon className="h-3.5 w-3.5" style={{ color: 'var(--apple-text-tertiary)' }} />
+							<span
+								className="text-[11px] font-semibold uppercase tracking-wide"
+								style={{ color: 'var(--apple-text-tertiary)' }}
+							>
+								{title}
+							</span>
+						</div>
+						<div className="pl-5 space-y-1">
+							{items?.map((item, idx) => (
+								<p
+									key={`${key}-${idx}`}
+									className="text-[14px] leading-relaxed flex items-start gap-2"
+									style={{ color: 'var(--apple-text-primary)' }}
+								>
+									<span style={{ color: 'var(--apple-text-tertiary)' }}>•</span>
+									{item}
+								</p>
+							))}
+						</div>
+					</div>
+				))}
+			</div>
+		</div>
+	)
+}
+
+// Requirements badges
+function RequirementsSection({ codes }: { codes: string[] }) {
+	if (!codes || codes.length === 0) return null
+
+	return (
+		<div className="mb-8">
+			<SectionHeader icon={Link2} title="Requisitos Relacionados" count={codes.length} />
+			<div className="flex flex-wrap gap-2">
+				{codes.map((code) => (
+					<span
+						key={code}
+						className="px-3 py-1.5 rounded-lg text-[13px] font-medium"
+						style={{
+							background: 'var(--apple-bg-hover)',
+							color: 'var(--apple-accent)',
+							border: '1px solid var(--apple-border-subtle)',
+						}}
+					>
+						{code}
+					</span>
+				))}
+			</div>
+		</div>
+	)
+}
 
 export function StoryDetailSheet({ story, open, onOpenChange, onUpdate }: StoryDetailSheetProps) {
 	const [isEditing, setIsEditing] = useState(false)
@@ -156,18 +454,28 @@ export function StoryDetailSheet({ story, open, onOpenChange, onUpdate }: StoryD
 		cursor: 'pointer',
 	}
 
+	// Check if story has rich content
+	const hasAcceptanceCriteria = story.acceptanceCriteria && story.acceptanceCriteria.length > 0
+	const hasTasks = story.tasks && story.tasks.length > 0
+	const hasDevNotes =
+		story.devNotes &&
+		Object.values(story.devNotes).some((v) => Array.isArray(v) && v.length > 0)
+	const hasRequirements =
+		story.functionalRequirementCodes && story.functionalRequirementCodes.length > 0
+	const hasRichContent = hasAcceptanceCriteria || hasTasks || hasDevNotes || hasRequirements
+
 	return (
 		<Sheet open={open} onOpenChange={onOpenChange}>
 			<SheetContent
 				side="right"
-				className="!w-[700px] !max-w-[700px] p-0 overflow-hidden"
+				className="!w-[700px] !max-w-[700px] p-0 overflow-hidden flex flex-col"
 				style={{ background: 'var(--apple-bg)' }}
 			>
 				<SheetTitle className="sr-only">{story.title}</SheetTitle>
 				<SheetDescription className="sr-only">Detalhes da story {story.storyKey}</SheetDescription>
 
 				{/* Header */}
-				<div className="p-8 pb-6" style={{ borderBottom: '1px solid var(--apple-border-subtle)' }}>
+				<div className="p-8 pb-6 shrink-0" style={{ borderBottom: '1px solid var(--apple-border-subtle)' }}>
 					<div className="flex items-start justify-between gap-6">
 						<div className="flex-1">
 							{/* Story Key + Priority */}
@@ -226,12 +534,8 @@ export function StoryDetailSheet({ story, open, onOpenChange, onUpdate }: StoryD
 								</h2>
 							)}
 						</div>
-
-						{/* Close button */}
-						<button type="button" onClick={() => onOpenChange(false)} className="apple-icon-btn">
-							<X className="h-5 w-5" />
-						</button>
-					</div>
+					{/* Close button is provided by SheetContent */}
+				</div>
 
 					{/* Meta badges */}
 					<div className="flex flex-wrap items-center gap-3 mt-6">
@@ -295,12 +599,40 @@ export function StoryDetailSheet({ story, open, onOpenChange, onUpdate }: StoryD
 										<span>Sprint {story.targetSprint}</span>
 									</div>
 								)}
+
+								{/* Rich content indicators */}
+								{hasAcceptanceCriteria && (
+									<div
+										className="apple-badge flex items-center gap-1.5"
+										style={{ color: 'var(--apple-accent)' }}
+									>
+										<CheckSquare className="h-3.5 w-3.5" />
+										<span>{story.acceptanceCriteria.length}</span>
+									</div>
+								)}
+								{hasTasks && (
+									<div
+										className="apple-badge flex items-center gap-1.5"
+										style={{ color: 'var(--apple-accent)' }}
+									>
+										<ListChecks className="h-3.5 w-3.5" />
+										<span>{story.tasks.length}</span>
+									</div>
+								)}
+								{hasDevNotes && (
+									<div
+										className="apple-badge flex items-center gap-1.5"
+										style={{ color: 'var(--apple-accent)' }}
+									>
+										<Code2 className="h-3.5 w-3.5" />
+									</div>
+								)}
 							</>
 						)}
 					</div>
 				</div>
 
-				{/* Content */}
+				{/* Content - Scrollable */}
 				<div className="flex-1 overflow-y-auto p-8 apple-scrollbar">
 					{/* User Story */}
 					<div className="mb-8">
@@ -390,10 +722,43 @@ export function StoryDetailSheet({ story, open, onOpenChange, onUpdate }: StoryD
 						</div>
 					</div>
 
-					{/* Divider */}
-					<div className="h-px w-full mb-8" style={{ background: 'var(--apple-border-subtle)' }} />
+					{/* Description (if available) */}
+					{story.description && (
+						<>
+							<div className="h-px w-full mb-8" style={{ background: 'var(--apple-border-subtle)' }} />
+							<div className="mb-8">
+								<SectionHeader icon={FileText} title="Descrição" />
+								<p
+									className="text-[14px] leading-relaxed whitespace-pre-wrap"
+									style={{ color: 'var(--apple-text-primary)' }}
+								>
+									{story.description}
+								</p>
+							</div>
+						</>
+					)}
+
+					{/* Rich Content Sections */}
+					{hasRichContent && (
+						<>
+							<div className="h-px w-full mb-8" style={{ background: 'var(--apple-border-subtle)' }} />
+
+							{/* Acceptance Criteria */}
+							<AcceptanceCriteriaSection criteria={story.acceptanceCriteria} />
+
+							{/* Tasks */}
+							<TasksSection tasks={story.tasks} />
+
+							{/* Dev Notes */}
+							<DevNotesSection devNotes={story.devNotes} />
+
+							{/* Requirements */}
+							<RequirementsSection codes={story.functionalRequirementCodes} />
+						</>
+					)}
 
 					{/* Metadata Grid */}
+					<div className="h-px w-full mb-8" style={{ background: 'var(--apple-border-subtle)' }} />
 					<div className="grid grid-cols-2 gap-6">
 						<div>
 							<span
@@ -429,7 +794,7 @@ export function StoryDetailSheet({ story, open, onOpenChange, onUpdate }: StoryD
 
 				{/* Footer */}
 				<div
-					className="p-6 flex gap-3"
+					className="p-6 flex gap-3 shrink-0"
 					style={{ borderTop: '1px solid var(--apple-border-subtle)' }}
 				>
 					{isEditing ? (

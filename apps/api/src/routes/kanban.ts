@@ -1,22 +1,13 @@
 import { zValidator } from '@hono/zod-validator'
-import { db, smEpics, smSessions, smStories, users } from '@repo/db'
+import { db, smEpics, smSessions, smStories } from '@repo/db'
 import { PaginationSchema } from '@repo/shared'
 import { and, asc, desc, eq, gt, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
+import { getUserByClerkId } from '../lib/helpers.js'
 import { commonErrors, successResponse } from '../lib/response.js'
 import { type AuthVariables, authMiddleware, getAuth } from '../middleware/auth.js'
 
 export const kanbanRoutes = new Hono<{ Variables: AuthVariables }>()
-
-// ============================================
-// HELPER: Get user by clerkId
-// ============================================
-
-async function getUserByClerkId(clerkId: string) {
-	return db.query.users.findFirst({
-		where: eq(users.clerkId, clerkId),
-	})
-}
 
 // ============================================
 // KANBAN ENDPOINTS
@@ -120,6 +111,11 @@ kanbanRoutes.get('/sessions/:id/board', authMiddleware, async (c) => {
 					asA: true,
 					iWant: true,
 					soThat: true,
+					description: true,
+					acceptanceCriteria: true,
+					tasks: true,
+					devNotes: true,
+					functionalRequirementCodes: true,
 					status: true,
 					priority: true,
 					storyPoints: true,

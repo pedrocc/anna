@@ -17,6 +17,8 @@ export const SmStepSchema = z.enum([
 
 export const SmStatusSchema = z.enum(['active', 'paused', 'completed', 'archived'])
 
+export const SmGenerationStatusSchema = z.enum(['idle', 'generating', 'completed', 'failed'])
+
 export const SmMessageRoleSchema = z.enum(['system', 'user', 'assistant'])
 
 export const SmDocumentTypeSchema = z.enum([
@@ -138,9 +140,41 @@ export const SmPrdContextSchema = z.object({
 				id: z.string(),
 				name: z.string(),
 				description: z.string(),
+				goals: z.array(z.string()).optional(),
+				painPoints: z.array(z.string()).optional(),
 			})
 		)
 		.optional(),
+	// Novos campos para contexto expandido do PRD
+	successCriteria: z
+		.array(
+			z.object({
+				id: z.string(),
+				type: z.string(),
+				description: z.string(),
+				metric: z.string().optional(),
+				target: z.string().optional(),
+			})
+		)
+		.optional(),
+	userJourneys: z
+		.array(
+			z.object({
+				id: z.string(),
+				personaId: z.string(),
+				personaName: z.string(),
+				stages: z.array(
+					z.object({
+						stage: z.string(),
+						description: z.string(),
+						touchpoints: z.array(z.string()).optional(),
+					})
+				),
+			})
+		)
+		.optional(),
+	outOfScope: z.array(z.string()).optional(),
+	mvpSuccessCriteria: z.array(z.string()).optional(),
 })
 
 // ============================================
@@ -266,6 +300,12 @@ export const SmSessionSchema = z
 		currentStep: SmStepSchema,
 		status: SmStatusSchema,
 		stepsCompleted: z.array(SmStepSchema),
+
+		// Generation state (persisted for page reload)
+		generationStatus: SmGenerationStatusSchema,
+		generationStartedAt: z.date().optional().nullable(),
+		generationError: z.string().optional().nullable(),
+
 		totalEpics: z.number().int(),
 		totalStories: z.number().int(),
 		totalStoryPoints: z.number().int(),
@@ -332,6 +372,10 @@ export const SmChatRequestSchema = z.object({
 		.optional(),
 })
 
+export const EditSmMessageRequestSchema = z.object({
+	content: z.string().min(1).max(10000),
+})
+
 // ============================================
 // DOCUMENT SCHEMAS
 // ============================================
@@ -358,11 +402,91 @@ export const UpdateSmDocumentSchema = z.object({
 })
 
 // ============================================
+// EXTRACTED DATA SCHEMAS (from AI responses)
+// ============================================
+
+/**
+ * Schema for extracted acceptance criteria from AI response
+ */
+export const SmExtractedAcceptanceCriteriaSchema = z.object({
+	description: z.string().min(1),
+	type: z.enum(['simple', 'given_when_then']).optional(),
+	given: z.string().optional(),
+	when: z.string().optional(),
+	then: z.string().optional(),
+})
+
+/**
+ * Schema for extracted task from AI response
+ */
+export const SmExtractedTaskSchema = z.object({
+	description: z.string().min(1),
+	estimatedHours: z.number().optional(),
+})
+
+/**
+ * Schema for epic data extracted from AI response
+ */
+export const SmExtractedEpicSchema = z.object({
+	number: z.number().int().min(1),
+	title: z.string().min(1),
+	description: z.string().min(1),
+	businessValue: z.string().optional(),
+	priority: SmStoryPrioritySchema.optional(),
+	functionalRequirementCodes: z.array(z.string()).optional(),
+})
+
+/**
+ * Schema for story data extracted from AI response
+ */
+export const SmExtractedStorySchema = z.object({
+	epicNumber: z.number().int().min(1),
+	storyNumber: z.number().int().min(1),
+	title: z.string().min(1),
+	asA: z.string().min(1),
+	iWant: z.string().min(1),
+	soThat: z.string().min(1),
+	acceptanceCriteria: z.array(SmExtractedAcceptanceCriteriaSchema).optional(),
+	tasks: z.array(SmExtractedTaskSchema).optional(),
+	devNotes: z
+		.object({
+			architecturePatterns: z.array(z.string()).optional(),
+			componentsToTouch: z.array(z.string()).optional(),
+			testingRequirements: z.array(z.string()).optional(),
+			securityConsiderations: z.array(z.string()).optional(),
+			performanceNotes: z.array(z.string()).optional(),
+			references: z.array(z.string()).optional(),
+		})
+		.optional(),
+	storyPoints: z.number().int().optional(),
+	priority: SmStoryPrioritySchema.optional(),
+})
+
+/**
+ * Schema for structured data block extracted from AI response
+ * Format in AI response:
+ * ---SM_DATA_START---
+ * { "epics": [...], "stories": [...], "action": "create" }
+ * ---SM_DATA_END---
+ */
+export const SmExtractedDataSchema = z.object({
+	epics: z.array(SmExtractedEpicSchema).optional(),
+	stories: z.array(SmExtractedStorySchema).optional(),
+	action: z.enum(['create', 'update']),
+})
+
+// ============================================
 // TYPE EXPORTS
 // ============================================
 
+export type SmExtractedAcceptanceCriteria = z.infer<typeof SmExtractedAcceptanceCriteriaSchema>
+export type SmExtractedTask = z.infer<typeof SmExtractedTaskSchema>
+export type SmExtractedEpic = z.infer<typeof SmExtractedEpicSchema>
+export type SmExtractedStory = z.infer<typeof SmExtractedStorySchema>
+export type SmExtractedData = z.infer<typeof SmExtractedDataSchema>
 export type SmStep = z.infer<typeof SmStepSchema>
 export type SmStatus = z.infer<typeof SmStatusSchema>
+export type SmGenerationStatus = z.infer<typeof SmGenerationStatusSchema>
 export type SmMessageRole = z.infer<typeof SmMessageRoleSchema>
 export type SmDocumentType = z.infer<typeof SmDocumentTypeSchema>
 export type SmEpicStatus = z.infer<typeof SmEpicStatusSchema>
@@ -386,6 +510,7 @@ export type CreateSmSession = z.infer<typeof CreateSmSessionSchema>
 export type UpdateSmSession = z.infer<typeof UpdateSmSessionSchema>
 export type SmMessage = z.infer<typeof SmMessageSchema>
 export type SmChatRequest = z.infer<typeof SmChatRequestSchema>
+export type EditSmMessageRequest = z.infer<typeof EditSmMessageRequestSchema>
 export type SmDocument = z.infer<typeof SmDocumentSchema>
 export type CreateSmDocument = z.infer<typeof CreateSmDocumentSchema>
 export type UpdateSmDocument = z.infer<typeof UpdateSmDocumentSchema>

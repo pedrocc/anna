@@ -82,7 +82,7 @@ chatRoutes.post('/', authMiddleware, zValidator('json', ChatRequestSchema), asyn
 // List available models
 chatRoutes.get('/models', authMiddleware, async (c) => {
 	const popularModels = [
-		{ id: 'deepseek/deepseek-chat-v3-0324', name: 'DeepSeek V3', provider: 'DeepSeek' },
+		{ id: 'deepseek/deepseek-v3.2', name: 'DeepSeek V3', provider: 'DeepSeek' },
 		{ id: 'anthropic/claude-sonnet-4', name: 'Claude Sonnet 4', provider: 'Anthropic' },
 		{ id: 'anthropic/claude-3.5-sonnet', name: 'Claude 3.5 Sonnet', provider: 'Anthropic' },
 		{ id: 'openai/gpt-4o', name: 'GPT-4o', provider: 'OpenAI' },

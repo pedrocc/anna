@@ -20,7 +20,13 @@ export const rateLimiter = (options?: { windowMs?: number; max?: number }) => {
 	const maxRequests = options?.max ?? RATE_LIMIT.MAX_REQUESTS
 
 	return createMiddleware(async (c, next) => {
-		const ip = c.req.header('x-forwarded-for') ?? c.req.header('x-real-ip') ?? 'unknown'
+		// Get client IP from headers or fallback to a unique request identifier
+		const forwardedFor = c.req.header('x-forwarded-for')
+		const realIp = c.req.header('x-real-ip')
+		const cfConnectingIp = c.req.header('cf-connecting-ip') // Cloudflare
+
+		// Use first IP from x-forwarded-for (client IP), or other headers
+		const ip = forwardedFor?.split(',')[0]?.trim() ?? realIp ?? cfConnectingIp ?? 'anonymous'
 		const key = `ratelimit:${ip}`
 
 		const redisClient = getRedis()

@@ -5,17 +5,20 @@ import {
 	briefingMessages,
 	briefingSessions,
 	db,
-	users,
+	prdSessions,
+	smSessions,
 } from '@repo/db'
+import type { BriefingStep } from '@repo/shared'
 import {
 	BriefingChatRequestSchema,
 	CreateBriefingDocumentSchema,
 	CreateBriefingSessionSchema,
+	EditBriefingMessageRequestSchema,
 	PaginationSchema,
 	UpdateBriefingDocumentSchema,
 	UpdateBriefingSessionSchema,
 } from '@repo/shared'
-import { and, desc, eq, sql } from 'drizzle-orm'
+import { and, desc, eq, gte, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { streamSSE } from 'hono/streaming'
 import {
@@ -26,21 +29,12 @@ import {
 	getNextStep,
 	getStepInfo,
 } from '../lib/briefing-prompts.js'
+import { getUserByClerkId } from '../lib/helpers.js'
 import { getOpenRouterClient, OpenRouterAPIError } from '../lib/openrouter.js'
 import { commonErrors, successResponse } from '../lib/response.js'
 import { type AuthVariables, authMiddleware, getAuth } from '../middleware/auth.js'
 
 export const briefingRoutes = new Hono<{ Variables: AuthVariables }>()
-
-// ============================================
-// HELPER: Get user by clerkId
-// ============================================
-
-async function getUserByClerkId(clerkId: string) {
-	return db.query.users.findFirst({
-		where: eq(users.clerkId, clerkId),
-	})
-}
 
 // ============================================
 // SESSION CRUD ENDPOINTS
@@ -117,8 +111,8 @@ briefingRoutes.get('/sessions/:id', authMiddleware, async (c) => {
 		return commonErrors.notFound(c, 'Session not found')
 	}
 
-	// Reverse messages to chronological order
-	const messagesChronological = session.messages.reverse()
+	// Reverse messages to chronological order (use spread to avoid mutating original)
+	const messagesChronological = [...session.messages].reverse()
 
 	return successResponse(c, {
 		...session,
@@ -204,7 +198,7 @@ briefingRoutes.post(
 			c,
 			{
 				...sessionWithMessages,
-				messages: sessionWithMessages?.messages.reverse() ?? [],
+				messages: [...(sessionWithMessages?.messages ?? [])].reverse(),
 			},
 			201
 		)
@@ -260,6 +254,69 @@ briefingRoutes.delete('/sessions/:id', authMiddleware, async (c) => {
 	}
 
 	return successResponse(c, { deleted: true })
+})
+
+// Rename session with cascade to linked PRD and SM sessions
+briefingRoutes.post('/sessions/:id/rename', authMiddleware, async (c) => {
+	const { userId } = getAuth(c)
+	const sessionId = c.req.param('id')
+	const body = await c.req.json<{ projectName: string }>()
+
+	if (!body.projectName?.trim()) {
+		return commonErrors.badRequest(c, 'Project name is required')
+	}
+
+	const newName = body.projectName.trim()
+
+	const user = await getUserByClerkId(userId)
+	if (!user) {
+		return commonErrors.notFound(c, 'User not found')
+	}
+
+	// Update briefing session
+	const [updated] = await db
+		.update(briefingSessions)
+		.set({ projectName: newName, updatedAt: new Date() })
+		.where(and(eq(briefingSessions.id, sessionId), eq(briefingSessions.userId, user.id)))
+		.returning()
+
+	if (!updated) {
+		return commonErrors.notFound(c, 'Session not found')
+	}
+
+	// Find all PRD sessions that reference this briefing in inputDocuments
+	const allPrdSessions = await db.query.prdSessions.findMany({
+		where: eq(prdSessions.userId, user.id),
+	})
+
+	const linkedPrdIds: string[] = []
+	for (const prd of allPrdSessions) {
+		const docs = prd.inputDocuments as Array<{ path?: string; type?: string }> | null
+		if (docs?.some((d) => d.path === sessionId && d.type === 'briefing')) {
+			linkedPrdIds.push(prd.id)
+			// Update PRD project name
+			await db
+				.update(prdSessions)
+				.set({ projectName: newName, updatedAt: new Date() })
+				.where(eq(prdSessions.id, prd.id))
+		}
+	}
+
+	// Update all SM sessions linked to those PRDs
+	if (linkedPrdIds.length > 0) {
+		for (const prdId of linkedPrdIds) {
+			await db
+				.update(smSessions)
+				.set({ projectName: newName, updatedAt: new Date() })
+				.where(and(eq(smSessions.prdSessionId, prdId), eq(smSessions.userId, user.id)))
+		}
+	}
+
+	return successResponse(c, {
+		updated: true,
+		projectName: newName,
+		linkedPrds: linkedPrdIds.length,
+	})
 })
 
 // ============================================
@@ -334,7 +391,7 @@ briefingRoutes.post(
 		)
 
 		// Build conversation history (reverse to chronological, then map)
-		const historyMessages = session.messages
+		const historyMessages = [...session.messages]
 			.reverse()
 			.filter((m) => m.role !== 'system')
 			.map((m) => ({
@@ -356,9 +413,9 @@ briefingRoutes.post(
 
 				const generator = client.chatStream({
 					messages: llmMessages,
-					model: 'deepseek/deepseek-chat-v3-0324',
+					model: 'deepseek/deepseek-v3.2',
 					temperature: 0.7,
-					max_tokens: 2048,
+					max_tokens: 16384, // DeepSeek V3 via OpenRouter max output
 				})
 
 				for await (const chunk of generator) {
@@ -376,107 +433,357 @@ briefingRoutes.post(
 					step: session.currentStep,
 				})
 
-				// Auto-detect step transitions based on Anna's response
+				// Auto-advance step based on mandatory markers
+				// Marcadores obrigatórios de transição - a IA DEVE usar esses marcadores exatos
+				const stepCompletionPatterns: Record<string, RegExp[]> = {
+					init: [
+						/\[AVANÇAR:\s*VISION\]/i,
+						/\[AVANCAR:\s*VISION\]/i,
+						/vamos\s+(para\s+)?(a\s+)?vis[aã]o/i,
+						/vamos\s+\w+\s+(a\s+)?vis[aã]o/i,
+						/avanc(ar|ando)\s+para\s+(a\s+)?vis[aã]o/i,
+					],
+					vision: [
+						/\[AVANÇAR:\s*USERS\]/i,
+						/\[AVANCAR:\s*USERS\]/i,
+						/vamos\s+(para\s+)?(os\s+)?usu[aá]rios/i,
+						/vamos\s+\w+\s+(os\s+)?usu[aá]rios/i,
+						/avanc(ar|ando)\s+para\s+(os\s+)?usu[aá]rios/i,
+						/usu[aá]rios\s+valid(ados|adas)/i,
+					],
+					users: [
+						/\[AVANÇAR:\s*METRICS\]/i,
+						/\[AVANCAR:\s*METRICS\]/i,
+						/vamos\s+(para\s+)?(as\s+)?m[eé]tricas/i,
+						/vamos\s+\w+\s+(as\s+)?m[eé]tricas/i,
+						/avanc(ar|ando)\s+para\s+(as\s+)?m[eé]tricas/i,
+					],
+					metrics: [
+						/\[AVANÇAR:\s*SCOPE\]/i,
+						/\[AVANCAR:\s*SCOPE\]/i,
+						/vamos\s+(para\s+)?(o\s+)?escopo/i,
+						/vamos\s+\w+\s+(o\s+)?escopo/i,
+						/avanc(ar|ando)\s+para\s+(o\s+)?escopo/i,
+					],
+					scope: [
+						/\[AVANÇAR:\s*COMPLETE\]/i,
+						/\[AVANCAR:\s*COMPLETE\]/i,
+						/briefing\s+(est[aá]\s+)?completo/i,
+						/vamos\s+finalizar/i,
+						/podemos\s+finalizar/i,
+					],
+				}
+
+				const currentPatterns = stepCompletionPatterns[session.currentStep] ?? []
+				const shouldAdvance =
+					session.currentStep !== 'complete' &&
+					currentPatterns.some((pattern) => pattern.test(fullResponse))
+
+				// Debug log
+				console.log('[Briefing] Step transition check:', {
+					currentStep: session.currentStep,
+					shouldAdvance,
+					responseSnippet: fullResponse.slice(0, 200),
+					patterns: currentPatterns.map((p) => p.toString()),
+				})
+
 				let newStep = session.currentStep
-				const newStepsCompleted = [...(session.stepsCompleted ?? [])]
-
-				// Normalize text for comparison (lowercase, remove accents)
-				const normalizedResponse = fullResponse
-					.toLowerCase()
-					.normalize('NFD')
-					.replace(/[\u0300-\u036f]/g, '')
-
-				// Check for explicit action to advance step
-				if (action === 'advance_step') {
+				if (shouldAdvance) {
 					const nextStep = getNextStep(session.currentStep)
 					if (nextStep) {
 						newStep = nextStep
-						if (!newStepsCompleted.includes(session.currentStep)) {
-							newStepsCompleted.push(session.currentStep)
+						const stepsCompleted = [...(session.stepsCompleted ?? [])]
+						if (!stepsCompleted.includes(session.currentStep)) {
+							stepsCompleted.push(session.currentStep)
 						}
-					}
-				} else {
-					// Auto-detect transitions based on keywords in response
-					const transitionKeywords: Record<string, string[]> = {
-						vision: [
-							'visao do produto',
-							'vamos definir a **visao',
-							'visao clara',
-							'entrando na fase de **visao',
-							'proxima etapa e a visao',
-						],
-						users: [
-							'usuarios-alvo',
-							'usuarios do produto',
-							'vamos definir os **usuarios',
-							'entrando na fase de **usuarios',
-							'quem vai usar',
-							'personas',
-						],
-						metrics: [
-							'metricas de sucesso',
-							'como medir o **sucesso',
-							'vamos definir como medir',
-							'entrando na fase de **metricas',
-							'kpis',
-						],
-						scope: [
-							'escopo do mvp',
-							'vamos definir o **escopo',
-							'entrando na fase de **escopo',
-							'features essenciais',
-							'o que entra no mvp',
-						],
-						complete: [
-							'briefing esta completo',
-							'concluimos o briefing',
-							'product brief completo',
-							'vamos para a **conclusao',
-							'entrando na fase de **conclusao',
-							'gerar o documento',
-						],
-					}
-
-					for (const [targetStep, keywords] of Object.entries(transitionKeywords)) {
-						if (keywords.some((kw) => normalizedResponse.includes(kw))) {
-							const targetIndex = BRIEFING_STEPS_ORDER.indexOf(targetStep as typeof newStep)
-							const currentIndex = BRIEFING_STEPS_ORDER.indexOf(session.currentStep)
-
-							// Only advance if target is next step
-							if (targetIndex === currentIndex + 1) {
-								if (!newStepsCompleted.includes(session.currentStep)) {
-									newStepsCompleted.push(session.currentStep)
-								}
-								newStep = targetStep as typeof newStep
-								break
-							}
-						}
+						await db
+							.update(briefingSessions)
+							.set({
+								currentStep: nextStep,
+								stepsCompleted,
+								...(nextStep === 'complete' && { status: 'completed', completedAt: new Date() }),
+								updatedAt: new Date(),
+							})
+							.where(eq(briefingSessions.id, sessionId))
 					}
 				}
 
-				// Update session
-				const updateData: {
-					updatedAt: Date
-					currentStep?: typeof newStep
-					stepsCompleted?: string[]
-					status?: 'completed'
-					completedAt?: Date
-				} = {
-					updatedAt: new Date(),
+				// Update session timestamp if no step change
+				if (!shouldAdvance) {
+					await db
+						.update(briefingSessions)
+						.set({ updatedAt: new Date() })
+						.where(eq(briefingSessions.id, sessionId))
 				}
 
+				// Send step update event if step changed
 				if (newStep !== session.currentStep) {
-					updateData.currentStep = newStep
-					updateData.stepsCompleted = newStepsCompleted
+					await stream.writeSSE({
+						data: JSON.stringify({ stepUpdate: newStep }),
+					})
 				}
 
-				// Mark as completed if reaching complete step
-				if (newStep === 'complete' && session.status !== 'completed') {
-					updateData.status = 'completed'
-					updateData.completedAt = new Date()
+				await stream.writeSSE({ data: '[DONE]' })
+			} catch (error) {
+				if (error instanceof OpenRouterAPIError) {
+					await stream.writeSSE({
+						data: JSON.stringify({
+							error: { code: error.code, message: error.message },
+						}),
+					})
+				} else {
+					await stream.writeSSE({
+						data: JSON.stringify({
+							error: { message: 'Failed to generate response' },
+						}),
+					})
+				}
+			}
+		})
+	}
+)
+
+// ============================================
+// MESSAGE EDIT ENDPOINT
+// ============================================
+
+briefingRoutes.post(
+	'/messages/:messageId/edit',
+	authMiddleware,
+	zValidator('json', EditBriefingMessageRequestSchema),
+	async (c) => {
+		const { userId } = getAuth(c)
+		const messageId = c.req.param('messageId')
+		const { content } = c.req.valid('json')
+
+		const user = await getUserByClerkId(userId)
+		if (!user) {
+			return commonErrors.notFound(c, 'User not found')
+		}
+
+		// 1. Get the message to edit
+		const message = await db.query.briefingMessages.findFirst({
+			where: eq(briefingMessages.id, messageId),
+		})
+
+		if (!message) {
+			return commonErrors.notFound(c, 'Message not found')
+		}
+
+		// 2. Validate it's a user message
+		if (message.role !== 'user') {
+			return commonErrors.badRequest(c, 'Can only edit user messages')
+		}
+
+		// 3. Get session and verify ownership
+		const session = await db.query.briefingSessions.findFirst({
+			where: and(eq(briefingSessions.id, message.sessionId), eq(briefingSessions.userId, user.id)),
+		})
+
+		if (!session) {
+			return commonErrors.forbidden(c, 'Access denied')
+		}
+
+		const sessionId = message.sessionId
+		const editedStep = message.step
+		const messageTimestamp = message.createdAt
+
+		// 4. Delete all messages from this point onwards (inclusive)
+		await db
+			.delete(briefingMessages)
+			.where(and(eq(briefingMessages.sessionId, sessionId), gte(briefingMessages.createdAt, messageTimestamp)))
+
+		// 5. Check if we need to rollback the step
+		const currentStepIndex = BRIEFING_STEPS_ORDER.indexOf(session.currentStep)
+		const editedStepIndex = BRIEFING_STEPS_ORDER.indexOf(editedStep)
+
+		if (currentStepIndex > editedStepIndex) {
+			// Rollback to the edited step
+			const newStepsCompleted = (session.stepsCompleted ?? []).filter(
+				(s) => BRIEFING_STEPS_ORDER.indexOf(s as BriefingStep) < editedStepIndex
+			)
+
+			await db
+				.update(briefingSessions)
+				.set({
+					currentStep: editedStep,
+					stepsCompleted: newStepsCompleted,
+					status: 'active',
+					completedAt: null,
+					updatedAt: new Date(),
+				})
+				.where(eq(briefingSessions.id, sessionId))
+		}
+
+		// 6. Insert the new edited user message
+		await db.insert(briefingMessages).values({
+			sessionId,
+			role: 'user',
+			content,
+			step: editedStep,
+		})
+
+		// 7. Refresh session data for LLM context
+		const updatedSession = await db.query.briefingSessions.findFirst({
+			where: eq(briefingSessions.id, sessionId),
+			with: {
+				messages: {
+					orderBy: [desc(briefingMessages.createdAt)],
+					limit: 50,
+				},
+			},
+		})
+
+		if (!updatedSession) {
+			return commonErrors.internalError(c, 'Failed to refresh session')
+		}
+
+		// 8. Build system prompt with session context
+		const systemPrompt = buildBriefingSystemPrompt(
+			{
+				projectName: updatedSession.projectName,
+				projectDescription: updatedSession.projectDescription,
+				problemStatement: updatedSession.problemStatement,
+				problemImpact: updatedSession.problemImpact,
+				existingSolutionsGaps: updatedSession.existingSolutionsGaps,
+				proposedSolution: updatedSession.proposedSolution,
+				keyDifferentiators: updatedSession.keyDifferentiators ?? [],
+				primaryUsers: updatedSession.primaryUsers ?? [],
+				secondaryUsers: updatedSession.secondaryUsers ?? [],
+				userJourneys: updatedSession.userJourneys ?? [],
+				successMetrics: updatedSession.successMetrics ?? [],
+				businessObjectives: updatedSession.businessObjectives ?? [],
+				kpis: updatedSession.kpis ?? [],
+				mvpFeatures: updatedSession.mvpFeatures ?? [],
+				outOfScope: updatedSession.outOfScope ?? [],
+				mvpSuccessCriteria: updatedSession.mvpSuccessCriteria ?? [],
+				futureVision: updatedSession.futureVision,
+				stepsCompleted: updatedSession.stepsCompleted ?? [],
+			},
+			updatedSession.currentStep,
+			undefined
+		)
+
+		// Build conversation history
+		const historyMessages = [...updatedSession.messages]
+			.reverse()
+			.filter((m) => m.role !== 'system')
+			.map((m) => ({
+				role: m.role as 'user' | 'assistant',
+				content: m.content,
+			}))
+
+		const llmMessages = [{ role: 'system' as const, content: systemPrompt }, ...historyMessages]
+
+		// 9. Stream response
+		return streamSSE(c, async (stream) => {
+			try {
+				const client = getOpenRouterClient()
+				let fullResponse = ''
+
+				const generator = client.chatStream({
+					messages: llmMessages,
+					model: 'deepseek/deepseek-v3.2',
+					temperature: 0.7,
+					max_tokens: 16384,
+				})
+
+				for await (const chunk of generator) {
+					fullResponse += chunk
+					await stream.writeSSE({
+						data: JSON.stringify({ content: chunk }),
+					})
 				}
 
-				await db.update(briefingSessions).set(updateData).where(eq(briefingSessions.id, sessionId))
+				// Save assistant response
+				await db.insert(briefingMessages).values({
+					sessionId,
+					role: 'assistant',
+					content: fullResponse,
+					step: updatedSession.currentStep,
+				})
+
+				// Auto-advance step based on mandatory markers
+				// Marcadores obrigatórios de transição - a IA DEVE usar esses marcadores exatos
+				const stepCompletionPatterns: Record<string, RegExp[]> = {
+					init: [
+						/\[AVANÇAR:\s*VISION\]/i,
+						/\[AVANCAR:\s*VISION\]/i,
+						/vamos\s+(para\s+)?(a\s+)?vis[aã]o/i,
+						/vamos\s+\w+\s+(a\s+)?vis[aã]o/i,
+						/avanc(ar|ando)\s+para\s+(a\s+)?vis[aã]o/i,
+					],
+					vision: [
+						/\[AVANÇAR:\s*USERS\]/i,
+						/\[AVANCAR:\s*USERS\]/i,
+						/vamos\s+(para\s+)?(os\s+)?usu[aá]rios/i,
+						/vamos\s+\w+\s+(os\s+)?usu[aá]rios/i,
+						/avanc(ar|ando)\s+para\s+(os\s+)?usu[aá]rios/i,
+						/usu[aá]rios\s+valid(ados|adas)/i,
+					],
+					users: [
+						/\[AVANÇAR:\s*METRICS\]/i,
+						/\[AVANCAR:\s*METRICS\]/i,
+						/vamos\s+(para\s+)?(as\s+)?m[eé]tricas/i,
+						/vamos\s+\w+\s+(as\s+)?m[eé]tricas/i,
+						/avanc(ar|ando)\s+para\s+(as\s+)?m[eé]tricas/i,
+					],
+					metrics: [
+						/\[AVANÇAR:\s*SCOPE\]/i,
+						/\[AVANCAR:\s*SCOPE\]/i,
+						/vamos\s+(para\s+)?(o\s+)?escopo/i,
+						/vamos\s+\w+\s+(o\s+)?escopo/i,
+						/avanc(ar|ando)\s+para\s+(o\s+)?escopo/i,
+					],
+					scope: [
+						/\[AVANÇAR:\s*COMPLETE\]/i,
+						/\[AVANCAR:\s*COMPLETE\]/i,
+						/briefing\s+(est[aá]\s+)?completo/i,
+						/vamos\s+finalizar/i,
+						/podemos\s+finalizar/i,
+					],
+				}
+
+				const currentPatterns = stepCompletionPatterns[updatedSession.currentStep] ?? []
+				const shouldAdvance =
+					updatedSession.currentStep !== 'complete' &&
+					currentPatterns.some((pattern) => pattern.test(fullResponse))
+
+				let newStep = updatedSession.currentStep
+				if (shouldAdvance) {
+					const nextStep = getNextStep(updatedSession.currentStep)
+					if (nextStep) {
+						newStep = nextStep
+						const stepsCompleted = [...(updatedSession.stepsCompleted ?? [])]
+						if (!stepsCompleted.includes(updatedSession.currentStep)) {
+							stepsCompleted.push(updatedSession.currentStep)
+						}
+						await db
+							.update(briefingSessions)
+							.set({
+								currentStep: nextStep,
+								stepsCompleted,
+								...(nextStep === 'complete' && { status: 'completed', completedAt: new Date() }),
+								updatedAt: new Date(),
+							})
+							.where(eq(briefingSessions.id, sessionId))
+					}
+				}
+
+				// Update session timestamp if no step change
+				if (!shouldAdvance) {
+					await db
+						.update(briefingSessions)
+						.set({ updatedAt: new Date() })
+						.where(eq(briefingSessions.id, sessionId))
+				}
+
+				// Send step update event if step changed
+				if (newStep !== updatedSession.currentStep) {
+					await stream.writeSSE({
+						data: JSON.stringify({ stepUpdate: newStep }),
+					})
+				}
 
 				await stream.writeSSE({ data: '[DONE]' })
 			} catch (error) {
@@ -544,6 +851,16 @@ briefingRoutes.post(
 		})
 		const nextVersion = existingDoc ? existingDoc.version + 1 : 1
 
+		// Mark generation as started BEFORE streaming
+		await db
+			.update(briefingSessions)
+			.set({
+				generationStatus: 'generating',
+				generationStartedAt: new Date(),
+				generationError: null,
+			})
+			.where(eq(briefingSessions.id, sessionId))
+
 		// Stream document generation
 		return streamSSE(c, async (stream) => {
 			try {
@@ -578,9 +895,9 @@ briefingRoutes.post(
 
 				const generator = client.chatStream({
 					messages: [{ role: 'user', content: prompt }],
-					model: 'deepseek/deepseek-chat-v3-0324',
+					model: 'deepseek/deepseek-v3.2',
 					temperature: 0.5,
-					max_tokens: 4096,
+					max_tokens: 16384, // DeepSeek V3 via OpenRouter max output
 				})
 
 				for await (const chunk of generator) {
@@ -601,19 +918,37 @@ briefingRoutes.post(
 					custom: body?.title ?? `Custom Document: ${session.projectName}`,
 				}
 
-				// Save to briefing_documents table
-				const [newDoc] = await db
-					.insert(briefingDocuments)
-					.values({
-						sessionId,
-						type: docType,
-						title: docTitles[docType] ?? `Document: ${session.projectName}`,
-						content: fullDocument,
-						version: nextVersion,
-					})
-					.returning()
+				// Save to briefing_documents table (upsert - only one document per session)
+				let savedDoc
+				if (existingDoc) {
+					// Update existing document
+					const [updated] = await db
+						.update(briefingDocuments)
+						.set({
+							title: docTitles[docType] ?? `Document: ${session.projectName}`,
+							content: fullDocument,
+							version: nextVersion,
+							updatedAt: new Date(),
+						})
+						.where(eq(briefingDocuments.id, existingDoc.id))
+						.returning()
+					savedDoc = updated
+				} else {
+					// Create new document
+					const [created] = await db
+						.insert(briefingDocuments)
+						.values({
+							sessionId,
+							type: docType,
+							title: docTitles[docType] ?? `Document: ${session.projectName}`,
+							content: fullDocument,
+							version: 1,
+						})
+						.returning()
+					savedDoc = created
+				}
 
-				// Also update session for backward compatibility
+				// Also update session for backward compatibility + mark generation as completed
 				await db
 					.update(briefingSessions)
 					.set({
@@ -621,6 +956,7 @@ briefingRoutes.post(
 						documentTitle: docTitles[docType],
 						currentStep: 'complete',
 						status: 'completed',
+						generationStatus: 'completed',
 						completedAt: new Date(),
 						updatedAt: new Date(),
 					})
@@ -629,11 +965,24 @@ briefingRoutes.post(
 				await stream.writeSSE({
 					data: JSON.stringify({
 						done: true,
-						document: newDoc,
+						document: savedDoc,
 					}),
 				})
 				await stream.writeSSE({ data: '[DONE]' })
 			} catch (error) {
+				const errorMessage =
+					error instanceof OpenRouterAPIError ? error.message : 'Failed to generate document'
+
+				// Mark generation as failed
+				await db
+					.update(briefingSessions)
+					.set({
+						generationStatus: 'failed',
+						generationError: errorMessage,
+						updatedAt: new Date(),
+					})
+					.where(eq(briefingSessions.id, sessionId))
+
 				if (error instanceof OpenRouterAPIError) {
 					await stream.writeSSE({
 						data: JSON.stringify({

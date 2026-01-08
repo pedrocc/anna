@@ -22,7 +22,9 @@ stack-vdev/
 ├── packages/
 │   ├── db/           # Drizzle ORM + schemas PostgreSQL
 │   ├── shared/       # Types e schemas Zod compartilhados
-│   └── ui/           # Componentes shadcn/ui reutilizáveis
+│   ├── ui/           # Componentes shadcn/ui reutilizáveis
+│   ├── email/        # Email service via Resend
+│   └── jobs/         # Job queue via BullMQ + Redis
 └── tooling/
     └── biome/        # Configuração Biome (lint/format)
 ```
@@ -31,6 +33,8 @@ stack-vdev/
 - `@repo/db` - Database schemas e Drizzle client
 - `@repo/shared` - Types, schemas Zod, constantes
 - `@repo/ui` - Componentes shadcn/ui
+- `@repo/email` - Envio de emails via Resend
+- `@repo/jobs` - Background jobs via BullMQ
 
 ## Comandos Principais
 
@@ -61,7 +65,7 @@ bun typecheck    # Verifica tipos TypeScript
 
 **Dev Tools:**
 - Bun 1.3.5+
-- TypeScript 5.8+ (strict mode)
+- TypeScript 5.9+ (strict mode)
 - Biome (lint/format)
 
 ## Autenticação e Segurança
@@ -116,13 +120,22 @@ router.get('/',
 
 **4. Variáveis de Ambiente:**
 ```bash
-# apps/api/.env
+# .env (raiz do projeto)
 DATABASE_URL=postgresql://...
 CLERK_PUBLISHABLE_KEY=pk_test_...
 CLERK_SECRET_KEY=sk_test_...
+CLERK_WEBHOOK_SECRET=whsec_...  # Para validação de webhooks
+REDIS_URL=redis://localhost:6379
+RESEND_API_KEY=re_...
+OPENROUTER_API_KEY=sk-or-...
+```
 
-# apps/web/.env
-CLERK_PUBLISHABLE_KEY=pk_test_...
+**5. Webhook Verification** (`apps/api/src/middleware/webhook.ts`):
+```typescript
+import { verifyClerkWebhook } from '../middleware/webhook.js'
+
+// Usar em rotas de webhook do Clerk
+userRoutes.post('/', verifyClerkWebhook, zValidator('json', schema), handler)
 ```
 
 **IMPORTANTE:**
@@ -130,6 +143,7 @@ CLERK_PUBLISHABLE_KEY=pk_test_...
 - Usar `.env.example` como template
 - Clerk gerencia toda autenticação (não implementar JWT customizado)
 - Microsoft Entra ID configurado no dashboard Clerk
+- Webhooks do Clerk DEVEM usar o middleware `verifyClerkWebhook`
 
 ## Regras de Código
 
@@ -215,11 +229,26 @@ const route = createRoute({
 })
 ```
 
+### Helpers Centralizados
+
+**Use helpers de `apps/api/src/lib/helpers.ts`:**
+
+```typescript
+import { getUserByClerkId } from '../lib/helpers.js'
+
+// Buscar usuário pelo Clerk ID
+const user = await getUserByClerkId(userId)
+if (!user) {
+  return commonErrors.notFound(c, 'User not found')
+}
+```
+
 ### Configuração
 
 - Rate limiting já configurado globalmente
 - CORS configurado para ambiente de desenvolvimento
 - Error handling global para erros não tratados
+- Webhook verification via Svix (Clerk)
 
 ## Padrões de Frontend
 

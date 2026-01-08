@@ -19,6 +19,13 @@ export const smStepEnum = pgEnum('sm_step', [
 
 export const smStatusEnum = pgEnum('sm_status', ['active', 'paused', 'completed', 'archived'])
 
+export const smGenerationStatusEnum = pgEnum('sm_generation_status', [
+	'idle', // Nenhuma geração em andamento
+	'generating', // Geração em progresso
+	'completed', // Geração concluída com sucesso
+	'failed', // Geração falhou
+])
+
 export const smMessageRoleEnum = pgEnum('sm_message_role', ['system', 'user', 'assistant'])
 
 export const smDocumentTypeEnum = pgEnum('sm_document_type', [
@@ -150,6 +157,11 @@ export const smSessions = pgTable(
 		currentStep: smStepEnum('current_step').default('init').notNull(),
 		status: smStatusEnum('status').default('active').notNull(),
 		stepsCompleted: jsonb('steps_completed').$type<string[]>().default([]),
+
+		// Generation state (persisted for page reload)
+		generationStatus: smGenerationStatusEnum('generation_status').default('idle').notNull(),
+		generationStartedAt: timestamp('generation_started_at', { withTimezone: true }),
+		generationError: text('generation_error'),
 
 		// Summary stats (updated as stories are created)
 		totalEpics: integer('total_epics').default(0),

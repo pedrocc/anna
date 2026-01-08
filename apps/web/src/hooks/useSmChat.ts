@@ -4,9 +4,42 @@ import { useCallback, useState } from 'react'
 declare const __API_URL__: string | undefined
 const API_URL = __API_URL__ ?? 'http://localhost:3000'
 
+/**
+ * Removes the SM_DATA block from content for clean display
+ * Exported for use in message display components
+ * Handles complete blocks, and also partial/truncated blocks
+ */
+export function cleanSmDataFromContent(content: string): string {
+	if (!content) return ''
+
+	let result = content
+
+	// 1. Remove complete SM_DATA blocks (START...END)
+	result = result.replace(/---SM_DATA_START---[\s\S]*?---SM_DATA_END---/g, '')
+
+	// 2. Remove truncated blocks: START without END (remove from START to end of string)
+	result = result.replace(/---SM_DATA_START---[\s\S]*/g, '')
+
+	// 3. Remove truncated blocks: END without START (remove from beginning to END)
+	result = result.replace(/[\s\S]*?---SM_DATA_END---/g, '')
+
+	// 4. Remove empty code blocks that may be left over (```json followed by ```)
+	result = result.replace(/```(?:json)?\s*```/gi, '')
+
+	// 5. Remove standalone code fence markers with just "json"
+	result = result.replace(/```json\s*$/gi, '')
+	result = result.replace(/^```json\s*/gim, '')
+
+	// 6. Clean up multiple newlines
+	result = result.replace(/\n{3,}/g, '\n\n')
+
+	return result.trim()
+}
+
 interface UseSmChatOptions {
 	sessionId: string
 	onMessageComplete?: (content: string) => void
+	onStepUpdate?: (step: string) => void
 	onError?: (error: Error) => void
 }
 
@@ -22,6 +55,7 @@ interface UseSmChatReturn {
 export function useSmChat({
 	sessionId,
 	onMessageComplete,
+	onStepUpdate,
 	onError,
 }: UseSmChatOptions): UseSmChatReturn {
 	const { getToken } = useAuth()
@@ -85,7 +119,7 @@ export function useSmChat({
 
 						const data = trimmed.slice(6)
 						if (data === '[DONE]') {
-							onMessageComplete?.(fullContent)
+							onMessageComplete?.(cleanSmDataFromContent(fullContent))
 							break
 						}
 
@@ -93,7 +127,11 @@ export function useSmChat({
 							const parsed = JSON.parse(data)
 							if (parsed.content) {
 								fullContent += parsed.content
-								setStreamingContent(fullContent)
+								// Clean SM_DATA block for display during streaming
+								setStreamingContent(cleanSmDataFromContent(fullContent))
+							}
+							if (parsed.stepUpdate) {
+								onStepUpdate?.(parsed.stepUpdate)
 							}
 							if (parsed.error) {
 								throw new Error(parsed.error.message)
@@ -106,9 +144,9 @@ export function useSmChat({
 					}
 				}
 
-				// Final content
+				// Final content - clean SM_DATA block before passing to handler
 				if (fullContent) {
-					onMessageComplete?.(fullContent)
+					onMessageComplete?.(cleanSmDataFromContent(fullContent))
 				}
 			} catch (err) {
 				const error = err instanceof Error ? err : new Error('Unknown error')
@@ -116,10 +154,11 @@ export function useSmChat({
 				onError?.(error)
 			} finally {
 				setIsStreaming(false)
+				setStreamingContent('') // Reset streaming content when done
 				setPendingUserMessage(null)
 			}
 		},
-		[sessionId, getToken, onMessageComplete, onError]
+		[sessionId, getToken, onMessageComplete, onStepUpdate, onError]
 	)
 
 	return {

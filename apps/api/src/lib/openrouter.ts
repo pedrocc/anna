@@ -60,7 +60,7 @@ export class OpenRouterClient {
 		}
 		this.apiKey = key
 		this.defaultModel =
-			defaultModel ?? process.env['OPENROUTER_DEFAULT_MODEL'] ?? 'deepseek/deepseek-chat-v3-0324'
+			defaultModel ?? process.env['OPENROUTER_DEFAULT_MODEL'] ?? 'deepseek/deepseek-v3.2'
 	}
 
 	async chat(request: ChatCompletionRequest): Promise<ChatCompletionResponse> {
@@ -95,6 +95,12 @@ export class OpenRouterClient {
 	}
 
 	async *chatStream(request: ChatCompletionRequest): AsyncGenerator<string, void, unknown> {
+		console.log('[OpenRouter] Starting stream request:', {
+			model: request.model ?? this.defaultModel,
+			max_tokens: request.max_tokens,
+			messages_count: request.messages.length,
+		})
+
 		const response = await fetch(`${OPENROUTER_API_URL}/chat/completions`, {
 			method: 'POST',
 			headers: {
@@ -113,8 +119,17 @@ export class OpenRouterClient {
 			}),
 		})
 
+		console.log('[OpenRouter] Response status:', response.status)
+
 		if (!response.ok) {
-			const error = (await response.json()) as OpenRouterError
+			const errorText = await response.text()
+			console.error('[OpenRouter] Error response:', errorText)
+			let error: OpenRouterError
+			try {
+				error = JSON.parse(errorText) as OpenRouterError
+			} catch {
+				throw new OpenRouterAPIError(errorText, 'UNKNOWN', response.status)
+			}
 			throw new OpenRouterAPIError(
 				error.error?.message ?? 'Unknown error',
 				error.error?.code ?? 'UNKNOWN',

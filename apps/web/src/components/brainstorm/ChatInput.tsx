@@ -6,12 +6,14 @@ interface ChatInputProps {
 	onSend: (message: string) => void
 	disabled?: boolean
 	placeholder?: string
+	autoFocus?: boolean
 }
 
 export function ChatInput({
 	onSend,
 	disabled,
 	placeholder = 'Digite sua mensagem...',
+	autoFocus,
 }: ChatInputProps) {
 	const [input, setInput] = useState('')
 	const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -44,6 +46,7 @@ export function ChatInput({
 				onKeyDown={handleKeyDown}
 				placeholder={placeholder}
 				disabled={disabled}
+				autoFocus={autoFocus}
 				className="min-h-[60px] resize-none"
 				rows={2}
 			/>

@@ -729,6 +729,15 @@ Criterios de Aceitacao:
 - [ ] [Criterio 2]
 \`\`\`
 
+**REGRA DE CONFIRMACAO OBRIGATORIA:**
+Antes de sugerir avancar para os NFRs, voce DEVE:
+1. Listar um resumo dos FRs documentados ate agora (ex: "Temos FR-001 a FR-005 documentados")
+2. Perguntar explicitamente: "Existe mais algum requisito funcional que devemos incluir?"
+3. Aguardar resposta do usuario
+4. SOMENTE apos o usuario confirmar que nao ha mais, use a frase de transicao
+
+NAO avance automaticamente. A pergunta de confirmacao e OBRIGATORIA.
+
 **MENU DE OPCOES:**
 - **[A] Aprofundar** - Detalhar FR especifico
 - **[P] Perspectivas** - Ver de diferentes angulos
@@ -781,6 +790,15 @@ Metrica: [Como medir]
 Target: [Valor alvo]
 Prioridade: [Critical/High/Medium/Low]
 \`\`\`
+
+**REGRA DE CONFIRMACAO OBRIGATORIA:**
+Antes de sugerir concluir o PRD, voce DEVE:
+1. Listar um resumo dos NFRs documentados ate agora (ex: "Temos NFR-001 a NFR-003 documentados")
+2. Perguntar explicitamente: "Existe mais algum requisito nao-funcional que devemos incluir?"
+3. Aguardar resposta do usuario
+4. SOMENTE apos o usuario confirmar que nao ha mais, use a frase de transicao
+
+NAO avance automaticamente. A pergunta de confirmacao e OBRIGATORIA.
 
 **MENU DE OPCOES:**
 - **[A] Aprofundar** - Detalhar NFR especifico
@@ -954,7 +972,22 @@ ${buildContextSummary(context)}`
 - Use markdown para formatacao
 - Valide entendimento antes de avancar
 - NUNCA gere conteudo sem input do usuario - voce e facilitadora, nao geradora
-- Para requisitos, use formato estruturado (FR-XXX, NFR-XXX)`
+- Para requisitos, use formato estruturado (FR-XXX, NFR-XXX)
+
+**REGRA DE TRANSICAO OBRIGATORIA:**
+Quando for avancar para o proximo step, voce DEVE usar EXATAMENTE uma destas frases no FINAL da sua resposta:
+- init → discovery: "Vamos para a Descoberta"
+- discovery → success: "Vamos definir os Criterios de Sucesso"
+- success → journeys: "Vamos mapear as Jornadas de Usuario"
+- journeys → domain: "Vamos explorar requisitos de dominio"
+- domain → innovation: "Vamos verificar se ha inovacao"
+- innovation → project_type: "Vamos fazer um deep dive no tipo de projeto"
+- project_type → scoping: "Vamos definir o escopo MVP"
+- scoping → functional: "Vamos sintetizar os Requisitos Funcionais"
+- functional → nonfunctional: "Vamos para os Requisitos Nao-Funcionais"
+- nonfunctional → complete: "PRD completo - vamos para a conclusao"
+
+IMPORTANTE: Use a frase EXATA para que o sistema detecte a transicao automaticamente. Sem a frase correta, o step NAO avanca.`
 
 	return prompt
 }
@@ -1029,28 +1062,76 @@ Vamos percorrer 11 etapas para documentar completamente os requisitos:
 `
 
 	if (hasBriefing) {
-		message += `Vi que voce ja tem um **Product Brief**. Vou usar como base para acelerar o processo.
-
-**Pergunta inicial:**
-O que voce considera o insight mais importante do briefing que devemos levar para o PRD?`
+		message += `Vi que voce ja tem um **Product Brief** vinculado. Vou analisar o documento e usar como base para acelerar o processo.`
 	} else {
-		message += `**Pergunta inicial:**
-Voce tem um Product Brief ou sessao de Briefing que possamos usar como base? Isso acelera muito o processo.`
+		message += `Vamos comecar! Me conte sobre o projeto: qual problema voce quer resolver e para quem?`
 	}
 
 	return message
 }
 
-export function buildPrdDocumentPrompt(context: PrdSessionContext): string {
+/**
+ * Builds the prompt for Anna to analyze the briefing document at the start of a PRD session
+ */
+export function buildBriefingAnalysisPrompt(
+	briefingContent: string,
+	projectName: string
+): { systemPrompt: string; userPrompt: string } {
+	const systemPrompt = `${PM_PERSONA}
+
+**CONTEXTO:**
+Voce esta iniciando uma nova sessao de PRD. O usuario compartilhou o Product Brief do projeto "${projectName}".
+
+**SUA TAREFA:**
+1. Analise o documento do briefing de forma estruturada
+2. Identifique os pontos-chave: Visao, Usuarios-alvo, Metricas de Sucesso, Escopo MVP
+3. Destaque o que ja esta bem definido e o que precisa ser aprofundado no PRD
+4. Faca a transicao para a etapa de Discovery com uma pergunta sobre o tipo de projeto
+
+**FORMATO DA RESPOSTA:**
+- Use markdown para estruturar
+- Seja concisa mas completa
+- Termine com uma pergunta clara para avancar para Discovery
+- A pergunta deve ser sobre classificar o tipo de projeto (API, Mobile App, SaaS, etc.)
+
+**IMPORTANTE:**
+- NAO repita o conteudo do briefing inteiro
+- Faca um resumo executivo dos pontos principais
+- Identifique lacunas que precisarao ser exploradas nas proximas etapas`
+
+	const userPrompt = `Analise o seguinte Product Brief e prepare o contexto para o PRD:
+
+${briefingContent}`
+
+	return { systemPrompt, userPrompt }
+}
+
+export function buildPrdDocumentPrompt(
+	context: PrdSessionContext,
+	messages?: Array<{ role: string; content: string }>,
+	authorName?: string
+): string {
+	// Build conversation history section
+	const conversationHistory = messages
+		? messages
+				.filter((m) => m.role !== 'system')
+				.map((m) => `**${m.role === 'user' ? 'Usuário' : 'Anna'}:** ${m.content}`)
+				.join('\n\n---\n\n')
+		: ''
+
 	return `Voce e um escritor tecnico criando um PRD (Product Requirements Document) executivo.
 
 **PROJETO:** "${context.projectName}"
 **TIPO:** ${context.projectType || 'Nao definido'}
 **DOMINIO:** ${context.domain || 'Nao definido'}
 
-**DADOS DO PRD:**
+---
 
-${JSON.stringify(context, null, 2)}
+## HISTÓRICO DA CONVERSA DE LEVANTAMENTO
+
+Abaixo está todo o trabalho feito durante as etapas de levantamento de requisitos. USE ESTE CONTEÚDO para gerar o PRD:
+
+${conversationHistory || 'Nenhuma conversa registrada.'}
 
 ---
 
@@ -1058,100 +1139,235 @@ Crie um documento PRD em Markdown com a seguinte estrutura:
 
 # PRD: ${context.projectName}
 
-## Document Control
-| Version | Date | Author | Status |
-|---------|------|--------|--------|
-| 1.0 | ${new Date().toLocaleDateString('pt-BR')} | Anna (PM) | Draft |
+## Controle do Documento
+| Versao | Data | Autor | Status |
+|--------|------|-------|--------|
+| 1.0 | ${new Date().toLocaleDateString('pt-BR')} | ${authorName || 'Nao identificado'} | Rascunho |
 
 ---
 
-## Executive Summary
+## Resumo Executivo
 (2-3 paragrafos resumindo o produto, problema e solucao)
 
 ---
 
-## Project Classification
+## Classificacao do Projeto
 
-### Project Type
+### Tipo de Projeto
 (Tipo do projeto e justificativa)
 
-### Domain & Complexity
+### Dominio e Complexidade
 (Dominio e nivel de complexidade)
 
-### Key Differentiators
+### Diferenciadores-Chave
 (Lista de diferenciadores)
 
 ---
 
-## Success Criteria
+## Criterios de Sucesso
 
-### User Success
+### Sucesso do Usuario
 (Criterios de sucesso do usuario)
 
-### Business Success
+### Sucesso de Negocio
 (Criterios de sucesso de negocio)
 
-### Technical Success
+### Sucesso Tecnico
 (Criterios de sucesso tecnico)
 
 ---
 
-## User Journeys
+## Jornadas de Usuario
 
 ### Personas
 (Lista de personas com contexto)
 
-### Journey Maps
+### Mapas de Jornada
 (Jornadas por etapa)
 
 ---
 
-## Domain Requirements
+## Requisitos de Dominio
 (Se aplicavel - requisitos regulatorios e de compliance)
 
 ---
 
-## Feature Scope
+## Escopo de Funcionalidades
 
-### MVP Features (Must Have)
+### Funcionalidades MVP (Obrigatorias)
 (Features essenciais para MVP)
 
-### Growth Features (Should Have)
+### Funcionalidades de Crescimento (Desejaveis)
 (Features para proximas versoes)
 
-### Out of Scope
+### Fora do Escopo
 (O que NAO entra)
 
-### MVP Success Criteria
+### Criterios de Sucesso do MVP
 (Como validar o MVP)
 
 ---
 
-## Functional Requirements
+## Requisitos Funcionais
 
-### Summary
-| Code | Name | Category | Priority |
-|------|------|----------|----------|
-(Tabela resumo de FRs)
+### Resumo
+| Codigo | Nome | Categoria | Prioridade | Modulo/Funcionalidade |
+|--------|------|-----------|------------|------------------------|
+(Tabela resumo de TODOS os FRs - FR-001, FR-002, FR-003, etc. Inclua TODOS os codigos mencionados na conversa)
 
-### Detailed Requirements
-(Cada FR com descricao e criterios de aceitacao)
+### Requisitos Detalhados
 
----
-
-## Non-Functional Requirements
-
-### Summary
-| Code | Category | Name | Target | Priority |
-|------|----------|------|--------|----------|
-(Tabela resumo de NFRs)
-
-### Detailed Requirements
-(Cada NFR com descricao, metrica e target)
+**CRITICO: Para CADA requisito funcional (FR-XXX) discutido na conversa, use o formato COMPLETO abaixo. NAO OMITA NENHUMA SECAO.**
 
 ---
 
-## Next Steps
+#### FR-XXX: [Nome do Requisito]
+
+**Visao Geral:**
+| Atributo | Valor |
+|----------|-------|
+| Codigo | FR-XXX |
+| Nome | [Nome descritivo] |
+| Descricao | [O que o sistema deve fazer - seja detalhado] |
+| Categoria | [User-facing / System / Integration] |
+| Prioridade | [Critical / High / Medium / Low] |
+| Modulo/Feature | [A qual feature pertence] |
+| Status | [Proposto / Aprovado / Implementado] |
+
+**Especificacao de Dados de Entrada:**
+
+*Dados Obrigatorios:*
+| Campo | Tipo | Descricao | Validacoes | Exemplo |
+|-------|------|-----------|------------|---------|
+| [campo1] | [string/number/boolean/date/object] | [descricao do campo] | [regras de validacao] | [exemplo de valor] |
+| [campo2] | [...] | [...] | [...] | [...] |
+
+*Dados Opcionais:*
+| Campo | Tipo | Descricao | Default | Exemplo |
+|-------|------|-----------|---------|---------|
+| [campo3] | [...] | [...] | [valor default] | [...] |
+
+**Regras de Negocio e Validacao:**
+1. [RN-001: Regra especifica - ex: Email deve ser unico no sistema]
+2. [RN-002: Regra especifica - ex: Senha deve ter minimo 8 caracteres]
+3. [RN-003: Regra especifica - ex: Usuario deve ter idade >= 18 anos]
+(Liste TODAS as regras discutidas na conversa)
+
+**Fluxo Principal (Happy Path):**
+1. [Passo 1: Usuario/Sistema faz X]
+2. [Passo 2: Sistema valida Y]
+3. [Passo 3: Sistema processa Z]
+4. [Passo 4: Sistema retorna resultado]
+
+**Fluxos Alternativos e Casos de Erro:**
+| ID | Condicao/Trigger | Comportamento do Sistema | Codigo de Erro | Mensagem |
+|----|------------------|--------------------------|----------------|----------|
+| E1 | Campo obrigatorio vazio | Retorna erro 400 | FIELD_REQUIRED | "Campo X e obrigatorio" |
+| E2 | Formato invalido | Retorna erro 400 | INVALID_FORMAT | "Formato de X invalido" |
+| E3 | Registro nao encontrado | Retorna erro 404 | NOT_FOUND | "X nao encontrado" |
+| E4 | Sem permissao | Retorna erro 403 | FORBIDDEN | "Sem permissao para X" |
+
+**Dependencias e Integracoes:**
+- *Pre-requisitos:* [FR-XXX deve estar implementado antes]
+- *Dependencias:* [Depende de FR-YYY para funcionar]
+- *Integracoes Externas:* [Sistema X, API Y, Servico Z]
+- *Impacto em Outros FRs:* [Afeta FR-ZZZ quando executado]
+
+**Criterios de Aceitacao (Testables):**
+- [ ] [CA-001: Criterio especifico e verificavel]
+- [ ] [CA-002: Criterio especifico e verificavel]
+- [ ] [CA-003: Criterio especifico e verificavel]
+- [ ] [CA-004: Todos os casos de erro tratados conforme tabela]
+- [ ] [CA-005: Validacoes implementadas conforme regras de negocio]
+
+**Observacoes Tecnicas:**
+[Qualquer detalhe tecnico adicional discutido na conversa - tecnologias, bibliotecas, padroes, etc.]
+
+---
+
+(REPITA O FORMATO ACIMA PARA CADA FR-XXX DISCUTIDO NA CONVERSA)
+
+---
+
+## Requisitos Nao-Funcionais
+
+### Resumo
+| Codigo | Categoria | Nome | Meta | Prioridade | Escopo |
+|--------|-----------|------|------|------------|--------|
+(Tabela resumo de TODOS os NFRs - NFR-001, NFR-002, etc.)
+
+### Requisitos Detalhados
+
+**CRITICO: Para CADA requisito nao-funcional (NFR-XXX) discutido na conversa, use o formato COMPLETO abaixo.**
+
+---
+
+#### NFR-XXX: [Nome do Requisito]
+
+**Classificacao:**
+| Atributo | Valor |
+|----------|-------|
+| Codigo | NFR-XXX |
+| Categoria | [Performance / Security / Reliability / Usability / Scalability / Maintainability / Compliance] |
+| Prioridade | [Critical / High / Medium / Low] |
+| Escopo | [Sistema inteiro / Modulo especifico / Feature especifica] |
+
+**Especificacao:**
+- **Descricao:** [O que e necessario - seja detalhado]
+- **Justificativa:** [Por que e importante para o negocio/usuario]
+- **Contexto:** [Quando/onde este requisito se aplica]
+
+**Metricas e Targets:**
+| Metrica | Target | Metodo de Medicao | Frequencia |
+|---------|--------|-------------------|------------|
+| [ex: Tempo de resposta] | [< 200ms p95] | [APM/New Relic/Logs] | [Continuo] |
+| [ex: Disponibilidade] | [99.9%] | [Uptime monitoring] | [Mensal] |
+
+**Cenarios de Teste:**
+1. [Cenario 1: Condicao normal - ex: 100 usuarios simultaneos]
+2. [Cenario 2: Carga de pico - ex: 1000 usuarios simultaneos]
+3. [Cenario 3: Degradacao - ex: falha de servico externo]
+
+**Impacto se Nao Atendido:**
+[Consequencias tecnicas e de negocio de nao atingir o requisito]
+
+**Dependencias:**
+- [Infraestrutura necessaria]
+- [Servicos externos]
+- [Configuracoes especificas]
+
+**Criterios de Aceitacao:**
+- [ ] [CA-001: Criterio mensuravel]
+- [ ] [CA-002: Criterio mensuravel]
+
+---
+
+(REPITA O FORMATO ACIMA PARA CADA NFR-XXX DISCUTIDO NA CONVERSA)
+
+---
+
+## Modelo de Dados / Glossario de Entidades
+
+### Entidades Principais
+
+Para CADA entidade/objeto discutido na conversa, documente:
+
+#### [Nome da Entidade - ex: Usuario]
+| Campo | Tipo | Obrigatorio | Descricao | Validacoes | Exemplo |
+|-------|------|-------------|-----------|------------|---------|
+| id | UUID | Sim (auto) | Identificador unico | - | "550e8400-e29b-41d4-a716-446655440000" |
+| [campo1] | string | Sim | [descricao] | [validacoes] | [exemplo] |
+| [campo2] | number | Nao | [descricao] | [validacoes] | [exemplo] |
+| createdAt | datetime | Sim (auto) | Data de criacao | - | "2024-01-15T10:30:00Z" |
+| updatedAt | datetime | Sim (auto) | Data de atualizacao | - | "2024-01-15T10:30:00Z" |
+
+**Relacionamentos:**
+- [Entidade X] 1:N [Entidade Y] - [descricao do relacionamento]
+- [Entidade X] N:N [Entidade Z] - [descricao do relacionamento]
+
+---
+
+## Proximos Passos
 
 1. (Proximo passo 1)
 2. (Proximo passo 2)
@@ -1159,12 +1375,12 @@ Crie um documento PRD em Markdown com a seguinte estrutura:
 
 ---
 
-## Appendix
+## Apendice
 
-### Glossary
+### Glossario
 (Termos tecnicos usados)
 
-### References
+### Referencias
 (Documentos de referencia)
 
 ---
@@ -1173,13 +1389,78 @@ Crie um documento PRD em Markdown com a seguinte estrutura:
 
 ---
 
-**INSTRUCOES:**
-- Use APENAS os dados fornecidos no contexto
-- NAO invente informacoes que nao foram discutidas
-- Seja conciso mas completo
-- Use formatacao profissional
-- Inclua apenas secoes que tenham dados reais
-- FRs e NFRs devem manter seus codigos (FR-XXX, NFR-XXX)`
+**===========================================**
+**INSTRUCOES CRITICAS PARA GERACAO DO PRD**
+**===========================================**
+
+**PASSO 1 - LEIA TODO O HISTORICO:**
+Antes de comecar a gerar o documento, leia a conversa INTEIRA do inicio ao fim. Anote mentalmente todos os detalhes discutidos.
+
+**PASSO 2 - EXTRAIA CADA DETALHE:**
+
+Para CADA requisito funcional (FR-XXX, RF-XXX), procure e extraia:
+
+| O que procurar | Padroes na conversa | Onde colocar no template |
+|----------------|---------------------|--------------------------|
+| Dados obrigatorios | "campos obrigatorios", "deve informar", "required", "mandatory", "nao pode ser vazio" | Tabela "Dados Obrigatorios" |
+| Dados opcionais | "opcional", "pode informar", "se quiser", "default" | Tabela "Dados Opcionais" |
+| Tipos de dados | "string", "numero", "email", "data", "booleano", "lista", "objeto" | Coluna "Tipo" nas tabelas |
+| Validacoes | "deve ter no maximo", "minimo", "formato valido", "unico", "regex", "entre X e Y" | Coluna "Validacoes" e secao "Regras de Negocio" |
+| Regras de negocio | "a regra e", "nao pode", "deve ser", "somente se", "quando", "caso" | Secao "Regras de Negocio e Validacao" |
+| Fluxo/comportamento | "primeiro", "depois", "entao", "o sistema deve", "quando o usuario" | Secao "Fluxo Principal" |
+| Casos de erro | "se falhar", "erro quando", "se nao existir", "invalido", "nao encontrado" | Tabela "Fluxos Alternativos e Casos de Erro" |
+| Dependencias | "depende de", "precisa de", "apos", "antes de", "integra com" | Secao "Dependencias e Integracoes" |
+
+**PASSO 3 - PARA CADA ENTIDADE/OBJETO:**
+
+Procure mencoes a entidades como "usuario", "produto", "pedido", "cliente", etc. e extraia:
+- Todos os campos mencionados
+- Tipos de cada campo
+- Se e obrigatorio ou opcional
+- Validacoes especificas
+- Relacionamentos com outras entidades
+
+**PASSO 4 - NAO OMITA NADA:**
+
+- Se um campo foi mencionado como obrigatorio, ele DEVE aparecer na tabela de dados obrigatorios
+- Se uma regra de validacao foi discutida, ela DEVE aparecer na secao de regras
+- Se um caso de erro foi mencionado, ele DEVE aparecer na tabela de erros
+- Se um fluxo foi descrito, ele DEVE aparecer no fluxo principal ou alternativo
+
+**PASSO 5 - PREENCHA TODAS AS SECOES:**
+
+Para CADA FR-XXX no documento, TODAS estas secoes devem estar preenchidas:
+- [ ] Visao Geral (tabela completa)
+- [ ] Dados de Entrada Obrigatorios (se mencionados)
+- [ ] Dados de Entrada Opcionais (se mencionados)
+- [ ] Regras de Negocio e Validacao
+- [ ] Fluxo Principal
+- [ ] Casos de Erro
+- [ ] Dependencias
+- [ ] Criterios de Aceitacao
+
+Se uma secao nao foi discutida, coloque "A ser definido na proxima sessao" - NAO deixe em branco.
+
+**PASSO 6 - VERIFICACAO FINAL:**
+
+Antes de finalizar, verifique:
+1. Todos os FR-XXX mencionados estao no documento?
+2. Todos os NFR-XXX mencionados estao no documento?
+3. Todas as entidades mencionadas estao no glossario?
+4. Cada FR tem TODAS as secoes preenchidas?
+5. Os campos obrigatorios de cada entidade estao documentados?
+
+**REGRAS DE OURO:**
+
+1. **COMPLETUDE > BREVIDADE:** O documento pode ser longo. Inclua TODOS os detalhes.
+2. **NAO RESUMA:** Nao resuma informacoes. Copie os detalhes como foram discutidos.
+3. **NAO INVENTE:** Nao adicione informacoes que nao foram discutidas.
+4. **ESTRUTURE:** Use as tabelas e formatos especificados - eles ajudam desenvolvedores.
+5. **CODIGOS EXATOS:** Mantenha os codigos exatamente como foram usados (FR-001, RF-001, etc.)
+
+**LEMBRE-SE:** Este documento sera usado por desenvolvedores para implementar o sistema.
+Se um detalhe esta faltando, o desenvolvedor tera que adivinhar - e provavelmente errara.
+INCLUA TUDO. NADA PODE FALTAR.`
 }
 
 export function getStepInfo(step: PrdStep): {
@@ -1290,4 +1571,107 @@ export function shouldSkipStep(step: PrdStep, context: PrdSessionContext): boole
 	}
 
 	return false
+}
+
+// ============================================
+// EXTRACTION PROMPT
+// ============================================
+
+/**
+ * Gera prompt para extrair dados estruturados do documento PRD
+ * Usado após a geração do documento para popular os campos do banco
+ */
+export function buildExtractionPrompt(documentContent: string): string {
+	return `Analise este documento PRD e extraia os dados estruturados em formato JSON.
+
+DOCUMENTO PRD:
+${documentContent}
+
+---
+
+EXTRAIA OS SEGUINTES DADOS EM JSON:
+
+{
+  "executiveSummary": "Texto do Resumo Executivo (1-2 parágrafos)",
+
+  "personas": [
+    {
+      "id": "uuid gerado",
+      "name": "Nome da persona",
+      "description": "Descrição/contexto da persona",
+      "goals": ["objetivo 1", "objetivo 2"],
+      "painPoints": ["dor 1", "dor 2"]
+    }
+  ],
+
+  "features": [
+    {
+      "id": "uuid gerado",
+      "name": "Nome da feature",
+      "description": "Descrição da feature",
+      "priority": "must_have | should_have | nice_to_have",
+      "scope": "mvp | growth | vision"
+    }
+  ],
+
+  "functionalRequirements": [
+    {
+      "id": "uuid gerado",
+      "code": "FR-001",
+      "name": "Nome do requisito",
+      "description": "Descrição detalhada",
+      "category": "Categoria (System, User-facing, etc)",
+      "priority": "critical | high | medium | low",
+      "acceptanceCriteria": ["critério 1", "critério 2"]
+    }
+  ],
+
+  "nonFunctionalRequirements": [
+    {
+      "id": "uuid gerado",
+      "code": "NFR-001",
+      "category": "performance | security | reliability | usability | maintainability | compliance | scalability",
+      "name": "Nome do requisito",
+      "description": "Descrição detalhada",
+      "priority": "critical | high | medium | low"
+    }
+  ],
+
+  "successCriteria": [
+    {
+      "id": "uuid gerado",
+      "type": "user | business | technical",
+      "description": "Descrição do critério",
+      "metric": "Métrica (opcional)",
+      "target": "Meta (opcional)"
+    }
+  ],
+
+  "outOfScope": ["item 1 fora do escopo", "item 2"],
+
+  "mvpSuccessCriteria": ["critério MVP 1", "critério MVP 2"],
+
+  "userJourneys": [
+    {
+      "id": "uuid gerado",
+      "personaId": "id da persona relacionada",
+      "personaName": "Nome da persona",
+      "stages": [
+        {
+          "stage": "discovery | onboarding | core_usage | success | long_term",
+          "description": "Descrição da etapa"
+        }
+      ]
+    }
+  ]
+}
+
+REGRAS:
+1. Funcionalidades MVP = scope: "mvp", priority: "must_have"
+2. Funcionalidades de Crescimento = scope: "growth", priority: "should_have"
+3. Gere UUIDs únicos para cada id (formato: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)
+4. Se algum dado não existir no documento, use array vazio []
+5. Extraia acceptanceCriteria dos requisitos funcionais se disponíveis
+
+Responda APENAS com o JSON válido, sem explicações ou markdown.`
 }

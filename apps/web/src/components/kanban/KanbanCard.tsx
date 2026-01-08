@@ -45,7 +45,7 @@ export function KanbanCard({ story, isDragging, onClick }: KanbanCardProps) {
 	const priorityColor = priorityColors[story.priority] ?? priorityColors['medium']
 
 	return (
-		// biome-ignore lint/a11y/useSemanticElements: Drag-and-drop cards need div for layout
+		// biome-ignore lint/a11y/noStaticElementInteractions: Drag-and-drop cards require div with dnd-kit attributes
 		<div
 			ref={setNodeRef}
 			style={style}

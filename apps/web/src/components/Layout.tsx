@@ -33,7 +33,7 @@ export function Layout({ children }: LayoutProps) {
 		<>
 			{/* Redirecionar para login se não autenticado */}
 			<SignedOut>
-				<RedirectToSignIn signInFallbackRedirectUrl="/brainstorm" />
+				<RedirectToSignIn signInFallbackRedirectUrl="/inicio" />
 			</SignedOut>
 
 			<SignedIn>

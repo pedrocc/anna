@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { spawn, spawnSync } from 'bun'
+import { spawn } from 'bun'
+import { DEFAULT_PORTS, findAvailablePort, isPortInUse, printPortsSummary } from './lib/ports.js'
 
 // Load root .env file
 const envPath = resolve(import.meta.dir, '../.env')
@@ -19,31 +20,20 @@ try {
 	console.warn('⚠️ No .env file found at root')
 }
 
-const DEFAULT_API_PORT = 3000
-const DEFAULT_WEB_PORT = 5173
+console.log('🔍 Verificando portas disponíveis...\n')
 
-// Kill any process using a specific port
-function killProcessOnPort(port: number): void {
-	const result = spawnSync(['lsof', '-i', `:${port}`, '-t'], {
-		stdout: 'pipe',
-		stderr: 'pipe',
-	})
-	const pids = result.stdout.toString().trim()
-	if (pids) {
-		for (const pid of pids.split('\n')) {
-			if (pid) {
-				spawnSync(['kill', '-9', pid], { stdout: 'pipe', stderr: 'pipe' })
-			}
-		}
-	}
+// Find available ports for API and Web
+let apiPort = DEFAULT_PORTS.api
+let webPort = DEFAULT_PORTS.web
+
+if (isPortInUse(apiPort)) {
+	apiPort = findAvailablePort(apiPort + 1)
+	console.log(`⚠️  Porta ${DEFAULT_PORTS.api} em uso. API usará porta ${apiPort}`)
 }
 
-// Ensure default ports are free before starting
-function ensurePortsFree(): void {
-	killProcessOnPort(DEFAULT_API_PORT)
-	killProcessOnPort(DEFAULT_WEB_PORT)
-	// Small delay to ensure ports are released
-	Bun.sleepSync(500)
+if (isPortInUse(webPort)) {
+	webPort = findAvailablePort(webPort + 1)
+	console.log(`⚠️  Porta ${DEFAULT_PORTS.web} em uso. Web usará porta ${webPort}`)
 }
 
 const processes: ReturnType<typeof spawn>[] = []
@@ -58,14 +48,14 @@ function cleanup() {
 process.on('SIGINT', cleanup)
 process.on('SIGTERM', cleanup)
 
-// Kill any existing processes on the default ports
-ensurePortsFree()
+printPortsSummary({
+	api: apiPort,
+	web: webPort,
+	postgres: DEFAULT_PORTS.postgres,
+	redis: DEFAULT_PORTS.redis,
+})
 
-const apiPort = DEFAULT_API_PORT
-const webPort = DEFAULT_WEB_PORT
-
-console.log(`🚀 Iniciando API em http://localhost:${apiPort}`)
-console.log(`🌐 Iniciando Web em http://localhost:${webPort}`)
+console.log('\n🚀 Iniciando serviços de desenvolvimento...\n')
 
 // Start API
 const api = spawn({

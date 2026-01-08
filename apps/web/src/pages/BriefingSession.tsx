@@ -8,23 +8,36 @@ import {
 	AlertDialogHeader,
 	AlertDialogTitle,
 	Button,
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
+	DropdownMenuSeparator,
 	DropdownMenuTrigger,
+	Input,
+	Label,
 	Spinner,
 	Tabs,
 	TabsContent,
 	TabsList,
 	TabsTrigger,
 } from '@repo/ui'
-import { ArrowLeft, ChevronLeft, FileText, MessageSquare, Settings, Trash2 } from 'lucide-react'
-import { useCallback, useState } from 'react'
+import { AlertTriangle, ArrowLeft, FileText, MessageSquare, Pencil, Settings, Trash2 } from 'lucide-react'
+import { useCallback, useEffect, useState } from 'react'
 import { Link, useLocation, useParams } from 'wouter'
 import { DocumentViewer } from '../components/brainstorm'
-import { ChatInterface, DocumentList, StepIndicator } from '../components/briefing'
+import { ChatInterface, StepIndicator } from '../components/briefing'
 import { useBriefingChat, useBriefingDocument } from '../hooks/useBriefingChat'
-import { api, type BriefingDocumentFromAPI, useBriefingSession } from '../lib/api-client'
+import { useMessageEdit } from '../hooks/useMessageEdit'
+import { api, useBriefingSession } from '../lib/api-client'
+
+// Timeout em milissegundos para considerar uma geração como abandonada (10 minutos)
+const GENERATION_TIMEOUT_MS = 10 * 60 * 1000
 
 export function BriefingSessionPage() {
 	const { id } = useParams<{ id: string }>()
@@ -32,13 +45,50 @@ export function BriefingSessionPage() {
 	const { data: session, error, isLoading, mutate } = useBriefingSession(id ?? null)
 	const [activeTab, setActiveTab] = useState<string>('chat')
 	const [isSavingDoc, setIsSavingDoc] = useState(false)
-	const [isDeletingDoc, setIsDeletingDoc] = useState(false)
 	const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+	const [showRenameDialog, setShowRenameDialog] = useState(false)
+	const [newProjectName, setNewProjectName] = useState('')
+	const [isRenaming, setIsRenaming] = useState(false)
 	const [isDeleting, setIsDeleting] = useState(false)
-	const [isAdvancing, setIsAdvancing] = useState(false)
-	const [selectedDocument, setSelectedDocument] = useState<BriefingDocumentFromAPI | null>(null)
+	const [initialTabSet, setInitialTabSet] = useState(false)
+
+	// Verifica se a geração está em andamento baseado no status persistido
+	const isGenerationInProgress = session?.generationStatus === 'generating'
+	const generationFailed = session?.generationStatus === 'failed'
+
+	// Verifica se a geração excedeu o timeout (abandonada)
+	const isGenerationTimedOut =
+		isGenerationInProgress &&
+		session?.generationStartedAt &&
+		Date.now() - new Date(session.generationStartedAt).getTime() > GENERATION_TIMEOUT_MS
+
+	// Polling para atualizar a sessão enquanto a geração está em andamento
+	useEffect(() => {
+		if (!isGenerationInProgress || isGenerationTimedOut) return
+
+		const interval = setInterval(() => {
+			mutate()
+		}, 3000) // Polling a cada 3 segundos
+
+		return () => clearInterval(interval)
+	}, [isGenerationInProgress, isGenerationTimedOut, mutate])
+
+	// Set initial tab to documents if document exists
+	useEffect(() => {
+		if (!initialTabSet && session?.documents && session.documents.length > 0) {
+			setActiveTab('document')
+			setInitialTabSet(true)
+		}
+	}, [session?.documents, initialTabSet])
+
+	// Get the single document (first one)
+	const document = session?.documents?.[0] ?? null
 
 	const handleMessageComplete = useCallback(() => {
+		mutate()
+	}, [mutate])
+
+	const handleStepUpdate = useCallback(() => {
 		mutate()
 	}, [mutate])
 
@@ -51,49 +101,45 @@ export function BriefingSessionPage() {
 	} = useBriefingChat({
 		sessionId: id ?? '',
 		onMessageComplete: handleMessageComplete,
+		onStepUpdate: handleStepUpdate,
 	})
 
 	const { generateDocument, isGenerating } = useBriefingDocument(id ?? '')
+
+	const {
+		editMessage,
+		isEditing,
+		streamingContent: editStreamingContent,
+	} = useMessageEdit({
+		module: 'briefing',
+		onMessageComplete: handleMessageComplete,
+		onStepUpdate: handleStepUpdate,
+	})
+
+	const handleEditMessage = useCallback(
+		async (messageId: string, content: string) => {
+			await editMessage(messageId, content)
+		},
+		[editMessage]
+	)
 
 	const handleGenerateDocument = async () => {
 		try {
 			await generateDocument()
 			await mutate()
-			setSelectedDocument(null)
 			setActiveTab('document')
 		} catch (_err) {}
 	}
 
 	const handleSaveDocument = async (content: string) => {
-		if (!selectedDocument) return
+		if (!document) return
 		setIsSavingDoc(true)
 		try {
-			await api.briefing.updateDocumentById(selectedDocument.id, { content })
+			await api.briefing.updateDocumentById(document.id, { content })
 			await mutate()
-			setSelectedDocument((prev) => (prev ? { ...prev, content } : null))
 		} finally {
 			setIsSavingDoc(false)
 		}
-	}
-
-	const handleDeleteDocument = async () => {
-		if (!selectedDocument) return
-		setIsDeletingDoc(true)
-		try {
-			await api.briefing.deleteDocument(selectedDocument.id)
-			await mutate()
-			setSelectedDocument(null)
-		} finally {
-			setIsDeletingDoc(false)
-		}
-	}
-
-	const handleSelectDocument = (doc: BriefingDocumentFromAPI) => {
-		setSelectedDocument(doc)
-	}
-
-	const handleBackToList = () => {
-		setSelectedDocument(null)
 	}
 
 	const handleDeleteSession = async () => {
@@ -107,46 +153,28 @@ export function BriefingSessionPage() {
 		}
 	}
 
-	const handleAdvanceStep = async () => {
-		if (!id) return
-		setIsAdvancing(true)
+	const handleRenameSession = async () => {
+		if (!id || !newProjectName.trim()) return
+		setIsRenaming(true)
 		try {
-			const updated = await api.briefing.advanceStep(id)
+			await api.briefing.renameSession(id, newProjectName.trim())
 			await mutate()
-
-			const newStep = updated?.currentStep
-
-			// Se avançou para 'complete', gera o documento automaticamente
-			if (newStep === 'complete') {
-				setTimeout(() => {
-					handleGenerateDocument()
-				}, 500)
-				return
-			}
-
-			// Envia mensagem automática para Anna iniciar a nova etapa
-			const stepMessages: Record<string, string> = {
-				vision: 'Vamos definir a visão do produto.',
-				users: 'Vamos definir os usuários do produto.',
-				metrics: 'Vamos definir as métricas de sucesso.',
-				scope: 'Vamos definir o escopo do MVP.',
-			}
-
-			const message = newStep ? stepMessages[newStep] : undefined
-			if (message) {
-				setTimeout(() => {
-					sendMessage(message)
-				}, 500)
-			}
+			setShowRenameDialog(false)
+			setNewProjectName('')
 		} catch (_err) {
 		} finally {
-			setIsAdvancing(false)
+			setIsRenaming(false)
 		}
+	}
+
+	const openRenameDialog = () => {
+		setNewProjectName(session?.projectName ?? '')
+		setShowRenameDialog(true)
 	}
 
 	if (isLoading) {
 		return (
-			<div className="flex h-[calc(100vh-4rem)] items-center justify-center bg-[#f9fafb]">
+			<div className="flex h-svh items-center justify-center bg-[#f9fafb]">
 				<Spinner className="h-8 w-8" />
 			</div>
 		)
@@ -154,7 +182,7 @@ export function BriefingSessionPage() {
 
 	if (error || !session) {
 		return (
-			<div className="flex h-[calc(100vh-4rem)] flex-col items-center justify-center gap-4 bg-[#f9fafb]">
+			<div className="flex h-svh flex-col items-center justify-center gap-4 bg-[#f9fafb]">
 				<p className="text-muted-foreground">Erro ao carregar sessão</p>
 				<Button asChild variant="outline">
 					<Link href="/briefing">
@@ -167,12 +195,18 @@ export function BriefingSessionPage() {
 	}
 
 	const messages = session.messages ?? []
-	const documents = session.documents ?? []
-	const hasDocuments = documents.length > 0
-	const showDocumentButton = session.currentStep === 'scope' || session.currentStep === 'complete'
+	const hasDocument = !!document
+	const isComplete = session.currentStep === 'complete'
+	// Esconde o botão quando já está completo E já tem documento gerado
+	const showDocumentButton =
+		(session.currentStep === 'scope' || isComplete) && !(isComplete && hasDocument)
+
+	// Combina o estado local (isGenerating) com o estado persistido (isGenerationInProgress)
+	// O botão fica desabilitado se qualquer um estiver true
+	const isDocumentGenerating = isGenerating || (isGenerationInProgress && !isGenerationTimedOut)
 
 	return (
-		<div className="flex h-[calc(100vh-4rem)] flex-col overflow-hidden bg-[#f9fafb]">
+		<div className="flex h-svh flex-col overflow-hidden bg-[#f9fafb]">
 			{/* Header */}
 			<div className="shrink-0 border-b border-border bg-white px-6 py-4">
 				<div className="mx-auto flex max-w-7xl items-center justify-between">
@@ -202,7 +236,7 @@ export function BriefingSessionPage() {
 						<StepIndicator
 							currentStep={session.currentStep}
 							stepsCompleted={session.stepsCompleted ?? []}
-							hasDocument={hasDocuments}
+							hasDocument={hasDocument}
 						/>
 					</div>
 
@@ -211,21 +245,16 @@ export function BriefingSessionPage() {
 						{showDocumentButton && (
 							<Button
 								onClick={handleGenerateDocument}
-								disabled={isGenerating}
-								variant={hasDocuments ? 'ghost' : 'default'}
-								size="sm"
-								className="gap-2"
+								disabled={isDocumentGenerating}
+								variant="ghost"
+								size="icon"
+								className="text-muted-foreground hover:text-blue-600"
+								title={isDocumentGenerating ? 'Gerando documento...' : 'Gerar Documento'}
 							>
-								{isGenerating ? (
-									<>
-										<Spinner className="h-4 w-4" />
-										Gerando...
-									</>
+								{isDocumentGenerating ? (
+									<Spinner className="h-5 w-5" />
 								) : (
-									<>
-										<FileText className="h-4 w-4" />
-										{hasDocuments ? 'Novo Doc' : 'Gerar Doc'}
-									</>
+									<FileText className="h-5 w-5" />
 								)}
 							</Button>
 						)}
@@ -237,6 +266,11 @@ export function BriefingSessionPage() {
 								</Button>
 							</DropdownMenuTrigger>
 							<DropdownMenuContent align="end" className="border border-border bg-white">
+								<DropdownMenuItem onClick={openRenameDialog}>
+									<Pencil className="mr-2 h-4 w-4" />
+									Renomear Projeto
+								</DropdownMenuItem>
+								<DropdownMenuSeparator />
 								<DropdownMenuItem
 									className="text-red-500 focus:text-red-500"
 									onClick={() => setShowDeleteDialog(true)}
@@ -271,12 +305,7 @@ export function BriefingSessionPage() {
 								className="gap-2 rounded-none border-b-2 border-transparent px-4 py-3 text-muted-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
 							>
 								<FileText className="h-4 w-4" />
-								Documentos
-								{hasDocuments && (
-									<span className="ml-1 rounded-full bg-primary/10 px-1.5 text-xs font-medium text-primary">
-										{documents.length}
-									</span>
-								)}
+								Documento
 							</TabsTrigger>
 						</TabsList>
 					</div>
@@ -289,52 +318,63 @@ export function BriefingSessionPage() {
 					<ChatInterface
 						messages={messages}
 						onSendMessage={sendMessage}
-						onAdvanceStep={handleAdvanceStep}
 						onGenerateDocument={handleGenerateDocument}
+						onEditMessage={handleEditMessage}
 						isStreaming={isStreaming}
 						streamingContent={streamingContent}
 						pendingUserMessage={pendingUserMessage}
 						currentStep={session.currentStep}
-						isAdvancing={isAdvancing}
-						isGenerating={isGenerating}
-						hasDocuments={hasDocuments}
+						isGenerating={isDocumentGenerating}
+						isEditing={isEditing}
+						editStreamingContent={editStreamingContent}
+						hasDocuments={hasDocument}
 					/>
 				</TabsContent>
 
 				<TabsContent value="document" className="m-0 flex min-h-0 flex-1 flex-col overflow-auto">
-					{selectedDocument ? (
+					{document ? (
 						<div className="px-6 pb-4 pt-4">
 							<div className="mx-auto max-w-7xl">
-								<Button
-									variant="ghost"
-									size="sm"
-									onClick={handleBackToList}
-									className="mb-4 text-muted-foreground"
-								>
-									<ChevronLeft className="mr-1 h-4 w-4" />
-									Voltar para lista
-								</Button>
 								<DocumentViewer
-									content={selectedDocument.content}
-									title={selectedDocument.title}
+									content={document.content}
+									title={document.title}
 									onSave={handleSaveDocument}
-									onDelete={handleDeleteDocument}
 									isSaving={isSavingDoc}
-									isDeleting={isDeletingDoc}
 								/>
 							</div>
 						</div>
 					) : (
-						<div className="min-h-0 flex-1 overflow-auto px-6 py-6">
-							<div className="mx-auto max-w-7xl">
-								<DocumentList
-									documents={documents}
-									selectedDocumentId={null}
-									onSelectDocument={handleSelectDocument}
-									onGenerateNew={handleGenerateDocument}
-									isGenerating={isGenerating}
-								/>
-							</div>
+						<div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4">
+							{generationFailed ? (
+								<>
+									<AlertTriangle className="h-12 w-12 text-red-500" />
+									<p className="text-red-600 font-medium">Falha ao gerar documento</p>
+									{session.generationError && (
+										<p className="text-sm text-muted-foreground max-w-md text-center">
+											{session.generationError}
+										</p>
+									)}
+								</>
+							) : isDocumentGenerating ? (
+								<>
+									<Spinner className="h-12 w-12" />
+									<p className="text-muted-foreground">Gerando documento...</p>
+									<p className="text-sm text-muted-foreground">
+										Isso pode levar alguns minutos
+									</p>
+								</>
+							) : (
+								<>
+									<FileText className="h-12 w-12 text-muted-foreground/50" />
+									<p className="text-muted-foreground">Nenhum documento gerado ainda</p>
+								</>
+							)}
+							{(session.currentStep === 'scope' || isComplete) && !isDocumentGenerating && (
+								<Button onClick={handleGenerateDocument} className="gap-2">
+									<FileText className="h-4 w-4" />
+									{generationFailed ? 'Tentar Novamente' : 'Gerar Documento'}
+								</Button>
+							)}
 						</div>
 					)}
 				</TabsContent>
@@ -346,6 +386,53 @@ export function BriefingSessionPage() {
 					{chatError.message}
 				</div>
 			)}
+
+			{/* Rename dialog */}
+			<Dialog open={showRenameDialog} onOpenChange={setShowRenameDialog}>
+				<DialogContent className="border border-border bg-white">
+					<DialogHeader>
+						<DialogTitle className="text-foreground">Renomear Projeto</DialogTitle>
+						<DialogDescription className="text-muted-foreground">
+							O nome será atualizado em todos os módulos vinculados (Briefing, PRD e Planejamento).
+						</DialogDescription>
+					</DialogHeader>
+					<div className="grid gap-4 py-4">
+						<div className="grid gap-2">
+							<Label htmlFor="projectName" className="text-foreground">
+								Nome do Projeto
+							</Label>
+							<Input
+								id="projectName"
+								value={newProjectName}
+								onChange={(e) => setNewProjectName(e.target.value)}
+								onKeyDown={(e) => {
+									if (e.key === 'Enter' && newProjectName.trim() && !isRenaming) {
+										e.preventDefault()
+										handleRenameSession()
+									}
+								}}
+								placeholder="Nome do projeto"
+								className="border-border"
+							/>
+						</div>
+					</div>
+					<DialogFooter>
+						<Button variant="outline" onClick={() => setShowRenameDialog(false)} disabled={isRenaming}>
+							Cancelar
+						</Button>
+						<Button onClick={handleRenameSession} disabled={!newProjectName.trim() || isRenaming}>
+							{isRenaming ? (
+								<>
+									<Spinner className="mr-2 h-4 w-4" />
+									Salvando...
+								</>
+							) : (
+								'Salvar'
+							)}
+						</Button>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
 
 			{/* Delete confirmation dialog */}
 			<AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>

@@ -10,7 +10,7 @@ import {
 import { Spinner } from '@repo/ui'
 import { LayoutGrid } from 'lucide-react'
 import { useCallback, useState } from 'react'
-import { useParams } from 'wouter'
+import { useLocation, useParams } from 'wouter'
 import { AppleBoard, AppleCardOverlay, AppleFilters, AppleHeader } from '../components/kanban/apple'
 import { StoryDetailSheet } from '../components/kanban/StoryDetailSheet'
 import { api, type KanbanStory, useKanbanBoard } from '../lib/api-client'
@@ -20,6 +20,7 @@ type StoryStatus = KanbanStory['status']
 export function KanbanBoardPage() {
 	const params = useParams<{ id: string }>()
 	const sessionId = params.id ?? null
+	const [, navigate] = useLocation()
 	const { data, error, isLoading, mutate } = useKanbanBoard(sessionId)
 
 	// Filter state
@@ -30,10 +31,23 @@ export function KanbanBoardPage() {
 	// Drag state
 	const [activeStory, setActiveStory] = useState<KanbanStory | null>(null)
 	const [isUpdating, setIsUpdating] = useState(false)
+	const [isDeleting, setIsDeleting] = useState(false)
 
 	// Story detail sheet state
 	const [selectedStory, setSelectedStory] = useState<KanbanStory | null>(null)
 	const [sheetOpen, setSheetOpen] = useState(false)
+
+	const handleDelete = useCallback(async () => {
+		if (!sessionId) return
+		setIsDeleting(true)
+		try {
+			await api.sm.deleteSession(sessionId)
+			navigate('/kanban')
+		} catch (error) {
+			console.error('Failed to delete project:', error)
+			setIsDeleting(false)
+		}
+	}, [sessionId, navigate])
 
 	const sensors = useSensors(
 		useSensor(PointerSensor, {
@@ -170,7 +184,9 @@ export function KanbanBoardPage() {
 				totalStories={data.session.totalStories}
 				totalPoints={data.session.totalStoryPoints}
 				isUpdating={isUpdating}
+				isDeleting={isDeleting}
 				onRefresh={() => mutate()}
+				onDelete={handleDelete}
 			/>
 
 			{/* Filters */}

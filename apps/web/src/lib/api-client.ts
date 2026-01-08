@@ -30,6 +30,7 @@ export const apiRoutes = {
 		steps: '/api/v1/briefing/steps',
 		advance: (id: string) => `/api/v1/briefing/sessions/${id}/advance`,
 		complete: (id: string) => `/api/v1/briefing/sessions/${id}/complete`,
+		rename: (id: string) => `/api/v1/briefing/sessions/${id}/rename`,
 	},
 	prd: {
 		sessions: '/api/v1/prd/sessions',
@@ -42,6 +43,7 @@ export const apiRoutes = {
 		advance: (id: string) => `/api/v1/prd/sessions/${id}/advance`,
 		skip: (id: string) => `/api/v1/prd/sessions/${id}/skip`,
 		complete: (id: string) => `/api/v1/prd/sessions/${id}/complete`,
+		rename: (id: string) => `/api/v1/prd/sessions/${id}/rename`,
 	},
 	sm: {
 		sessions: '/api/v1/sm/sessions',
@@ -56,6 +58,7 @@ export const apiRoutes = {
 		storyById: (id: string) => `/api/v1/sm/stories/${id}`,
 		advance: (id: string) => `/api/v1/sm/sessions/${id}/advance`,
 		complete: (id: string) => `/api/v1/sm/sessions/${id}/complete`,
+		rename: (id: string) => `/api/v1/sm/sessions/${id}/rename`,
 		prdSessions: '/api/v1/sm/prd-sessions',
 	},
 	kanban: {
@@ -153,7 +156,9 @@ export function useBriefingSession(
 ) {
 	return useSWR<BriefingSessionWithMessages>(id ? apiRoutes.briefing.session(id) : null, fetcher, {
 		...config,
-		refreshInterval: 0, // Don't auto-refresh, we handle this manually
+		refreshInterval: 0,
+		revalidateOnMount: true, // Always fetch fresh data on mount
+		revalidateOnFocus: true, // Refresh when window regains focus
 	})
 }
 
@@ -238,6 +243,16 @@ export const api = {
 		deleteSession: async (id: string) => {
 			return apiRequest<{ deleted: boolean }>(apiRoutes.briefing.session(id), {
 				method: 'DELETE',
+			})
+		},
+
+		/**
+		 * Rename a briefing session (cascades to linked PRD and SM sessions)
+		 */
+		renameSession: async (id: string, projectName: string) => {
+			return apiRequest<{ updated: boolean; projectName: string }>(apiRoutes.briefing.rename(id), {
+				method: 'POST',
+				json: { projectName },
 			})
 		},
 
@@ -332,6 +347,16 @@ export const api = {
 		deleteSession: async (id: string) => {
 			return apiRequest<{ deleted: boolean }>(apiRoutes.prd.session(id), {
 				method: 'DELETE',
+			})
+		},
+
+		/**
+		 * Rename a PRD session (cascades to linked Briefing and SM sessions)
+		 */
+		renameSession: async (id: string, projectName: string) => {
+			return apiRequest<{ updated: boolean; projectName: string }>(apiRoutes.prd.rename(id), {
+				method: 'POST',
+				json: { projectName },
 			})
 		},
 
@@ -432,6 +457,16 @@ export const api = {
 		deleteSession: async (id: string) => {
 			return apiRequest<{ deleted: boolean }>(apiRoutes.sm.session(id), {
 				method: 'DELETE',
+			})
+		},
+
+		/**
+		 * Rename an SM session (cascades to linked PRD and Briefing sessions)
+		 */
+		renameSession: async (id: string, projectName: string) => {
+			return apiRequest<{ updated: boolean; projectName: string }>(apiRoutes.sm.rename(id), {
+				method: 'POST',
+				json: { projectName },
 			})
 		},
 
@@ -563,7 +598,9 @@ export function usePrdSession(
 ) {
 	return useSWR<PrdSessionWithMessages>(id ? apiRoutes.prd.session(id) : null, fetcher, {
 		...config,
-		refreshInterval: 0, // Don't auto-refresh, we handle this manually
+		refreshInterval: 0,
+		revalidateOnMount: true, // Always fetch fresh data on mount
+		revalidateOnFocus: true, // Refresh when window regains focus
 	})
 }
 
@@ -657,6 +694,8 @@ export function useSmSession(id: string | null, config?: SWRConfiguration<SmSess
 	return useSWR<SmSessionWithMessages>(id ? apiRoutes.sm.session(id) : null, fetcher, {
 		...config,
 		refreshInterval: 0,
+		revalidateOnMount: true, // Always fetch fresh data on mount
+		revalidateOnFocus: true, // Refresh when window regains focus
 	})
 }
 
@@ -727,6 +766,41 @@ export type KanbanEpic = {
 }
 
 /**
+ * Acceptance criteria for a story
+ */
+export type KanbanAcceptanceCriteria = {
+	id: string
+	description: string
+	type: 'given_when_then' | 'simple'
+	given?: string
+	when?: string
+	then?: string
+}
+
+/**
+ * Task for a story
+ */
+export type KanbanTask = {
+	id: string
+	description: string
+	estimatedHours?: number
+	acceptanceCriteriaIds?: string[]
+	completed: boolean
+}
+
+/**
+ * Dev notes for a story
+ */
+export type KanbanDevNotes = {
+	architecturePatterns?: string[]
+	componentsToTouch?: string[]
+	testingRequirements?: string[]
+	securityConsiderations?: string[]
+	performanceNotes?: string[]
+	references?: string[]
+}
+
+/**
  * Kanban story (card)
  */
 export type KanbanStory = {
@@ -739,6 +813,11 @@ export type KanbanStory = {
 	asA: string
 	iWant: string
 	soThat: string
+	description: string | null
+	acceptanceCriteria: KanbanAcceptanceCriteria[]
+	tasks: KanbanTask[]
+	devNotes: KanbanDevNotes
+	functionalRequirementCodes: string[]
 	status: 'backlog' | 'ready_for_dev' | 'in_progress' | 'review' | 'done'
 	priority: 'critical' | 'high' | 'medium' | 'low'
 	storyPoints: number | null

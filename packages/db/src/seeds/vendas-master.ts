@@ -32,10 +32,13 @@ function uuid() {
 async function main() {
 	// 1. Buscar usuário existente (primeiro usuário do banco)
 	const existingUsers = await db.query.users.findMany({ limit: 1 })
-	if (existingUsers.length === 0) {
+	const firstUser = existingUsers[0]
+	if (!firstUser) {
+		// biome-ignore lint/suspicious/noConsole: Seed script needs to log errors
+		console.error('No users found in database. Please create a user first.')
 		process.exit(1)
 	}
-	const userId = existingUsers[0]?.id
+	const userId = firstUser.id
 
 	const brainstormId = uuid()
 	const brainstormIdeas = [

@@ -1,203 +1,160 @@
 import type { PrdStep } from '@repo/shared'
-import { Button } from '@repo/ui'
-import { ArrowRight, MessageSquareText, SkipForward } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import {
+	AlertDialog,
+	AlertDialogAction,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
+	Button,
+	Spinner,
+	Textarea,
+} from '@repo/ui'
+import { FileText, Sparkles } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
 import { ChatInput } from '../brainstorm/ChatInput'
 import { ChatMessage } from '../brainstorm/ChatMessage'
 
 interface PrdChatInterfaceProps {
 	messages: Array<{ id: string; role: string; content: string }>
 	onSendMessage: (message: string) => void
-	onAdvanceStep: () => void
-	onSkipStep?: () => void
+	onGenerateDocument?: () => void
+	onEditMessage?: (messageId: string, content: string) => void
 	isStreaming: boolean
 	streamingContent: string
 	pendingUserMessage: string | null
 	currentStep: PrdStep
-	isAdvancing: boolean
-}
-
-// Steps opcionais que podem ser pulados
-const OPTIONAL_STEPS: PrdStep[] = ['domain', 'innovation']
-
-// Labels para cada step
-const stepLabels: Record<PrdStep, string> = {
-	init: 'Inicialização',
-	discovery: 'Descoberta',
-	success: 'Critérios de Sucesso',
-	journeys: 'Jornadas de Usuário',
-	domain: 'Requisitos de Domínio',
-	innovation: 'Inovação',
-	project_type: 'Tipo de Projeto',
-	scoping: 'Escopo do MVP',
-	functional: 'Requisitos Funcionais',
-	nonfunctional: 'Requisitos Não-Funcionais',
-	complete: 'Conclusão',
-}
-
-// Ordem dos steps para determinar próxima etapa
-const PRD_STEPS_ORDER: PrdStep[] = [
-	'init',
-	'discovery',
-	'success',
-	'journeys',
-	'domain',
-	'innovation',
-	'project_type',
-	'scoping',
-	'functional',
-	'nonfunctional',
-	'complete',
-]
-
-// Keywords que indicam que a IA está pronta para avançar para a próxima etapa
-const TRANSITION_KEYWORDS = [
-	// Frases de transição genéricas
-	'vamos para a próxima etapa',
-	'próxima etapa',
-	'avançar para',
-	'passemos para',
-	'seguir para',
-	'próxima fase',
-	// Discovery
-	'vamos para a descoberta',
-	'classificar o projeto',
-	'descoberta de projeto',
-	// Success
-	'critérios de sucesso',
-	'métricas de sucesso',
-	'indicadores de sucesso',
-	'como medir o sucesso',
-	// Journeys
-	'jornadas de usuário',
-	'jornadas do usuário',
-	'fluxos de usuário',
-	'user journeys',
-	// Domain
-	'requisitos de domínio',
-	'regras de negócio',
-	'requisitos do domínio',
-	// Innovation
-	'inovação',
-	'diferenciais',
-	'funcionalidades inovadoras',
-	// Project Type
-	'tipo de projeto',
-	'classificação do projeto',
-	// Scoping
-	'escopo do mvp',
-	'funcionalidades essenciais',
-	'o que entra no mvp',
-	// Functional
-	'requisitos funcionais',
-	'funcionalidades do sistema',
-	'fr-',
-	// Non-functional
-	'requisitos não-funcionais',
-	'atributos de qualidade',
-	'nfr-',
-	// Complete
-	'prd está completo',
-	'concluímos o prd',
-	'gerar o documento',
-	'prd completo',
-]
-
-// Normaliza texto para comparação (lowercase, remove acentos)
-function normalizeText(text: string): string {
-	return text
-		.toLowerCase()
-		.normalize('NFD')
-		.replace(/[\u0300-\u036f]/g, '')
-		.replace(/\*\*/g, '')
+	isGenerating?: boolean
+	isEditing?: boolean
+	editStreamingContent?: string
+	hasDocuments?: boolean
 }
 
 export function ChatInterface({
 	messages,
 	onSendMessage,
-	onAdvanceStep,
-	onSkipStep,
+	onGenerateDocument,
+	onEditMessage,
 	isStreaming,
 	streamingContent,
 	pendingUserMessage,
 	currentStep,
-	isAdvancing,
+	isGenerating,
+	isEditing,
+	editStreamingContent,
+	hasDocuments,
 }: PrdChatInterfaceProps) {
 	const scrollRef = useRef<HTMLDivElement>(null)
-	const [isAdjusting, setIsAdjusting] = useState(false)
 
-	// Auto-scroll on new messages, streaming content, or pending message
+	// Edit state
+	const [editDialogOpen, setEditDialogOpen] = useState(false)
+	const [editingMessageId, setEditingMessageId] = useState<string | null>(null)
+	const [editContent, setEditContent] = useState('')
+	const [activeEditMessageId, setActiveEditMessageId] = useState<string | null>(null)
+
+	// Auto-scroll on new messages
 	useEffect(() => {
 		if (scrollRef.current) {
 			scrollRef.current.scrollIntoView({ behavior: 'smooth' })
 		}
-	}, [])
+	}, [messages.length, streamingContent, pendingUserMessage, editStreamingContent])
 
-	// Reset adjusting state when step changes
+	// Clear activeEditMessageId when editing is complete
 	useEffect(() => {
-		setIsAdjusting(false)
-	}, [])
+		if (!isEditing && activeEditMessageId) {
+			setActiveEditMessageId(null)
+		}
+	}, [isEditing, activeEditMessageId])
 
-	// Detecta se a última mensagem do assistant indica transição de etapa
-	const lastAssistantMessage = messages.filter((m) => m.role === 'assistant').at(-1)
-	const lastMessage = messages.filter((m) => m.role !== 'system').at(-1)
-
-	const showTransitionButtons = useMemo(() => {
-		if (!lastAssistantMessage) return false
-		if (isStreaming || pendingUserMessage || isAdjusting) return false
-		if (lastMessage?.role !== 'assistant') return false
-		if (currentStep === 'complete') return false
-
-		const normalizedContent = normalizeText(lastAssistantMessage.content)
-		return TRANSITION_KEYWORDS.some((keyword) => normalizedContent.includes(normalizeText(keyword)))
-	}, [lastAssistantMessage, lastMessage, isStreaming, pendingUserMessage, isAdjusting, currentStep])
-
-	// Verifica se o step atual é opcional
-	const isOptionalStep = OPTIONAL_STEPS.includes(currentStep)
-
-	const handleAdjust = () => {
-		setIsAdjusting(true)
-	}
-
-	const handleSendAdjustment = (message: string) => {
-		onSendMessage(message)
-	}
-
-	const handleAdvance = () => {
-		onAdvanceStep()
-	}
-
-	const handleSkipStep = () => {
-		if (onSkipStep) {
-			onSkipStep()
+	// Edit handlers
+	const handleEditClick = (messageId: string) => {
+		const message = messages.find((m) => m.id === messageId)
+		if (message) {
+			setEditingMessageId(messageId)
+			setEditContent(message.content)
+			setEditDialogOpen(true)
 		}
 	}
 
-	// Determina o nome da próxima etapa
-	const nextStepName = useMemo(() => {
-		const currentIndex = PRD_STEPS_ORDER.indexOf(currentStep)
-		const nextStep = PRD_STEPS_ORDER[currentIndex + 1]
-		return nextStep ? stepLabels[nextStep] : null
-	}, [currentStep])
+	const handleConfirmEdit = () => {
+		if (editingMessageId && onEditMessage && editContent.trim()) {
+			// Store the message ID for filtering before clearing dialog state
+			setActiveEditMessageId(editingMessageId)
+			onEditMessage(editingMessageId, editContent.trim())
+			setEditDialogOpen(false)
+			setEditingMessageId(null)
+			setEditContent('')
+		}
+	}
+
+	const handleCancelEdit = () => {
+		setEditDialogOpen(false)
+		setEditingMessageId(null)
+		setEditContent('')
+	}
+
+	// Calculate messages that will be deleted
+	const messagesToDelete = editingMessageId
+		? messages.filter((m) => {
+				const editIndex = messages.findIndex((msg) => msg.id === editingMessageId)
+				const msgIndex = messages.findIndex((msg) => msg.id === m.id)
+				return msgIndex > editIndex
+			}).length
+		: 0
+
+	const isBusy = isStreaming || isEditing
+
+	// Get all non-system messages, filtering out messages after the one being edited
+	const visibleMessages = messages.filter((m) => {
+		if (m.role === 'system') return false
+		// If we're actively editing, only show messages up to and including the edited one
+		if (activeEditMessageId && isEditing) {
+			const editIndex = messages.findIndex((msg) => msg.id === activeEditMessageId)
+			const msgIndex = messages.findIndex((msg) => msg.id === m.id)
+			return msgIndex <= editIndex
+		}
+		return true
+	})
 
 	return (
-		<div className="flex h-full flex-col">
+		<div className="flex min-h-0 flex-1 flex-col">
 			{/* Messages area */}
 			<div className="min-h-0 flex-1 overflow-y-auto">
 				<div className="mx-auto space-y-4 py-4" style={{ maxWidth: '1000px' }}>
-					{messages
-						.filter((m) => m.role !== 'system')
-						.map((msg) => (
-							<ChatMessage
-								key={msg.id}
-								messageRole={msg.role as 'user' | 'assistant'}
-								content={msg.content}
-							/>
-						))}
+					{visibleMessages.map((msg) => (
+						<ChatMessage
+							key={msg.id}
+							messageRole={msg.role as 'user' | 'assistant'}
+							content={msg.content}
+							messageId={msg.id}
+							onEdit={handleEditClick}
+							isEditable={!!onEditMessage}
+							editDisabled={isBusy}
+						/>
+					))}
 
 					{/* Pending user message (shown immediately while waiting for response) */}
 					{pendingUserMessage && (
 						<ChatMessage key="pending-user" messageRole="user" content={pendingUserMessage} />
+					)}
+
+					{/* Thinking indicator (shows while waiting for first token) */}
+					{(isStreaming || isEditing) && !streamingContent && !editStreamingContent && (
+						<div className="flex gap-3">
+							<div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted">
+								<Spinner className="h-4 w-4" />
+							</div>
+							<div className="flex items-center rounded-lg bg-muted px-4 py-3">
+								<span className="text-sm text-muted-foreground">Pensando...</span>
+							</div>
+						</div>
+					)}
+
+					{/* Edit Streaming Response */}
+					{isEditing && editStreamingContent && (
+						<ChatMessage messageRole="assistant" content={editStreamingContent} isStreaming />
 					)}
 
 					{/* Streaming response */}
@@ -205,81 +162,85 @@ export function ChatInterface({
 						<ChatMessage messageRole="assistant" content={streamingContent} isStreaming />
 					)}
 
-					{/* Transition buttons when AI indicates step is complete */}
-					{showTransitionButtons && (
-						<div className="flex flex-col items-center gap-3 py-4">
-							<p className="text-sm text-muted-foreground">
-								Pronto para avançar para <strong>{nextStepName}</strong>?
-							</p>
-							<div className="flex flex-wrap justify-center gap-2">
-								<Button variant="outline" size="default" onClick={handleAdjust}>
-									<MessageSquareText className="mr-2 h-4 w-4" />
-									Ajustar
-								</Button>
-								{isOptionalStep && onSkipStep && (
-									<Button variant="ghost" size="default" onClick={handleSkipStep}>
-										<SkipForward className="mr-2 h-4 w-4" />
-										Pular etapa
-									</Button>
-								)}
+					{/* Generate Document button when PRD is complete */}
+					{currentStep === 'complete' &&
+						onGenerateDocument &&
+						!isStreaming &&
+						!pendingUserMessage && (
+							<div className="flex flex-col items-center gap-4 py-8">
+								<div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5">
+									<Sparkles className="h-8 w-8 text-primary" />
+								</div>
+								<div className="text-center">
+									<h3 className="text-lg font-semibold text-foreground">PRD Completo!</h3>
+									<p className="mt-1 max-w-md text-sm text-muted-foreground">
+										Todas as etapas foram concluídas. Agora você pode gerar o documento do PRD com
+										todas as informações coletadas.
+									</p>
+								</div>
 								<Button
-									variant="default"
-									size="default"
-									onClick={handleAdvance}
-									disabled={isAdvancing}
+									size="lg"
+									onClick={onGenerateDocument}
+									disabled={isGenerating}
+									className="gap-2"
 								>
-									<ArrowRight className="mr-2 h-4 w-4" />
-									{isAdvancing ? 'Avançando...' : 'Avançar'}
+									{isGenerating ? (
+										<>
+											<Spinner className="h-4 w-4" />
+											Gerando documento...
+										</>
+									) : (
+										<>
+											<FileText className="h-5 w-5" />
+											{hasDocuments ? 'Gerar Novo PRD' : 'Gerar PRD'}
+										</>
+									)}
 								</Button>
 							</div>
-							{isOptionalStep && (
-								<p className="text-xs text-muted-foreground/70">
-									Esta etapa é opcional e pode ser pulada se não for relevante para seu projeto.
-								</p>
-							)}
-						</div>
-					)}
-
-					{/* Adjusting mode indicator */}
-					{isAdjusting && !isStreaming && !pendingUserMessage && (
-						<div className="flex flex-col items-center gap-2 py-4">
-							<p className="text-sm text-muted-foreground">
-								Digite abaixo o que você gostaria de ajustar em{' '}
-								<strong>{stepLabels[currentStep]}</strong>:
-							</p>
-						</div>
-					)}
+						)}
 
 					<div ref={scrollRef} />
 				</div>
 			</div>
 
-			{/* Input area */}
-			<div className="shrink-0 py-4">
-				<div className="mx-auto max-w-2xl">
-					{isAdjusting ? (
-						<div className="space-y-2">
-							<ChatInput
-								onSend={handleSendAdjustment}
-								disabled={isStreaming}
-								placeholder={`Descreva o ajuste que deseja em ${stepLabels[currentStep]}...`}
-							/>
-							<div className="flex justify-center">
-								<Button
-									variant="ghost"
-									size="sm"
-									onClick={() => setIsAdjusting(false)}
-									className="text-muted-foreground"
-								>
-									Cancelar ajuste
-								</Button>
-							</div>
-						</div>
-					) : (
-						<ChatInput onSend={onSendMessage} disabled={isStreaming} />
-					)}
+			{/* Fixed Chat Input at bottom (visible until complete) */}
+			{currentStep !== 'complete' && (
+				<div className="shrink-0 border-t border-border bg-white p-4">
+					<div className="mx-auto" style={{ maxWidth: '1000px' }}>
+						<ChatInput
+							onSend={onSendMessage}
+							disabled={isBusy}
+							placeholder="Digite sua mensagem..."
+						/>
+					</div>
 				</div>
-			</div>
+			)}
+
+			{/* Edit Confirmation Dialog */}
+			<AlertDialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+				<AlertDialogContent className="max-w-2xl">
+					<AlertDialogHeader>
+						<AlertDialogTitle>Editar mensagem</AlertDialogTitle>
+						<AlertDialogDescription>
+							{messagesToDelete > 0
+								? `Esta ação irá deletar ${messagesToDelete} mensagem${messagesToDelete > 1 ? 's' : ''} subsequente${messagesToDelete > 1 ? 's' : ''} e regenerar a conversa a partir deste ponto.`
+								: 'Edite sua mensagem abaixo. A resposta será regenerada.'}
+						</AlertDialogDescription>
+					</AlertDialogHeader>
+					<Textarea
+						value={editContent}
+						onChange={(e) => setEditContent(e.target.value)}
+						className="min-h-[150px] resize-none"
+						placeholder="Digite sua mensagem..."
+					/>
+					<AlertDialogFooter>
+						<AlertDialogCancel onClick={handleCancelEdit}>Cancelar</AlertDialogCancel>
+						<AlertDialogAction onClick={handleConfirmEdit} disabled={!editContent.trim()}>
+							Enviar
+						</AlertDialogAction>
+					</AlertDialogFooter>
+				</AlertDialogContent>
+			</AlertDialog>
 		</div>
 	)
 }

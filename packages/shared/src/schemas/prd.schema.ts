@@ -21,6 +21,8 @@ export const PrdStepSchema = z.enum([
 
 export const PrdStatusSchema = z.enum(['active', 'paused', 'completed', 'archived'])
 
+export const PrdGenerationStatusSchema = z.enum(['idle', 'generating', 'completed', 'failed'])
+
 export const PrdMessageRoleSchema = z.enum(['system', 'user', 'assistant'])
 
 export const PrdDocumentTypeSchema = z.enum([
@@ -246,6 +248,11 @@ export const PrdSessionSchema = z
 		status: PrdStatusSchema,
 		stepsCompleted: z.array(PrdStepSchema),
 
+		// Generation state (persisted for page reload)
+		generationStatus: PrdGenerationStatusSchema,
+		generationStartedAt: z.date().optional().nullable(),
+		generationError: z.string().optional().nullable(),
+
 		// Final document (Step 11)
 		documentContent: z.string().optional().nullable(),
 		documentTitle: z.string().optional().nullable(),
@@ -257,7 +264,7 @@ export const PrdSessionSchema = z
 export const CreatePrdSessionSchema = z.object({
 	projectName: z.string().min(1).max(200),
 	projectDescription: z.string().max(5000).optional(),
-	briefingSessionId: IdSchema.optional(), // Link opcional a uma sessão de briefing
+	briefingSessionId: IdSchema.optional(), // Opcional - PRD pode ser criado sem briefing
 })
 
 export const UpdatePrdSessionSchema = z.object({
@@ -347,6 +354,10 @@ export const PrdChatRequestSchema = z.object({
 		.optional(),
 })
 
+export const EditPrdMessageRequestSchema = z.object({
+	content: z.string().min(1).max(10000),
+})
+
 // ============================================
 // DOCUMENT SCHEMAS
 // ============================================
@@ -408,6 +419,7 @@ export const DomainConfigSchema = z.object({
 
 export type PrdStep = z.infer<typeof PrdStepSchema>
 export type PrdStatus = z.infer<typeof PrdStatusSchema>
+export type PrdGenerationStatus = z.infer<typeof PrdGenerationStatusSchema>
 export type PrdMessageRole = z.infer<typeof PrdMessageRoleSchema>
 export type PrdDocumentType = z.infer<typeof PrdDocumentTypeSchema>
 export type PrdProjectType = z.infer<typeof PrdProjectTypeSchema>
@@ -436,6 +448,7 @@ export type CreatePrdSession = z.infer<typeof CreatePrdSessionSchema>
 export type UpdatePrdSession = z.infer<typeof UpdatePrdSessionSchema>
 export type PrdMessage = z.infer<typeof PrdMessageSchema>
 export type PrdChatRequest = z.infer<typeof PrdChatRequestSchema>
+export type EditPrdMessageRequest = z.infer<typeof EditPrdMessageRequestSchema>
 export type PrdDocument = z.infer<typeof PrdDocumentSchema>
 export type CreatePrdDocument = z.infer<typeof CreatePrdDocumentSchema>
 export type UpdatePrdDocument = z.infer<typeof UpdatePrdDocumentSchema>
