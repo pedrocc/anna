@@ -9,6 +9,7 @@
     "tooling/*"
   ],
   "scripts": {
+    "start": "bun run scripts/start.ts",
     "dev": "bun run scripts/dev.ts",
     "build": "bun run --filter '*' build",
     "test": "bun test",
