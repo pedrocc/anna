@@ -22,7 +22,11 @@ import { and, desc, eq, gte, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { streamSSE } from 'hono/streaming'
 import { getUserByClerkId } from '../lib/helpers.js'
+import { createLogger } from '../lib/logger.js'
 import { getOpenRouterClient, OpenRouterAPIError } from '../lib/openrouter.js'
+
+const prdLogger = createLogger('prd')
+
 import {
 	buildBriefingAnalysisPrompt,
 	buildExtractionPrompt,
@@ -685,7 +689,9 @@ prdRoutes.post(
 		// 4. Delete all messages from this point onwards (inclusive)
 		await db
 			.delete(prdMessages)
-			.where(and(eq(prdMessages.sessionId, sessionId), gte(prdMessages.createdAt, messageTimestamp)))
+			.where(
+				and(eq(prdMessages.sessionId, sessionId), gte(prdMessages.createdAt, messageTimestamp))
+			)
 
 		// 5. Check if we need to rollback the step
 		const currentStepIndex = PRD_STEPS_ORDER.indexOf(session.currentStep)
@@ -925,11 +931,13 @@ prdRoutes.post(
 			.where(eq(prdSessions.id, sessionId))
 
 		// Stream document generation
-		console.log('[PRD Document] Starting document generation for session:', sessionId)
-		console.log('[PRD Document] Messages count:', messagesChronological.length)
+		prdLogger.info(
+			{ sessionId, messagesCount: messagesChronological.length },
+			'Starting document generation'
+		)
 
 		return streamSSE(c, async (stream) => {
-			console.log('[PRD Document] SSE stream started')
+			prdLogger.debug({ sessionId }, 'SSE stream started')
 			try {
 				const client = getOpenRouterClient()
 				let fullDocument = ''
@@ -961,8 +969,7 @@ prdRoutes.post(
 					user.name
 				)
 
-				console.log('[PRD Document] Prompt length:', prompt.length)
-				console.log('[PRD Document] Calling OpenRouter...')
+				prdLogger.debug({ sessionId, promptLength: prompt.length }, 'Calling OpenRouter')
 
 				const generator = client.chatStream({
 					messages: [{ role: 'user', content: prompt }],
@@ -971,22 +978,18 @@ prdRoutes.post(
 					max_tokens: 16384, // DeepSeek V3 via OpenRouter max output for comprehensive PRD documents
 				})
 
-				console.log('[PRD Document] Generator created, starting iteration...')
+				prdLogger.debug({ sessionId }, 'Generator created, starting iteration')
 				let chunkCount = 0
 				for await (const chunk of generator) {
 					chunkCount++
-					if (chunkCount === 1) {
-						console.log('[PRD Document] First chunk received')
-					} else if (chunkCount % 100 === 0) {
-						console.log(`[PRD Document] Chunk ${chunkCount}, doc length: ${fullDocument.length}`)
-					}
 					fullDocument += chunk
 					await stream.writeSSE({
 						data: JSON.stringify({ content: chunk }),
 					})
 				}
-				console.log(
-					`[PRD Document] Loop finished. Total chunks: ${chunkCount}, final length: ${fullDocument.length}`
+				prdLogger.debug(
+					{ sessionId, chunkCount, documentLength: fullDocument.length },
+					'Stream loop finished'
 				)
 
 				// Define title based on document type
@@ -1028,7 +1031,7 @@ prdRoutes.post(
 
 				// Extract structured data from document (non-blocking)
 				try {
-					console.log('[PRD Document] Starting structured data extraction...')
+					prdLogger.debug({ sessionId }, 'Starting structured data extraction')
 					const extractionPrompt = buildExtractionPrompt(fullDocument)
 
 					const extractionResponse = await client.chat({
@@ -1061,11 +1064,15 @@ prdRoutes.post(
 						cleanJson = cleanJson.trim()
 
 						const extractedData = JSON.parse(cleanJson)
-						console.log('[PRD Document] Extraction successful:', {
-							features: extractedData.features?.length ?? 0,
-							frs: extractedData.functionalRequirements?.length ?? 0,
-							personas: extractedData.personas?.length ?? 0,
-						})
+						prdLogger.info(
+							{
+								sessionId,
+								features: extractedData.features?.length ?? 0,
+								frs: extractedData.functionalRequirements?.length ?? 0,
+								personas: extractedData.personas?.length ?? 0,
+							},
+							'Extraction successful'
+						)
 
 						// Update session with structured data
 						await db
@@ -1084,11 +1091,11 @@ prdRoutes.post(
 							})
 							.where(eq(prdSessions.id, sessionId))
 
-						console.log('[PRD Document] Structured data saved to database')
+						prdLogger.debug({ sessionId }, 'Structured data saved to database')
 					}
 				} catch (extractionError) {
 					// Log but don't fail - extraction is optional
-					console.error('[PRD Document] Extraction failed:', extractionError)
+					prdLogger.warn({ err: extractionError, sessionId }, 'Extraction failed (non-critical)')
 				}
 
 				await stream.writeSSE({
@@ -1097,11 +1104,13 @@ prdRoutes.post(
 						document: newDoc,
 					}),
 				})
-				console.log('[PRD Document] Stream complete. Total chunks:', chunkCount)
-				console.log('[PRD Document] Full document length:', fullDocument.length)
+				prdLogger.info(
+					{ sessionId, chunkCount, documentLength: fullDocument.length },
+					'Stream complete'
+				)
 				await stream.writeSSE({ data: '[DONE]' })
 			} catch (error) {
-				console.error('[PRD Document] Error:', error)
+				prdLogger.error({ err: error, sessionId }, 'Document generation error')
 				const errorMessage =
 					error instanceof OpenRouterAPIError ? error.message : 'Failed to generate document'
 

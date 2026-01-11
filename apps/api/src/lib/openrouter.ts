@@ -3,6 +3,8 @@
  * https://openrouter.ai/docs
  */
 
+import { openrouterLogger } from './logger.js'
+
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1'
 
 export type ChatRole = 'system' | 'user' | 'assistant'
@@ -95,11 +97,14 @@ export class OpenRouterClient {
 	}
 
 	async *chatStream(request: ChatCompletionRequest): AsyncGenerator<string, void, unknown> {
-		console.log('[OpenRouter] Starting stream request:', {
-			model: request.model ?? this.defaultModel,
-			max_tokens: request.max_tokens,
-			messages_count: request.messages.length,
-		})
+		openrouterLogger.debug(
+			{
+				model: request.model ?? this.defaultModel,
+				max_tokens: request.max_tokens,
+				messages_count: request.messages.length,
+			},
+			'Starting stream request'
+		)
 
 		const response = await fetch(`${OPENROUTER_API_URL}/chat/completions`, {
 			method: 'POST',
@@ -119,11 +124,11 @@ export class OpenRouterClient {
 			}),
 		})
 
-		console.log('[OpenRouter] Response status:', response.status)
+		openrouterLogger.debug({ status: response.status }, 'Response received')
 
 		if (!response.ok) {
 			const errorText = await response.text()
-			console.error('[OpenRouter] Error response:', errorText)
+			openrouterLogger.error({ status: response.status, error: errorText }, 'API error response')
 			let error: OpenRouterError
 			try {
 				error = JSON.parse(errorText) as OpenRouterError

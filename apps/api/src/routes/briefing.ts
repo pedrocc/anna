@@ -30,8 +30,12 @@ import {
 	getStepInfo,
 } from '../lib/briefing-prompts.js'
 import { getUserByClerkId } from '../lib/helpers.js'
+import { createLogger } from '../lib/logger.js'
 import { getOpenRouterClient, OpenRouterAPIError } from '../lib/openrouter.js'
 import { commonErrors, successResponse } from '../lib/response.js'
+
+const briefingLogger = createLogger('briefing')
+
 import { type AuthVariables, authMiddleware, getAuth } from '../middleware/auth.js'
 
 export const briefingRoutes = new Hono<{ Variables: AuthVariables }>()
@@ -480,12 +484,14 @@ briefingRoutes.post(
 					currentPatterns.some((pattern) => pattern.test(fullResponse))
 
 				// Debug log
-				console.log('[Briefing] Step transition check:', {
-					currentStep: session.currentStep,
-					shouldAdvance,
-					responseSnippet: fullResponse.slice(0, 200),
-					patterns: currentPatterns.map((p) => p.toString()),
-				})
+				briefingLogger.debug(
+					{
+						sessionId,
+						currentStep: session.currentStep,
+						shouldAdvance,
+					},
+					'Step transition check'
+				)
 
 				let newStep = session.currentStep
 				if (shouldAdvance) {
@@ -591,7 +597,12 @@ briefingRoutes.post(
 		// 4. Delete all messages from this point onwards (inclusive)
 		await db
 			.delete(briefingMessages)
-			.where(and(eq(briefingMessages.sessionId, sessionId), gte(briefingMessages.createdAt, messageTimestamp)))
+			.where(
+				and(
+					eq(briefingMessages.sessionId, sessionId),
+					gte(briefingMessages.createdAt, messageTimestamp)
+				)
+			)
 
 		// 5. Check if we need to rollback the step
 		const currentStepIndex = BRIEFING_STEPS_ORDER.indexOf(session.currentStep)

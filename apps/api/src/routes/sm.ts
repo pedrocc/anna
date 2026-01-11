@@ -27,7 +27,11 @@ import { and, asc, desc, eq, gte, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { streamSSE } from 'hono/streaming'
 import { getUserByClerkId } from '../lib/helpers.js'
+import { createLogger } from '../lib/logger.js'
 import { getOpenRouterClient, OpenRouterAPIError } from '../lib/openrouter.js'
+
+const smLogger = createLogger('sm')
+
 import { commonErrors, successResponse } from '../lib/response.js'
 import { enrichStoriesFromConversation } from '../lib/sm-enrichment.js'
 import {
@@ -530,10 +534,7 @@ smRoutes.post('/chat', authMiddleware, zValidator('json', SmChatRequestSchema), 
 							if (extractedData.action === 'create') {
 								// Check if epic with this number already exists
 								const existingEpic = await db.query.smEpics.findFirst({
-									where: and(
-										eq(smEpics.sessionId, sessionId),
-										eq(smEpics.number, epicData.number)
-									),
+									where: and(eq(smEpics.sessionId, sessionId), eq(smEpics.number, epicData.number)),
 								})
 
 								if (existingEpic) {
@@ -563,10 +564,7 @@ smRoutes.post('/chat', authMiddleware, zValidator('json', SmChatRequestSchema), 
 							} else if (extractedData.action === 'update') {
 								// Update existing epic by number
 								const existingEpic = await db.query.smEpics.findFirst({
-									where: and(
-										eq(smEpics.sessionId, sessionId),
-										eq(smEpics.number, epicData.number)
-									),
+									where: and(eq(smEpics.sessionId, sessionId), eq(smEpics.number, epicData.number)),
 								})
 								if (existingEpic) {
 									await db
@@ -608,8 +606,9 @@ smRoutes.post('/chat', authMiddleware, zValidator('json', SmChatRequestSchema), 
 
 							if (!epicId) {
 								// Skip story if no epic found
-								console.warn(
-									`[SM Extraction] Skipping story ${storyData.epicNumber}-${storyData.storyNumber}: Epic ${storyData.epicNumber} not found`
+								smLogger.warn(
+									{ epicNumber: storyData.epicNumber, storyNumber: storyData.storyNumber },
+									'Skipping story: Epic not found'
 								)
 								continue
 							}
@@ -619,10 +618,7 @@ smRoutes.post('/chat', authMiddleware, zValidator('json', SmChatRequestSchema), 
 							if (extractedData.action === 'create') {
 								// Check if story already exists
 								const existingStory = await db.query.smStories.findFirst({
-									where: and(
-										eq(smStories.sessionId, sessionId),
-										eq(smStories.storyKey, storyKey)
-									),
+									where: and(eq(smStories.sessionId, sessionId), eq(smStories.storyKey, storyKey)),
 								})
 
 								if (existingStory) {
@@ -647,10 +643,7 @@ smRoutes.post('/chat', authMiddleware, zValidator('json', SmChatRequestSchema), 
 							} else if (extractedData.action === 'update') {
 								// Update existing story
 								const existingStory = await db.query.smStories.findFirst({
-									where: and(
-										eq(smStories.sessionId, sessionId),
-										eq(smStories.storyKey, storyKey)
-									),
+									where: and(eq(smStories.sessionId, sessionId), eq(smStories.storyKey, storyKey)),
 								})
 
 								if (existingStory) {
@@ -675,7 +668,7 @@ smRoutes.post('/chat', authMiddleware, zValidator('json', SmChatRequestSchema), 
 						}
 					}
 				} catch (extractError) {
-					console.error('[SM Extraction] Failed to persist extracted data:', extractError)
+					smLogger.error({ err: extractError }, 'Failed to persist extracted data')
 					// Continue without failing the chat - extraction is best-effort
 				}
 			}
@@ -962,7 +955,10 @@ smRoutes.post(
 						updatedAt: new Date(),
 						totalEpics: updatedSession.epics.length,
 						totalStories: updatedSession.stories.length,
-						totalStoryPoints: updatedSession.stories.reduce((sum, s) => sum + (s.storyPoints ?? 0), 0),
+						totalStoryPoints: updatedSession.stories.reduce(
+							(sum, s) => sum + (s.storyPoints ?? 0),
+							0
+						),
 					})
 					.where(eq(smSessions.id, sessionId))
 
@@ -1291,15 +1287,18 @@ smRoutes.post('/sessions/:id/enrich', authMiddleware, async (c) => {
 	}
 
 	try {
-		console.log(`[SM] Starting enrichment for session ${sessionId} with ${session.stories.length} stories`)
+		smLogger.info({ sessionId, storiesCount: session.stories.length }, 'Starting enrichment')
 		const result = await enrichStoriesFromConversation(sessionId, session.stories)
-		console.log(`[SM] Enrichment completed: ${result.enriched} enriched, ${result.failed} failed`)
+		smLogger.info(
+			{ sessionId, enriched: result.enriched, failed: result.failed },
+			'Enrichment completed'
+		)
 		return successResponse(c, {
 			...result,
 			message: `Enriched ${result.enriched} stories`,
 		})
 	} catch (error) {
-		console.error('[SM] Failed to enrich stories:', error)
+		smLogger.error({ err: error, sessionId }, 'Failed to enrich stories')
 		return commonErrors.badRequest(c, 'Failed to enrich stories')
 	}
 })
@@ -1344,7 +1343,10 @@ smRoutes.post(
 		// Enrich stories with AC, Tasks, DevNotes before generating document
 		if (session.stories.length > 0) {
 			try {
-				console.log(`[SM] Enriching ${session.stories.length} stories before document generation`)
+				smLogger.info(
+					{ sessionId, storiesCount: session.stories.length },
+					'Enriching stories before document generation'
+				)
 				await enrichStoriesFromConversation(
 					sessionId,
 					session.stories.map((s) => ({
@@ -1370,9 +1372,12 @@ smRoutes.post(
 						stories: enrichedSession.stories,
 					})
 				}
-				console.log('[SM] Stories enriched successfully')
+				smLogger.info({ sessionId }, 'Stories enriched successfully')
 			} catch (error) {
-				console.error('[SM] Failed to enrich stories (continuing with document generation):', error)
+				smLogger.warn(
+					{ err: error, sessionId },
+					'Failed to enrich stories (continuing with document generation)'
+				)
 				// Don't fail the document generation if enrichment fails
 			}
 		}

@@ -1,7 +1,10 @@
 import { db, smMessages, smStories } from '@repo/db'
 import { asc, eq } from 'drizzle-orm'
+import { createLogger } from './logger.js'
 import { getOpenRouterClient } from './openrouter.js'
 import { buildStoryEnrichmentPrompt } from './sm-prompts.js'
+
+const enrichLogger = createLogger('sm-enrichment')
 
 interface EnrichedStoryData {
 	storyKey: string
@@ -44,15 +47,16 @@ export async function enrichStoriesFromConversation(
 	})
 
 	if (messages.length === 0) {
-		console.log('[SM Enrichment] No messages found for session:', sessionId)
+		enrichLogger.debug({ sessionId }, 'No messages found for session')
 		return { enriched: 0, failed: 0 }
 	}
 
 	// 2. Montar contexto da conversa
 	const conversationText = messages.map((m) => `[${m.role}]: ${m.content}`).join('\n\n')
 
-	console.log(
-		`[SM Enrichment] Processing ${messages.length} messages for ${stories.length} stories`
+	enrichLogger.info(
+		{ sessionId, messagesCount: messages.length, storiesCount: stories.length },
+		'Processing stories'
 	)
 
 	// 3. Chamar AI para extrair dados estruturados
@@ -71,7 +75,7 @@ export async function enrichStoriesFromConversation(
 
 	// 4. Parsear resposta JSON
 	const enrichedData = parseEnrichmentResponse(responseContent)
-	console.log(`[SM Enrichment] Extracted data for ${enrichedData.length} stories`)
+	enrichLogger.debug({ storiesExtracted: enrichedData.length }, 'Extracted data')
 
 	// 5. Atualizar cada story no banco
 	let enriched = 0
@@ -80,7 +84,7 @@ export async function enrichStoriesFromConversation(
 	for (const data of enrichedData) {
 		const story = stories.find((s) => s.storyKey === data.storyKey)
 		if (!story) {
-			console.warn(`[SM Enrichment] Story not found: ${data.storyKey}`)
+			enrichLogger.warn({ storyKey: data.storyKey }, 'Story not found')
 			failed++
 			continue
 		}
@@ -96,9 +100,9 @@ export async function enrichStoriesFromConversation(
 				})
 				.where(eq(smStories.id, story.id))
 			enriched++
-			console.log(`[SM Enrichment] Updated story ${data.storyKey}`)
+			enrichLogger.debug({ storyKey: data.storyKey }, 'Updated story')
 		} catch (error) {
-			console.error(`[SM Enrichment] Failed to update story ${data.storyKey}:`, error)
+			enrichLogger.error({ err: error, storyKey: data.storyKey }, 'Failed to update story')
 			failed++
 		}
 	}
@@ -111,7 +115,7 @@ function parseEnrichmentResponse(response: string): EnrichedStoryData[] {
 	const jsonMatch = response.match(/```json\s*([\s\S]*?)\s*```/) || response.match(/\[[\s\S]*\]/)
 
 	if (!jsonMatch) {
-		console.error('[SM Enrichment] No JSON found in response:', response.slice(0, 500))
+		enrichLogger.error({ responsePreview: response.slice(0, 500) }, 'No JSON found in response')
 		return []
 	}
 
@@ -121,14 +125,16 @@ function parseEnrichmentResponse(response: string): EnrichedStoryData[] {
 
 		// Validar estrutura básica
 		if (!Array.isArray(parsed)) {
-			console.error('[SM Enrichment] Response is not an array')
+			enrichLogger.error('Response is not an array')
 			return []
 		}
 
 		return parsed
 	} catch (error) {
-		console.error('[SM Enrichment] Failed to parse JSON:', error)
-		console.error('[SM Enrichment] Raw response:', response.slice(0, 1000))
+		enrichLogger.error(
+			{ err: error, responsePreview: response.slice(0, 1000) },
+			'Failed to parse JSON'
+		)
 		return []
 	}
 }
