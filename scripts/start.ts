@@ -1,15 +1,12 @@
 #!/usr/bin/env bun
-import { readFileSync, writeFileSync } from 'node:fs'
+import { readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { spawn, spawnSync } from 'bun'
-import {
-	DEFAULT_PORTS,
-	findAvailablePort,
-	generatePortsEnv,
-	getAvailablePorts,
-	isPortInUse,
-	printPortsSummary,
-} from './lib/ports.js'
+import { generatePortsEnv, getAvailablePorts, printPortsSummary } from './lib/ports.js'
+
+// Constants
+const dockerComposePath = resolve(import.meta.dir, '../docker/docker-compose.yml')
+const portsEnvPath = resolve(import.meta.dir, '../docker/.env.ports')
 
 // Load root .env file
 const envPath = resolve(import.meta.dir, '../.env')
@@ -28,6 +25,52 @@ try {
 	console.warn('⚠️  Arquivo .env não encontrado na raiz')
 }
 
+// State tracking for cleanup
+let dockerStarted = false
+let isCleaningUp = false
+const processes: ReturnType<typeof spawn>[] = []
+
+// Cleanup function (registered early to handle interrupts at any stage)
+async function cleanup() {
+	if (isCleaningUp) return
+	isCleaningUp = true
+
+	console.log('\n\n🛑 Encerrando serviços...')
+
+	// Kill API/Web processes gracefully
+	if (processes.length > 0) {
+		console.log('   Parando API e Web...')
+		for (const proc of processes) {
+			proc.kill('SIGTERM')
+		}
+
+		// Wait for processes to exit (max 2s)
+		await Promise.race([Promise.all(processes.map((p) => p.exited)), Bun.sleep(2000)])
+	}
+
+	// Stop Docker containers if they were started
+	if (dockerStarted) {
+		console.log('   Parando containers Docker...')
+		spawnSync(['docker', 'compose', '-f', dockerComposePath, 'down'], {
+			stdout: 'pipe',
+			stderr: 'pipe',
+		})
+	}
+
+	// Clean up generated files
+	try {
+		unlinkSync(portsEnvPath)
+	} catch {
+		// File may not exist
+	}
+
+	console.log('✅ Encerrado com sucesso!')
+	process.exit(0)
+}
+
+process.on('SIGINT', cleanup)
+process.on('SIGTERM', cleanup)
+
 console.log('🚀 Iniciando Anna...\n')
 console.log('🔍 Verificando portas disponíveis...\n')
 
@@ -35,25 +78,53 @@ console.log('🔍 Verificando portas disponíveis...\n')
 const ports = getAvailablePorts()
 
 // Generate .env.ports file in docker directory
-const portsEnvPath = resolve(import.meta.dir, '../docker/.env.ports')
 writeFileSync(portsEnvPath, generatePortsEnv(ports))
 
 printPortsSummary(ports)
 
-// Step 1: Start Docker containers
+// Warn if .env has different port values (they will be overridden)
+const envDatabaseUrl = process.env['DATABASE_URL']
+const envRedisUrl = process.env['REDIS_URL']
+
+if (envDatabaseUrl) {
+	const envDbPort = envDatabaseUrl.match(/:(\d+)\//)?.[1]
+	if (envDbPort && envDbPort !== String(ports.postgres)) {
+		console.log(
+			`\n⚠️  Aviso: DATABASE_URL no .env usa porta ${envDbPort}, mas será usado ${ports.postgres}`
+		)
+	}
+}
+
+if (envRedisUrl) {
+	const envRedisPort = envRedisUrl.match(/:(\d+)$/)?.[1]
+	if (envRedisPort && envRedisPort !== String(ports.redis)) {
+		console.log(
+			`⚠️  Aviso: REDIS_URL no .env usa porta ${envRedisPort}, mas será usado ${ports.redis}`
+		)
+	}
+}
+
+// Step 1: Check for existing containers and start Docker
+console.log('\n🐳 Verificando containers Docker existentes...')
+
+// Check if containers are already running
+const existingContainers = spawnSync(['docker', 'compose', '-f', dockerComposePath, 'ps', '-q'], {
+	stdout: 'pipe',
+	stderr: 'pipe',
+})
+
+if (existingContainers.stdout.toString().trim()) {
+	console.log('   Containers existentes encontrados. Reiniciando...')
+	spawnSync(['docker', 'compose', '-f', dockerComposePath, 'down'], {
+		stdout: 'pipe',
+		stderr: 'pipe',
+	})
+}
+
 console.log('\n🐳 Iniciando containers Docker (PostgreSQL + Redis)...\n')
 
 const dockerCompose = spawnSync(
-	[
-		'docker',
-		'compose',
-		'-f',
-		resolve(import.meta.dir, '../docker/docker-compose.yml'),
-		'--env-file',
-		portsEnvPath,
-		'up',
-		'-d',
-	],
+	['docker', 'compose', '-f', dockerComposePath, '--env-file', portsEnvPath, 'up', '-d'],
 	{
 		stdout: 'inherit',
 		stderr: 'inherit',
@@ -70,6 +141,7 @@ if (dockerCompose.exitCode !== 0) {
 	process.exit(dockerCompose.exitCode || 1)
 }
 
+dockerStarted = true
 console.log('\n✅ Containers Docker iniciados!')
 
 // Step 2: Wait for PostgreSQL to be ready
@@ -85,7 +157,7 @@ while (retries < maxRetries && !dbReady) {
 			'docker',
 			'compose',
 			'-f',
-			resolve(import.meta.dir, '../docker/docker-compose.yml'),
+			dockerComposePath,
 			'exec',
 			'-T',
 			'postgres',
@@ -93,10 +165,7 @@ while (retries < maxRetries && !dbReady) {
 			'-U',
 			'postgres',
 		],
-		{
-			stdout: 'pipe',
-			stderr: 'pipe',
-		}
+		{ stdout: 'pipe', stderr: 'pipe' }
 	)
 
 	if (check.exitCode === 0) {
@@ -138,32 +207,9 @@ console.log('✅ Migrations aplicadas!')
 // Step 4: Start API and Web
 console.log('\n🌐 Iniciando aplicação (API + Web)...\n')
 
-const processes: ReturnType<typeof spawn>[] = []
-
-function cleanup() {
-	console.log('\n\n🛑 Encerrando serviços...')
-	for (const proc of processes) {
-		proc.kill()
-	}
-	process.exit(0)
-}
-
-process.on('SIGINT', cleanup)
-process.on('SIGTERM', cleanup)
-
-// Find available ports for API and Web (may differ from Docker ports)
-let apiPort = ports.api
-let webPort = ports.web
-
-if (isPortInUse(apiPort)) {
-	apiPort = findAvailablePort(apiPort + 1)
-	console.log(`⚠️  Porta ${ports.api} em uso. API usará porta ${apiPort}`)
-}
-
-if (isPortInUse(webPort)) {
-	webPort = findAvailablePort(webPort + 1)
-	console.log(`⚠️  Porta ${ports.web} em uso. Web usará porta ${webPort}`)
-}
+// Use ports from getAvailablePorts() - already validated
+const apiPort = ports.api
+const webPort = ports.web
 
 // Start API
 const api = spawn({
@@ -194,7 +240,7 @@ const web = spawn({
 })
 processes.push(web)
 
-console.log('\n' + '═'.repeat(50))
+console.log(`\n${'═'.repeat(50)}`)
 console.log('🎉 Anna está rodando!')
 console.log('═'.repeat(50))
 console.log(`\n   🌐 Web:        http://localhost:${webPort}`)
@@ -202,6 +248,6 @@ console.log(`   🔌 API:        http://localhost:${apiPort}`)
 console.log(`   🐘 PostgreSQL: localhost:${ports.postgres}`)
 console.log(`   📮 Redis:      localhost:${ports.redis}`)
 console.log('\n   Pressione Ctrl+C para encerrar')
-console.log('═'.repeat(50) + '\n')
+console.log(`${'═'.repeat(50)}\n`)
 
 await Promise.all(processes.map((p) => p.exited))

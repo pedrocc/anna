@@ -17,7 +17,7 @@ try {
 		}
 	}
 } catch {
-	console.warn('⚠️ No .env file found at root')
+	console.warn('⚠️  Arquivo .env não encontrado na raiz')
 }
 
 console.log('🔍 Verificando portas disponíveis...\n')
