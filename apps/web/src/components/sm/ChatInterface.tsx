@@ -140,9 +140,7 @@ export function ChatInterface({
 						<ChatMessage
 							key={msg.id}
 							messageRole={msg.role as 'user' | 'assistant'}
-							content={
-								msg.role === 'assistant' ? cleanSmDataFromContent(msg.content) : msg.content
-							}
+							content={msg.role === 'assistant' ? cleanSmDataFromContent(msg.content) : msg.content}
 							messageId={msg.id}
 							onEdit={handleEditClick}
 							isEditable={!!onEditMessage}

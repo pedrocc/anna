@@ -15,7 +15,7 @@
     "test": "bun test"
   },
   "dependencies": {
-    "zod": "^4.3.4"
+    "zod": "^4.3.5"
   },
   "devDependencies": {
     "@repo/typescript-config": "workspace:*",

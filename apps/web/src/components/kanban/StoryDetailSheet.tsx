@@ -458,8 +458,7 @@ export function StoryDetailSheet({ story, open, onOpenChange, onUpdate }: StoryD
 	const hasAcceptanceCriteria = story.acceptanceCriteria && story.acceptanceCriteria.length > 0
 	const hasTasks = story.tasks && story.tasks.length > 0
 	const hasDevNotes =
-		story.devNotes &&
-		Object.values(story.devNotes).some((v) => Array.isArray(v) && v.length > 0)
+		story.devNotes && Object.values(story.devNotes).some((v) => Array.isArray(v) && v.length > 0)
 	const hasRequirements =
 		story.functionalRequirementCodes && story.functionalRequirementCodes.length > 0
 	const hasRichContent = hasAcceptanceCriteria || hasTasks || hasDevNotes || hasRequirements
@@ -475,7 +474,10 @@ export function StoryDetailSheet({ story, open, onOpenChange, onUpdate }: StoryD
 				<SheetDescription className="sr-only">Detalhes da story {story.storyKey}</SheetDescription>
 
 				{/* Header */}
-				<div className="p-8 pb-6 shrink-0" style={{ borderBottom: '1px solid var(--apple-border-subtle)' }}>
+				<div
+					className="p-8 pb-6 shrink-0"
+					style={{ borderBottom: '1px solid var(--apple-border-subtle)' }}
+				>
 					<div className="flex items-start justify-between gap-6">
 						<div className="flex-1">
 							{/* Story Key + Priority */}
@@ -534,8 +536,8 @@ export function StoryDetailSheet({ story, open, onOpenChange, onUpdate }: StoryD
 								</h2>
 							)}
 						</div>
-					{/* Close button is provided by SheetContent */}
-				</div>
+						{/* Close button is provided by SheetContent */}
+					</div>
 
 					{/* Meta badges */}
 					<div className="flex flex-wrap items-center gap-3 mt-6">
@@ -725,7 +727,10 @@ export function StoryDetailSheet({ story, open, onOpenChange, onUpdate }: StoryD
 					{/* Description (if available) */}
 					{story.description && (
 						<>
-							<div className="h-px w-full mb-8" style={{ background: 'var(--apple-border-subtle)' }} />
+							<div
+								className="h-px w-full mb-8"
+								style={{ background: 'var(--apple-border-subtle)' }}
+							/>
 							<div className="mb-8">
 								<SectionHeader icon={FileText} title="Descrição" />
 								<p
@@ -741,7 +746,10 @@ export function StoryDetailSheet({ story, open, onOpenChange, onUpdate }: StoryD
 					{/* Rich Content Sections */}
 					{hasRichContent && (
 						<>
-							<div className="h-px w-full mb-8" style={{ background: 'var(--apple-border-subtle)' }} />
+							<div
+								className="h-px w-full mb-8"
+								style={{ background: 'var(--apple-border-subtle)' }}
+							/>
 
 							{/* Acceptance Criteria */}
 							<AcceptanceCriteriaSection criteria={story.acceptanceCriteria} />

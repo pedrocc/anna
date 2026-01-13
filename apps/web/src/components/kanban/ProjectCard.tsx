@@ -12,7 +12,15 @@ import {
 	DropdownMenuItem,
 	DropdownMenuTrigger,
 } from '@repo/ui'
-import { ArrowRight, Calendar, FileText, LayoutList, MoreVertical, Target, Trash2 } from 'lucide-react'
+import {
+	ArrowRight,
+	Calendar,
+	FileText,
+	LayoutList,
+	MoreVertical,
+	Target,
+	Trash2,
+} from 'lucide-react'
 import type { MouseEvent } from 'react'
 import { useState } from 'react'
 import { Link } from 'wouter'
@@ -153,8 +161,8 @@ export function ProjectCard({ project, onDeleted }: ProjectCardProps) {
 					<AlertDialogHeader>
 						<AlertDialogTitle>Excluir projeto</AlertDialogTitle>
 						<AlertDialogDescription>
-							Tem certeza que deseja excluir o projeto "{project.projectName}"? Esta ação
-							não pode ser desfeita e todos os dados do sprint plan serão perdidos.
+							Tem certeza que deseja excluir o projeto "{project.projectName}"? Esta ação não pode
+							ser desfeita e todos os dados do sprint plan serão perdidos.
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					<AlertDialogFooter>

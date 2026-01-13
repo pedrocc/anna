@@ -1,7 +1,7 @@
 import {
-	SmExtractedDataSchema,
 	type SmExtractedAcceptanceCriteria,
 	type SmExtractedData,
+	SmExtractedDataSchema,
 	type SmExtractedEpic,
 	type SmExtractedStory,
 	type SmExtractedTask,
@@ -111,9 +111,7 @@ export function transformAcceptanceCriteria(
 /**
  * Transforms extracted tasks to database format
  */
-export function transformTasks(
-	tasks: SmExtractedTask[] | undefined
-): Array<{
+export function transformTasks(tasks: SmExtractedTask[] | undefined): Array<{
 	id: string
 	description: string
 	estimatedHours?: number

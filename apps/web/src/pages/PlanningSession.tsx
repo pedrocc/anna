@@ -485,7 +485,11 @@ export function PlanningSessionPage() {
 						</div>
 					</div>
 					<DialogFooter>
-						<Button variant="outline" onClick={() => setShowRenameDialog(false)} disabled={isRenaming}>
+						<Button
+							variant="outline"
+							onClick={() => setShowRenameDialog(false)}
+							disabled={isRenaming}
+						>
 							Cancelar
 						</Button>
 						<Button onClick={handleRenameSession} disabled={!newProjectName.trim() || isRenaming}>

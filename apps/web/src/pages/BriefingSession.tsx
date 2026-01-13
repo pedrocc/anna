@@ -27,7 +27,15 @@ import {
 	TabsList,
 	TabsTrigger,
 } from '@repo/ui'
-import { AlertTriangle, ArrowLeft, FileText, MessageSquare, Pencil, Settings, Trash2 } from 'lucide-react'
+import {
+	AlertTriangle,
+	ArrowLeft,
+	FileText,
+	MessageSquare,
+	Pencil,
+	Settings,
+	Trash2,
+} from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useLocation, useParams } from 'wouter'
 import { DocumentViewer } from '../components/brainstorm'
@@ -359,9 +367,7 @@ export function BriefingSessionPage() {
 								<>
 									<Spinner className="h-12 w-12" />
 									<p className="text-muted-foreground">Gerando documento...</p>
-									<p className="text-sm text-muted-foreground">
-										Isso pode levar alguns minutos
-									</p>
+									<p className="text-sm text-muted-foreground">Isso pode levar alguns minutos</p>
 								</>
 							) : (
 								<>
@@ -417,7 +423,11 @@ export function BriefingSessionPage() {
 						</div>
 					</div>
 					<DialogFooter>
-						<Button variant="outline" onClick={() => setShowRenameDialog(false)} disabled={isRenaming}>
+						<Button
+							variant="outline"
+							onClick={() => setShowRenameDialog(false)}
+							disabled={isRenaming}
+						>
 							Cancelar
 						</Button>
 						<Button onClick={handleRenameSession} disabled={!newProjectName.trim() || isRenaming}>

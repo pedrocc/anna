@@ -47,8 +47,7 @@ export function AppleCard({ story, onClick }: AppleCardProps) {
 	const hasAcceptanceCriteria = story.acceptanceCriteria && story.acceptanceCriteria.length > 0
 	const hasTasks = story.tasks && story.tasks.length > 0
 	const hasDevNotes =
-		story.devNotes &&
-		Object.values(story.devNotes).some((v) => Array.isArray(v) && v.length > 0)
+		story.devNotes && Object.values(story.devNotes).some((v) => Array.isArray(v) && v.length > 0)
 
 	return (
 		// biome-ignore lint/a11y/noStaticElementInteractions: Drag-and-drop cards require div with dnd-kit attributes

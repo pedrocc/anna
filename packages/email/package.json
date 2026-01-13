@@ -12,8 +12,8 @@
     "test": "bun test"
   },
   "dependencies": {
-    "resend": "^6.6.0",
-    "@repo/shared": "workspace:*"
+    "@repo/shared": "workspace:*",
+    "resend": "^6.7.0"
   },
   "devDependencies": {
     "@repo/typescript-config": "workspace:*",

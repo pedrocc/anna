@@ -65,7 +65,9 @@ export function getAvailablePorts(): PortConfig {
 	// Check PostgreSQL port
 	if (isPortInUse(DEFAULT_PORTS.postgres)) {
 		ports.postgres = findAvailablePort(DEFAULT_PORTS.postgres + 1)
-		console.log(`⚠️  Porta ${DEFAULT_PORTS.postgres} em uso. PostgreSQL usará porta ${ports.postgres}`)
+		console.log(
+			`⚠️  Porta ${DEFAULT_PORTS.postgres} em uso. PostgreSQL usará porta ${ports.postgres}`
+		)
 	}
 
 	// Check Redis port

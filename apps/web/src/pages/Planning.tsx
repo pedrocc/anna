@@ -168,14 +168,17 @@ export function PlanningPage() {
 										</Label>
 										{availablePrds.length > 0 ? (
 											<>
-												<Select value={selectedPrd} onValueChange={(value) => {
-													setSelectedPrd(value)
-													// Auto-preencher nome do projeto com o nome do PRD selecionado
-													const prd = availablePrds.find(p => p.id === value)
-													if (prd && !projectName) {
-														setProjectName(prd.projectName)
-													}
-												}}>
+												<Select
+													value={selectedPrd}
+													onValueChange={(value) => {
+														setSelectedPrd(value)
+														// Auto-preencher nome do projeto com o nome do PRD selecionado
+														const prd = availablePrds.find((p) => p.id === value)
+														if (prd && !projectName) {
+															setProjectName(prd.projectName)
+														}
+													}}
+												>
 													<SelectTrigger className="border-border">
 														<SelectValue placeholder="Selecione um PRD..." />
 													</SelectTrigger>

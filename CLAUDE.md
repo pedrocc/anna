@@ -10,12 +10,17 @@ Este projeto usa **exclusivamente Bun** para:
 **PROIBIDO:** Node.js, npm, yarn, pnpm, Vite, esbuild, Webpack, Jest, Vitest.
 
 ## Sobre este Projeto
-Template de monorepo TypeScript + Bun para aplicações web (API REST + SPA) com autenticação Clerk, banco PostgreSQL e componentes shadcn/ui.
+**Anna** - Plataforma de gestão de projetos e requisitos com AI. Monorepo TypeScript + Bun com API REST (Hono), SPA React 19, autenticação Clerk, banco PostgreSQL e componentes shadcn/ui.
+
+## Plan Mode
+
+- Make the plan extremely concise. Sacrifice grammar for the sake of concision.
+- At the end of each plan, give me a list of unresolved questions to answer, if any.
 
 ## Estrutura do Monorepo
 
 ```
-stack-vdev/
+anna/
 ├── apps/
 │   ├── api/          # Hono REST API (runtime Bun)
 │   └── web/          # React 19 SPA (bundled com Bun)
@@ -39,34 +44,74 @@ stack-vdev/
 ## Comandos Principais
 
 ```bash
-bun dev          # Inicia API + Web em modo desenvolvimento
-bun test         # Roda todos os testes (via Bun)
-bun build        # Build de produção (via Bun bundler)
-bun lint         # Lint + format check (via Biome)
-bun db:migrate   # Aplica migrations Drizzle
-bun db:seed      # Popula banco com dados de teste
-bun typecheck    # Verifica tipos TypeScript
+# Desenvolvimento
+bun start        # Startup completo: Docker + migrations + API + Web
+bun dev          # Apenas API + Web (Docker deve estar rodando)
+
+# Build e Testes
+bun build        # Build de produção
+bun test         # Rodar todos os testes
+bun lint         # Lint + format check (Biome)
+bun lint:fix     # Auto-fix lint issues
+bun typecheck    # Verificar tipos TypeScript
+
+# Database
+bun db:migrate   # Aplicar migrations
+bun db:seed      # Popular com dados de teste
+bun db:studio    # Abrir Drizzle Studio (GUI)
+bun db:generate  # Gerar nova migration
+
+# Docker
+bun docker:start # Iniciar apenas containers
+bun docker:stop  # Parar containers
+bun docker:logs  # Ver logs dos containers
+
+# Utilitários
+bun new-project  # Criar novo projeto (wizard)
+bun health-check # Verificar saúde dos serviços
+bun verify-clerk # Validar configuração Clerk
 ```
+
+### Sistema de Auto-Detecção de Portas
+
+O script `bun start` detecta automaticamente portas disponíveis:
+- API: 3000 (ou próxima disponível)
+- Web: 5173 (ou próxima disponível)
+- PostgreSQL: 5432
+- Redis: 6379
+
+Configurado em `scripts/lib/ports.ts`.
 
 ## Stack Técnico
 
 **Backend:**
-- Hono 4.7+ (framework web)
+- Hono 4.11+ (framework web)
 - Drizzle ORM 0.45+ (PostgreSQL)
-- Clerk Backend (autenticação JWT)
-- Zod (validação)
+- Clerk Backend 2.29+ (autenticação JWT)
+- Zod 4.3+ (validação)
+- Pino 10.1+ (logging estruturado)
+- OpenRouter (LLM/AI via deepseek-v3.2)
+- IORedis 5.9+ (cache e rate limiting)
+- BullMQ 5.66+ (job queue)
+- Svix (webhook verification)
 
 **Frontend:**
-- React 19
-- Wouter (routing - NÃO React Router)
-- SWR (data fetching)
-- shadcn/ui (componentes)
-- Tailwind CSS
+- React 19.2+
+- Wouter 3.9+ (routing - NÃO React Router)
+- SWR 2.3+ (data fetching)
+- shadcn/ui + Radix UI (componentes)
+- Tailwind CSS 4.1+ (NÃO v3)
+- @dnd-kit (drag & drop para Kanban)
+- react-markdown + remark-gfm (rendering markdown)
+- Recharts 3.6+ (gráficos)
+- Lucide React (ícones)
+- docx + html2pdf.js (exportação de documentos)
+- @clerk/localizations (pt-BR)
 
 **Dev Tools:**
 - Bun 1.3.5+
 - TypeScript 5.9+ (strict mode)
-- Biome (lint/format)
+- Biome 2.3+ (lint/format)
 
 ## Autenticação e Segurança
 
@@ -121,13 +166,34 @@ router.get('/',
 **4. Variáveis de Ambiente:**
 ```bash
 # .env (raiz do projeto)
+
+# Database
 DATABASE_URL=postgresql://...
+
+# Clerk Authentication
 CLERK_PUBLISHABLE_KEY=pk_test_...
 CLERK_SECRET_KEY=sk_test_...
 CLERK_WEBHOOK_SECRET=whsec_...  # Para validação de webhooks
+
+# Redis (cache, rate limiting, jobs)
 REDIS_URL=redis://localhost:6379
+
+# Email
 RESEND_API_KEY=re_...
+
+# LLM/AI
 OPENROUTER_API_KEY=sk-or-...
+OPENROUTER_DEFAULT_MODEL=deepseek/deepseek-v3.2  # opcional
+
+# Logging
+LOG_LEVEL=info  # debug, info, warn, error
+
+# URLs (para CORS e referências)
+WEB_URL=http://localhost:5173
+API_URL=http://localhost:3000
+
+# Portas (opcional, auto-detectadas)
+PORT=3000
 ```
 
 **5. Webhook Verification** (`apps/api/src/middleware/webhook.ts`):
@@ -150,7 +216,7 @@ userRoutes.post('/', verifyClerkWebhook, zValidator('json', schema), handler)
 1. **TypeScript Strict** - NUNCA use `any`
 2. **Validação Obrigatória** - Todo input validado com Zod
 3. **Testes** - Lógica de negócio DEVE ter testes (`bun test`)
-4. **Componentes UI** - Use EXCLUSIVAMENTE shadcn/ui (tema Red, suporta Light/Dark)
+4. **Componentes UI** - Use EXCLUSIVAMENTE shadcn/ui (tema Azul #1d6ce0)
 5. **Schemas Compartilhados** - Types em `@repo/shared`, nunca duplicar
 
 ## Padrões de API
@@ -245,10 +311,96 @@ if (!user) {
 
 ### Configuração
 
-- Rate limiting já configurado globalmente
+- Rate limiting via Redis (X-RateLimit-* headers)
 - CORS configurado para ambiente de desenvolvimento
 - Error handling global para erros não tratados
 - Webhook verification via Svix (Clerk)
+
+### Rotas da API
+
+**Estrutura versionada `/api/v1/*`:**
+```typescript
+app.route('/api/v1/users', userRoutes)
+app.route('/api/v1/chat', chatRoutes)
+app.route('/api/v1/briefing', briefingRoutes)
+app.route('/api/v1/prd', prdRoutes)
+app.route('/api/v1/sm', smRoutes)
+app.route('/api/v1/kanban', kanbanRoutes)
+```
+
+**Padrão de URLs por domínio:**
+- `GET /sessions` - listar com paginação
+- `GET /sessions/:id` - obter específico
+- `POST /sessions` - criar novo
+- `PATCH /sessions/:id` - atualizar
+- `DELETE /sessions/:id` - remover
+- `POST /sessions/:id/:action` - ações (chat, rename, complete, etc.)
+
+### Health Checks
+
+```typescript
+GET /health       → { status: 'ok' }
+GET /health/ready → { status: 'ready', database: 'connected' }
+GET /health/live  → { status: 'live' }
+```
+
+### Streaming SSE
+
+**Para respostas em tempo real (chat, geração de documentos):**
+
+```typescript
+import { streamSSE } from 'hono/streaming'
+
+return streamSSE(c, async (stream) => {
+  const generator = client.chatStream(messages)
+  for await (const chunk of generator) {
+    await stream.writeSSE({
+      data: JSON.stringify({ content: chunk }),
+    })
+  }
+  await stream.writeSSE({ data: '[DONE]' })
+})
+```
+
+### Integração LLM/AI (OpenRouter)
+
+**Client centralizado em `apps/api/src/lib/openrouter.ts`:**
+
+```typescript
+import { getOpenRouterClient } from '../lib/openrouter.js'
+
+const client = getOpenRouterClient()
+
+// Completion padrão
+const response = await client.chat(messages, { temperature: 0.7 })
+
+// Streaming
+const generator = client.chatStream(messages)
+for await (const chunk of generator) {
+  // processar chunk
+}
+```
+
+**Modelo padrão:** `deepseek/deepseek-v3.2`
+
+### Logging Estruturado (Pino)
+
+```typescript
+import { createLogger } from '../lib/logger.js'
+
+const log = createLogger('module-name')
+
+log.info({ userId, action: 'create' }, 'User created')
+log.error({ err, sessionId }, 'Session failed')
+```
+
+**Loggers pré-configurados:**
+- `apiLogger` - requisições HTTP
+- `dbLogger` - operações de banco
+- `authLogger` - autenticação
+- `openrouterLogger` - chamadas LLM
+
+**Redação automática:** apiKey, password, authorization
 
 ## Padrões de Frontend
 
@@ -257,12 +409,34 @@ if (!user) {
 ```
 apps/web/src/
 ├── components/
-│   └── ErrorBoundary.tsx    # Error boundary global
+│   ├── ErrorBoundary.tsx    # Error boundary global
+│   ├── Layout.tsx           # Layout principal com sidebar
+│   ├── AppSidebar.tsx       # Navegação lateral
+│   ├── brainstorm/          # Componentes de brainstorm
+│   ├── briefing/            # Componentes de briefing
+│   ├── prd/                 # Componentes de PRD
+│   ├── sm/                  # Componentes de Sprint/Story Manager
+│   └── kanban/              # Board Kanban com @dnd-kit
 ├── pages/                   # Páginas da aplicação
+├── hooks/                   # Hooks customizados (useBriefingChat, etc.)
 ├── lib/
-│   └── api-client.ts        # Client API tipado + hooks SWR
-├── router.tsx               # Rotas (Wouter)
-└── main.tsx                 # Entry point
+│   ├── api-client.ts        # Client API tipado + hooks SWR
+│   └── api.ts               # Fetcher base com auth
+├── styles/
+│   └── globals.css          # Tailwind + custom animations
+└── main.tsx                 # Entry point + providers
+```
+
+### Organização por Feature
+
+Cada módulo de feature segue a estrutura:
+```
+components/{feature}/
+├── ChatInterface.tsx        # Interface de chat com SSE
+├── ChatMessage.tsx          # Mensagem individual com markdown
+├── StepIndicator.tsx        # Indicador de progresso multi-step
+├── SessionCard.tsx          # Card para listagem de sessões
+└── DocumentViewer.tsx       # Visualizador de documentos
 ```
 
 ### Error Boundary
@@ -306,8 +480,8 @@ function Profile() {
 ### Componentes UI (shadcn/ui)
 
 **Configuração Obrigatória:**
-- **Tema:** Red (vermelho como cor primária)
-- **Modo:** Light/Dark (suporta ambos via ThemeProvider)
+- **Tema:** Azul (#1d6ce0 como cor primária)
+- **Modo:** Light (modo único)
 - **Localização:** `packages/ui` ou importar via `@repo/ui`
 
 **Instalação de Componentes:**
@@ -325,9 +499,8 @@ bunx shadcn@latest add form
 
 **Regras:**
 1. SEMPRE prefira shadcn/ui a componentes customizados
-2. Mantenha consistência com tema Red
-3. Suporte aos modos Light e Dark via ThemeProvider
-4. Use classes Tailwind dark: para variantes de tema
+2. Mantenha consistência com tema Azul (#1d6ce0)
+3. Modo Light apenas (Dark mode não implementado)
 
 ### Routing e Pages
 
@@ -349,9 +522,92 @@ import { Route, Switch } from 'wouter'
 
 ### Build
 
-- Build com `bun build` (NÃO Vite)
-- Tailwind compilado automaticamente no build
-- HMR configurado para desenvolvimento
+- Build com custom `build.ts` (NÃO Vite)
+- Dev server com `dev-server.ts` para HMR
+- Tailwind CSS v4 compilado automaticamente
+- Build-time defines: `__API_URL__`, `__CLERK_PUBLISHABLE_KEY__`
+
+### Hooks de Chat SSE
+
+**Para streaming de mensagens em tempo real:**
+
+```typescript
+import { useBriefingChat } from '@/hooks/useBriefingChat'
+
+function Chat({ sessionId }) {
+  const { sendMessage, isStreaming, streamingContent, error } = useBriefingChat({
+    sessionId,
+    onMessageComplete: (content) => mutate(),
+    onStepUpdate: (newStep) => setCurrentStep(newStep),
+  })
+
+  return (
+    <button onClick={() => sendMessage(message)} disabled={isStreaming}>
+      Enviar
+    </button>
+  )
+}
+```
+
+**Hooks disponíveis:**
+- `useBriefingChat` - chat de discovery/briefing
+- `usePrdChat` - chat de requisitos (PRD)
+- `useSmChat` - chat de sprint/stories
+- `useMessageEdit` - edição de mensagens com regeneração
+
+### Design Systems
+
+**Dois sistemas visuais implementados:**
+
+**1. Basecamp (padrão):**
+- Minimalista, tipografia-driven
+- Bordas sutis, cores calmas
+- Classes: `.basecamp-card`, `.stagger-fade-in`
+
+**2. Apple (Kanban):**
+- Ultra minimalista, glassmorphism
+- CSS vars: `--apple-bg`, `--apple-border`, `--apple-priority-*`
+- Classes: `.apple-board`, `.apple-card`, `.apple-column`
+
+### Kanban com @dnd-kit
+
+```typescript
+import { DndContext, closestCenter } from '@dnd-kit/core'
+import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
+
+<DndContext onDragEnd={handleDragEnd}>
+  <SortableContext items={stories} strategy={verticalListSortingStrategy}>
+    {stories.map((story) => <KanbanCard key={story.id} story={story} />)}
+  </SortableContext>
+</DndContext>
+```
+
+### Exportação de Documentos
+
+```typescript
+import { Document, Packer, Paragraph } from 'docx'
+import html2pdf from 'html2pdf.js'
+import { saveAs } from 'file-saver'
+
+// Word
+const doc = new Document({ sections: [...] })
+const blob = await Packer.toBlob(doc)
+saveAs(blob, 'document.docx')
+
+// PDF
+html2pdf().from(element).save('document.pdf')
+```
+
+### Markdown Rendering
+
+```typescript
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+
+<ReactMarkdown remarkPlugins={[remarkGfm]}>
+  {content}
+</ReactMarkdown>
+```
 
 ## Padrões de Database
 
@@ -426,6 +682,48 @@ await db.update(users)
 - Evitar `SELECT *` - especificar colunas necessárias
 - Usar transactions para múltiplas operações
 
+## Arquitetura de Features
+
+O projeto segue um padrão modular para cada feature. Cada módulo possui:
+
+```
+packages/shared/src/schemas/{feature}.schema.ts  # Schemas Zod
+packages/db/src/schema/{feature}.ts              # Tabelas Drizzle
+apps/api/src/routes/{feature}.ts                 # Rotas API
+apps/api/src/lib/{feature}-prompts.ts            # Prompts LLM (se aplicável)
+apps/web/src/components/{feature}/               # Componentes React
+apps/web/src/pages/{Feature}*.tsx                # Páginas
+apps/web/src/hooks/use{Feature}Chat.ts           # Hooks SSE (se aplicável)
+```
+
+### Módulos Existentes
+
+| Módulo | Descrição | Chat AI | Documentos |
+|--------|-----------|---------|------------|
+| **briefing** | Discovery e levantamento inicial | ✅ | ✅ |
+| **prd** | Product Requirements Document | ✅ | ✅ |
+| **sm** | Sprint/Story Manager | ✅ | ✅ (backlog, epics) |
+| **kanban** | Board de gerenciamento visual | ❌ | ❌ |
+| **brainstorm** | Sessões de brainstorming | ✅ | ✅ |
+
+### Fluxo de Dados
+
+```
+Schema Zod → Validation → DB Insert/Update → API Response
+     ↓                         ↓
+Frontend Form ←──────── SWR Cache ←───── API Call
+```
+
+### Criando Nova Feature
+
+1. Criar schema em `@repo/shared/src/schemas/`
+2. Criar tabelas em `@repo/db/src/schema/`
+3. Gerar migration: `bun db:generate`
+4. Criar rotas em `apps/api/src/routes/`
+5. Criar componentes em `apps/web/src/components/`
+6. Criar páginas em `apps/web/src/pages/`
+7. Adicionar hooks SWR em `apps/web/src/lib/api-client.ts`
+
 ## Design de Interface
 
 ### Quando Criar UI
@@ -451,13 +749,12 @@ await db.update(users)
 **A skill frontend-design:**
 1. Garante qualidade visual profissional
 2. Evita designs genéricos ou sem identidade
-3. Mantém consistência com shadcn/ui tema Red
+3. Mantém consistência com shadcn/ui tema Azul
 4. Produz código otimizado e bem estruturado
-5. Suporta modos Light e Dark corretamente
 
 **Após usar a skill:**
 - Implementar usando componentes shadcn/ui
-- Manter tema Red e modo Light
+- Manter tema Azul (#1d6ce0)
 - Seguir padrões de código do projeto
 
 ## Antes de Implementar
@@ -546,12 +843,18 @@ describe('Feature', () => {
 
 **Plataforma:** Railway via GitHub Actions
 
-**Workflow:**
-1. Push para `main` = deploy automático
-2. CI/CD roda: lint → typecheck → test → build
-3. Se passar, deploy para Railway
+**CI/CD Pipeline (.github/workflows/):**
+1. `ci.yml`: lint → typecheck → test (com PostgreSQL/Redis) → build
+2. `deploy.yml`: Deploy para Railway (API e Web separados)
 
-**Docker:**
+**Trigger:** Push para `main` = deploy automático
+
+**Docker Local:**
+- PostgreSQL 17-alpine com health checks
+- Redis 7-alpine com health checks
+- Volumes nomeados: postgres_data, redis_data
+
+**Docker Produção:**
 - Base image: `oven/bun:1-alpine`
 - Multi-stage build configurado
 - Variáveis de ambiente via Railway dashboard
@@ -563,20 +866,23 @@ Antes de fazer commit/PR, verifique:
 **Build & Quality:**
 - [ ] `bun lint` passa sem erros
 - [ ] `bun typecheck` passa sem erros
-- [ ] `bun test` passa sem erros (coverage adequado)
+- [ ] `bun test` passa sem erros
+- [ ] Coverage mínimo 80% (configurado em bunfig.toml)
 - [ ] `bun build` compila com sucesso
 
 **Código:**
 - [ ] TypeScript strict (sem `any`)
 - [ ] Inputs validados com Zod
 - [ ] Respostas API usam helpers de `response.ts`
-- [ ] Componentes usam shadcn/ui (tema Red, suporta Light/Dark)
+- [ ] Componentes usam shadcn/ui (tema Azul)
+- [ ] Logging usa Pino (não console.log em produção)
 
 **Segurança:**
 - [ ] Middleware de autenticação em rotas protegidas
 - [ ] Validação de permissões implementada
 - [ ] Sem dados sensíveis em logs/commits
 - [ ] Variáveis de ambiente não commitadas
+- [ ] Campos sensíveis redatados nos logs
 
 **Database:**
 - [ ] Migrations criadas e testadas

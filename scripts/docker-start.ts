@@ -2,7 +2,7 @@
 import { writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { spawn } from 'bun'
-import { getAvailablePorts, generatePortsEnv, printPortsSummary } from './lib/ports.js'
+import { generatePortsEnv, getAvailablePorts, printPortsSummary } from './lib/ports.js'
 
 console.log('🔍 Verificando portas disponíveis...\n')
 

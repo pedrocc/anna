@@ -53,7 +53,11 @@ function formatTime(date: Date | string): string {
 	})
 }
 
-function getProgress(stepsCompleted: SmStep[], currentStep: SmStep, sessionStatus: SmStatus): number {
+function getProgress(
+	stepsCompleted: SmStep[],
+	currentStep: SmStep,
+	sessionStatus: SmStatus
+): number {
 	// Se o status é completed ou o step atual é complete, sempre 100%
 	if (sessionStatus === 'completed' || currentStep === 'complete') {
 		return 100
