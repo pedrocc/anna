@@ -104,25 +104,37 @@ describe('User Routes', () => {
 		})
 	})
 
-	describe('POST /api/v1/users', () => {
-		it('should return 400 for invalid request body', async () => {
+	describe('POST /api/v1/users (webhook endpoint)', () => {
+		it('should return 400 when webhook headers are missing', async () => {
+			// Webhook middleware checks for required headers before body validation
 			const res = await app.request('/api/v1/users', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ invalidField: 'value' }),
 			})
 
+			// Returns 400 because webhook headers are missing
 			expect(res.status).toBe(400)
+			const data = (await res.json()) as { error: { message: string } }
+			expect(data.error.message).toBe('Missing webhook verification headers')
 		})
 
-		it('should return 400 when missing required fields', async () => {
+		it('should return 401 when webhook signature is invalid', async () => {
 			const res = await app.request('/api/v1/users', {
 				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ clerkId: 'test-id' }),
+				headers: {
+					'Content-Type': 'application/json',
+					'svix-id': 'test-id',
+					'svix-timestamp': '1234567890',
+					'svix-signature': 'invalid-signature',
+				},
+				body: JSON.stringify({ clerkId: 'test-id', email: 'test@test.com' }),
 			})
 
-			expect(res.status).toBe(400)
+			// Webhook signature verification fails
+			expect(res.status).toBe(401)
+			const data = (await res.json()) as { error: { message: string } }
+			expect(data.error.message).toBe('Invalid webhook signature')
 		})
 	})
 })
