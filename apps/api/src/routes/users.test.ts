@@ -9,6 +9,7 @@ describe('User Routes', () => {
 		app = new Hono()
 		app.route('/api/v1/users', userRoutes)
 		process.env['CLERK_SECRET_KEY'] = 'test-secret-key'
+		process.env['CLERK_WEBHOOK_SECRET'] = 'test-webhook-secret'
 	})
 
 	describe('GET /api/v1/users/me', () => {
