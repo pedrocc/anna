@@ -1,8 +1,8 @@
 'use client'
 
-import { Slot } from 'radix-ui'
 import { cva, type VariantProps } from 'class-variance-authority'
 import { MenuIcon } from 'lucide-react'
+import { Slot } from 'radix-ui'
 import * as React from 'react'
 
 import { useIsMobile } from '../hooks/use-mobile.js'

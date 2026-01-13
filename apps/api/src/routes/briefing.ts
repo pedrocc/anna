@@ -930,7 +930,7 @@ briefingRoutes.post(
 				}
 
 				// Save to briefing_documents table (upsert - only one document per session)
-				let savedDoc
+				let savedDoc: typeof briefingDocuments.$inferSelect | undefined
 				if (existingDoc) {
 					// Update existing document
 					const [updated] = await db

@@ -265,7 +265,7 @@ prdRoutes.post(
 					? [
 							{
 								name: briefing.projectName,
-								path: data.briefingSessionId!,
+								path: data.briefingSessionId ?? '',
 								type: 'briefing' as const,
 								loadedAt: new Date().toISOString(),
 							},

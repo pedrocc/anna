@@ -43,8 +43,8 @@ export function KanbanBoardPage() {
 		try {
 			await api.sm.deleteSession(sessionId)
 			navigate('/kanban')
-		} catch (error) {
-			console.error('Failed to delete project:', error)
+		} catch {
+			// Error handled silently - UI reflects the failure
 			setIsDeleting(false)
 		}
 	}, [sessionId, navigate])

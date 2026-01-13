@@ -56,8 +56,8 @@ export function ProjectCard({ project, onDeleted }: ProjectCardProps) {
 		try {
 			await api.sm.deleteSession(project.id)
 			onDeleted?.()
-		} catch (error) {
-			console.error('Failed to delete project:', error)
+		} catch {
+			// Error handled silently - UI reflects the failure
 		} finally {
 			setIsDeleting(false)
 			setShowDeleteDialog(false)

@@ -413,6 +413,7 @@ export const SmExtractedAcceptanceCriteriaSchema = z.object({
 	type: z.enum(['simple', 'given_when_then']).optional(),
 	given: z.string().optional(),
 	when: z.string().optional(),
+	// biome-ignore lint/suspicious/noThenProperty: This is Given-When-Then acceptance criteria, not a Promise
 	then: z.string().optional(),
 })
 

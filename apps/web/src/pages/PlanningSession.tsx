@@ -28,7 +28,6 @@ import {
 	TabsTrigger,
 } from '@repo/ui'
 import {
-	AlertTriangle,
 	ArrowLeft,
 	ChevronLeft,
 	ClipboardList,
@@ -68,7 +67,7 @@ export function PlanningSessionPage() {
 
 	// Verifica se a geração está em andamento baseado no status persistido
 	const isGenerationInProgress = session?.generationStatus === 'generating'
-	const generationFailed = session?.generationStatus === 'failed'
+	const _generationFailed = session?.generationStatus === 'failed'
 
 	// Verifica se a geração excedeu o timeout (abandonada)
 	const isGenerationTimedOut =

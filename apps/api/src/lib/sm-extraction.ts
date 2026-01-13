@@ -6,6 +6,9 @@ import {
 	type SmExtractedStory,
 	type SmExtractedTask,
 } from '@repo/shared'
+import { createLogger } from './logger.js'
+
+const log = createLogger('sm-extraction')
 
 // Use native crypto.randomUUID() for generating UUIDs
 const generateUUID = (): string => crypto.randomUUID()
@@ -55,13 +58,13 @@ export function extractSmDataFromResponse(response: string): SmExtractedData | n
 		// Validate with Zod schema
 		const result = SmExtractedDataSchema.safeParse(parsed)
 		if (!result.success) {
-			console.error('[SM Extraction] Validation failed:', result.error.issues)
+			log.error({ issues: result.error.issues }, 'Validation failed')
 			return null
 		}
 
 		return result.data
 	} catch (error) {
-		console.error('[SM Extraction] Failed to parse JSON:', error)
+		log.error({ err: error }, 'Failed to parse JSON')
 		return null
 	}
 }
