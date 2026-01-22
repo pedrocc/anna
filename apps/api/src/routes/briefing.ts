@@ -547,6 +547,21 @@ briefingRoutes.post(
 
 				await stream.writeSSE({ data: '[DONE]' })
 			} catch (error) {
+				const errorMessage =
+					error instanceof OpenRouterAPIError ? error.message : 'Failed to generate response'
+
+				briefingLogger.error({ err: error, sessionId }, 'Chat stream error')
+
+				// Update session state so error is persisted for client recovery
+				await db
+					.update(briefingSessions)
+					.set({
+						generationStatus: 'failed',
+						generationError: errorMessage,
+						updatedAt: new Date(),
+					})
+					.where(eq(briefingSessions.id, sessionId))
+
 				if (error instanceof OpenRouterAPIError) {
 					await stream.writeSSE({
 						data: JSON.stringify({

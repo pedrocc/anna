@@ -455,7 +455,9 @@ prdRoutes.post(
 				await tx
 					.update(briefingSessions)
 					.set({ projectName: newName, updatedAt: new Date() })
-					.where(and(eq(briefingSessions.id, briefingDoc.path), eq(briefingSessions.userId, user.id)))
+					.where(
+						and(eq(briefingSessions.id, briefingDoc.path), eq(briefingSessions.userId, user.id))
+					)
 			}
 
 			// Update all SM sessions linked to this PRD
@@ -642,6 +644,21 @@ prdRoutes.post(
 
 				await stream.writeSSE({ data: '[DONE]' })
 			} catch (error) {
+				const errorMessage =
+					error instanceof OpenRouterAPIError ? error.message : 'Failed to generate response'
+
+				prdLogger.error({ err: error, sessionId }, 'Chat stream error')
+
+				// Update session state so error is persisted for client recovery
+				await db
+					.update(prdSessions)
+					.set({
+						generationStatus: 'failed',
+						generationError: errorMessage,
+						updatedAt: new Date(),
+					})
+					.where(eq(prdSessions.id, sessionId))
+
 				if (error instanceof OpenRouterAPIError) {
 					await stream.writeSSE({
 						data: JSON.stringify({
