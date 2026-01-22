@@ -10,11 +10,11 @@ interface LayoutProps {
 
 export function UserSync() {
 	const { user, isLoaded } = useUser()
-	const syncedUserId = useRef<string | null>(null)
+	const syncedKey = useRef<string | null>(null)
 	const isSyncing = useRef(false)
 
 	useEffect(() => {
-		if (!isLoaded || !user || isSyncing.current || syncedUserId.current === user.id) {
+		if (!isLoaded || !user || isSyncing.current) {
 			return
 		}
 
@@ -23,11 +23,16 @@ export function UserSync() {
 			return
 		}
 
+		const currentKey = `${user.id}:${fullName}`
+		if (syncedKey.current === currentKey) {
+			return
+		}
+
 		isSyncing.current = true
 		api.users
 			.syncName(fullName)
 			.then(() => {
-				syncedUserId.current = user.id
+				syncedKey.current = currentKey
 			})
 			.catch(() => {
 				// Don't mark as synced on failure, allowing retry on next effect

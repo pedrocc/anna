@@ -171,6 +171,79 @@ describe('UserSync', () => {
 		expect(syncNameMock).toHaveBeenLastCalledWith('Jane Smith')
 	})
 
+	it('re-syncs when user name changes for same user.id', async () => {
+		mockUseUser.mockReturnValue({
+			user: { id: 'user_1', fullName: 'John Doe', firstName: 'John', lastName: 'Doe' },
+			isLoaded: true,
+		})
+
+		const { rerender } = await act(async () => {
+			return render(<UserSync />)
+		})
+
+		// Wait for promise to resolve
+		await act(async () => {
+			await new Promise((resolve) => setTimeout(resolve, 0))
+		})
+
+		expect(syncNameMock).toHaveBeenCalledTimes(1)
+		expect(syncNameMock).toHaveBeenCalledWith('John Doe')
+
+		// Same user.id but name changed (e.g. user updated profile in Clerk)
+		mockUseUser.mockReturnValue({
+			user: { id: 'user_1', fullName: 'John Smith', firstName: 'John', lastName: 'Smith' },
+			isLoaded: true,
+		})
+
+		await act(async () => {
+			rerender(<UserSync />)
+		})
+
+		// Wait for promise to resolve
+		await act(async () => {
+			await new Promise((resolve) => setTimeout(resolve, 0))
+		})
+
+		expect(syncNameMock).toHaveBeenCalledTimes(2)
+		expect(syncNameMock).toHaveBeenLastCalledWith('John Smith')
+	})
+
+	it('does not re-sync when user object changes but name stays the same', async () => {
+		mockUseUser.mockReturnValue({
+			user: { id: 'user_1', fullName: 'John Doe', firstName: 'John', lastName: 'Doe' },
+			isLoaded: true,
+		})
+
+		const { rerender } = await act(async () => {
+			return render(<UserSync />)
+		})
+
+		// Wait for promise to resolve
+		await act(async () => {
+			await new Promise((resolve) => setTimeout(resolve, 0))
+		})
+
+		expect(syncNameMock).toHaveBeenCalledTimes(1)
+
+		// Same user.id and same name, but new user object reference
+		mockUseUser.mockReturnValue({
+			user: { id: 'user_1', fullName: 'John Doe', firstName: 'John', lastName: 'Doe' },
+			isLoaded: true,
+		})
+
+		await act(async () => {
+			rerender(<UserSync />)
+		})
+
+		// Wait for promise to resolve
+		await act(async () => {
+			await new Promise((resolve) => setTimeout(resolve, 0))
+		})
+
+		// Should not re-sync since id + name are unchanged
+		expect(syncNameMock).toHaveBeenCalledTimes(1)
+	})
+
 	it('prevents concurrent sync calls', async () => {
 		let resolveSync: (() => void) | null = null
 		syncNameMock = mock(
