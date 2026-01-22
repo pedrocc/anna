@@ -17,6 +17,7 @@ export type ApiErrorResponse = {
 		code: string
 		message: string
 		details?: unknown
+		requestId?: string
 	}
 }
 
@@ -53,11 +54,14 @@ export function errorResponse(
 	status = 400,
 	details?: unknown
 ) {
+	const requestId = c.get('requestId') as string | undefined
+
 	const response: ApiErrorResponse = {
 		success: false,
 		error: {
 			code,
 			message,
+			requestId,
 		},
 	}
 

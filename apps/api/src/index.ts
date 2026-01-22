@@ -8,6 +8,7 @@ import { timing } from 'hono/timing'
 import { commonErrors } from './lib/response.js'
 import { errorHandler } from './middleware/error-handler.js'
 import { closeRedis, rateLimiter } from './middleware/rate-limiter.js'
+import { requestLogger } from './middleware/request-logger.js'
 import { briefingRoutes } from './routes/briefing.js'
 import { chatRoutes } from './routes/chat.js'
 import { healthRoutes } from './routes/health.js'
@@ -22,6 +23,7 @@ const webUrl = process.env['WEB_URL'] ?? 'http://localhost:5173'
 
 // Global middleware
 app.use('*', requestId())
+app.use('*', requestLogger)
 app.use('*', timing())
 app.use('*', logger())
 app.use('*', secureHeaders())
