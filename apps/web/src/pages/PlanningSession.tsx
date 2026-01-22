@@ -100,6 +100,7 @@ export function PlanningSessionPage() {
 
 	const { generateDocument, isGenerating } = useSmDocument(id ?? '')
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: id ensures callback is recreated when navigating between sessions
 	const handleStepUpdate = useCallback(
 		(newStep: string) => {
 			mutate()
@@ -114,7 +115,7 @@ export function PlanningSessionPage() {
 				}, 500)
 			}
 		},
-		[mutate, generateDocument]
+		[id, mutate, generateDocument]
 	)
 
 	const {
