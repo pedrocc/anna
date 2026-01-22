@@ -644,8 +644,13 @@ prdRoutes.post(
 
 				await stream.writeSSE({ data: '[DONE]' })
 			} catch (error) {
-				const errorMessage =
-					error instanceof OpenRouterAPIError ? error.message : 'Failed to generate response'
+				const errorDetails =
+					error instanceof OpenRouterAPIError
+						? JSON.stringify({ message: error.message, code: error.code, status: error.status })
+						: JSON.stringify({
+								message: error instanceof Error ? error.message : 'Failed to generate response',
+								code: 'UNKNOWN',
+							})
 
 				prdLogger.error({ err: error, sessionId }, 'Chat stream error')
 
@@ -654,7 +659,7 @@ prdRoutes.post(
 					.update(prdSessions)
 					.set({
 						generationStatus: 'failed',
-						generationError: errorMessage,
+						generationError: errorDetails,
 						updatedAt: new Date(),
 					})
 					.where(eq(prdSessions.id, sessionId))
@@ -1163,15 +1168,20 @@ prdRoutes.post(
 				await stream.writeSSE({ data: '[DONE]' })
 			} catch (error) {
 				prdLogger.error({ err: error, sessionId }, 'Document generation error')
-				const errorMessage =
-					error instanceof OpenRouterAPIError ? error.message : 'Failed to generate document'
+				const errorDetails =
+					error instanceof OpenRouterAPIError
+						? JSON.stringify({ message: error.message, code: error.code, status: error.status })
+						: JSON.stringify({
+								message: error instanceof Error ? error.message : 'Failed to generate document',
+								code: 'UNKNOWN',
+							})
 
 				// Mark generation as failed
 				await db
 					.update(prdSessions)
 					.set({
 						generationStatus: 'failed',
-						generationError: errorMessage,
+						generationError: errorDetails,
 						updatedAt: new Date(),
 					})
 					.where(eq(prdSessions.id, sessionId))

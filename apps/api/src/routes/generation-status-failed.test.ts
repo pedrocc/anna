@@ -50,7 +50,7 @@ describe('generationStatus failed state on SSE stream errors', () => {
 	})
 
 	describe('Briefing session', () => {
-		it('should update generationStatus to failed and persist generationError', async () => {
+		it('should update generationStatus to failed and persist generationError with details', async () => {
 			const [session] = await db
 				.insert(briefingSessions)
 				.values({
@@ -67,13 +67,17 @@ describe('generationStatus failed state on SSE stream errors', () => {
 			expect(sess.generationStatus).toBe('idle')
 			expect(sess.generationError).toBeNull()
 
-			// Simulate error: update to failed with error message
-			const errorMessage = 'OpenRouter API rate limit exceeded'
+			// Simulate OpenRouterAPIError: persist JSON with message, code, status
+			const errorDetails = JSON.stringify({
+				message: 'Rate limit exceeded',
+				code: 'rate_limit_exceeded',
+				status: 429,
+			})
 			await db
 				.update(briefingSessions)
 				.set({
 					generationStatus: 'failed',
-					generationError: errorMessage,
+					generationError: errorDetails,
 					updatedAt: new Date(),
 				})
 				.where(eq(briefingSessions.id, sess.id))
@@ -84,10 +88,61 @@ describe('generationStatus failed state on SSE stream errors', () => {
 			})
 			const result = assertDefined(updated)
 			expect(result.generationStatus).toBe('failed')
-			expect(result.generationError).toBe(errorMessage)
+			expect(result.generationError).toBe(errorDetails)
+
+			// Verify JSON structure is parseable
+			const parsed = JSON.parse(assertDefined(result.generationError))
+			expect(parsed.message).toBe('Rate limit exceeded')
+			expect(parsed.code).toBe('rate_limit_exceeded')
+			expect(parsed.status).toBe(429)
 		})
 
-		it('should allow recovery from failed state to generating', async () => {
+		it('should persist generationError with UNKNOWN code for non-API errors', async () => {
+			const [session] = await db
+				.insert(briefingSessions)
+				.values({
+					userId: testUserId,
+					projectName: 'Test Briefing Unknown Error',
+					projectDescription: 'Testing unknown error',
+					currentStep: 'init',
+				})
+				.returning()
+
+			const sess = assertDefined(session)
+			createdBriefingIds.push(sess.id)
+
+			// Simulate non-API error: persist JSON with message and UNKNOWN code
+			const errorDetails = JSON.stringify({
+				message: 'Network connection failed',
+				code: 'UNKNOWN',
+			})
+			await db
+				.update(briefingSessions)
+				.set({
+					generationStatus: 'failed',
+					generationError: errorDetails,
+					updatedAt: new Date(),
+				})
+				.where(eq(briefingSessions.id, sess.id))
+
+			const updated = await db.query.briefingSessions.findFirst({
+				where: eq(briefingSessions.id, sess.id),
+			})
+			const result = assertDefined(updated)
+			expect(result.generationStatus).toBe('failed')
+
+			const parsed = JSON.parse(assertDefined(result.generationError))
+			expect(parsed.message).toBe('Network connection failed')
+			expect(parsed.code).toBe('UNKNOWN')
+			expect(parsed.status).toBeUndefined()
+		})
+
+		it('should allow recovery from failed state to generating (clears error)', async () => {
+			const errorDetails = JSON.stringify({
+				message: 'Previous error',
+				code: 'server_error',
+				status: 500,
+			})
 			const [session] = await db
 				.insert(briefingSessions)
 				.values({
@@ -96,7 +151,7 @@ describe('generationStatus failed state on SSE stream errors', () => {
 					projectDescription: 'Testing recovery from failed',
 					currentStep: 'init',
 					generationStatus: 'failed',
-					generationError: 'Previous error',
+					generationError: errorDetails,
 				})
 				.returning()
 
@@ -123,7 +178,7 @@ describe('generationStatus failed state on SSE stream errors', () => {
 	})
 
 	describe('PRD session', () => {
-		it('should update generationStatus to failed and persist generationError', async () => {
+		it('should update generationStatus to failed and persist generationError with details', async () => {
 			const [session] = await db
 				.insert(prdSessions)
 				.values({
@@ -140,13 +195,17 @@ describe('generationStatus failed state on SSE stream errors', () => {
 			expect(sess.generationStatus).toBe('idle')
 			expect(sess.generationError).toBeNull()
 
-			// Simulate error: update to failed with error message
-			const errorMessage = 'Failed to generate response'
+			// Simulate error with JSON details
+			const errorDetails = JSON.stringify({
+				message: 'Model not available',
+				code: 'model_not_found',
+				status: 404,
+			})
 			await db
 				.update(prdSessions)
 				.set({
 					generationStatus: 'failed',
-					generationError: errorMessage,
+					generationError: errorDetails,
 					updatedAt: new Date(),
 				})
 				.where(eq(prdSessions.id, sess.id))
@@ -157,10 +216,18 @@ describe('generationStatus failed state on SSE stream errors', () => {
 			})
 			const result = assertDefined(updated)
 			expect(result.generationStatus).toBe('failed')
-			expect(result.generationError).toBe(errorMessage)
+
+			const parsed = JSON.parse(assertDefined(result.generationError))
+			expect(parsed.message).toBe('Model not available')
+			expect(parsed.code).toBe('model_not_found')
+			expect(parsed.status).toBe(404)
 		})
 
 		it('should allow recovery from failed state to generating', async () => {
+			const errorDetails = JSON.stringify({
+				message: 'Previous error',
+				code: 'UNKNOWN',
+			})
 			const [session] = await db
 				.insert(prdSessions)
 				.values({
@@ -169,7 +236,7 @@ describe('generationStatus failed state on SSE stream errors', () => {
 					projectDescription: 'Testing recovery from failed',
 					currentStep: 'init',
 					generationStatus: 'failed',
-					generationError: 'Previous error',
+					generationError: errorDetails,
 				})
 				.returning()
 
@@ -196,7 +263,7 @@ describe('generationStatus failed state on SSE stream errors', () => {
 	})
 
 	describe('SM session', () => {
-		it('should update generationStatus to failed and persist generationError', async () => {
+		it('should update generationStatus to failed and persist generationError with details', async () => {
 			const [session] = await db
 				.insert(smSessions)
 				.values({
@@ -216,13 +283,17 @@ describe('generationStatus failed state on SSE stream errors', () => {
 			expect(sess.generationStatus).toBe('idle')
 			expect(sess.generationError).toBeNull()
 
-			// Simulate error: update to failed with error message
-			const errorMessage = 'Network timeout connecting to OpenRouter'
+			// Simulate error with JSON details
+			const errorDetails = JSON.stringify({
+				message: 'Network timeout connecting to OpenRouter',
+				code: 'timeout',
+				status: 408,
+			})
 			await db
 				.update(smSessions)
 				.set({
 					generationStatus: 'failed',
-					generationError: errorMessage,
+					generationError: errorDetails,
 					updatedAt: new Date(),
 				})
 				.where(eq(smSessions.id, sess.id))
@@ -233,10 +304,19 @@ describe('generationStatus failed state on SSE stream errors', () => {
 			})
 			const result = assertDefined(updated)
 			expect(result.generationStatus).toBe('failed')
-			expect(result.generationError).toBe(errorMessage)
+
+			const parsed = JSON.parse(assertDefined(result.generationError))
+			expect(parsed.message).toBe('Network timeout connecting to OpenRouter')
+			expect(parsed.code).toBe('timeout')
+			expect(parsed.status).toBe(408)
 		})
 
 		it('should allow recovery from failed state to generating', async () => {
+			const errorDetails = JSON.stringify({
+				message: 'Previous error',
+				code: 'server_error',
+				status: 500,
+			})
 			const [session] = await db
 				.insert(smSessions)
 				.values({
@@ -248,7 +328,7 @@ describe('generationStatus failed state on SSE stream errors', () => {
 					totalStories: 0,
 					totalStoryPoints: 0,
 					generationStatus: 'failed',
-					generationError: 'Previous error',
+					generationError: errorDetails,
 				})
 				.returning()
 
