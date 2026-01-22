@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test'
 import { renderHook } from '@testing-library/react'
-import { useRef } from 'react'
+import { type RefObject, useRef } from 'react'
 import { useAutoScroll } from './useAutoScroll'
 
 describe('useAutoScroll', () => {
@@ -111,6 +111,31 @@ describe('useAutoScroll', () => {
 		// Old RAF should be cancelled, new one scheduled
 		expect(rafCallbacks.has(firstRafId)).toBe(false)
 		expect(rafCallbacks.size).toBe(1)
+	})
+
+	it('should not scroll if ref becomes null before RAF fires', () => {
+		const scrollIntoView = mock(() => {})
+		const element = { scrollIntoView } as unknown as HTMLDivElement
+
+		// Use a plain object as a ref so we can mutate .current externally
+		const ref = { current: element } as RefObject<HTMLDivElement | null>
+
+		renderHook(() => {
+			useAutoScroll(ref, 1)
+		})
+
+		expect(rafCallbacks.size).toBe(1)
+
+		// Simulate ref becoming null (element removed from DOM) before RAF fires
+		;(ref as { current: HTMLDivElement | null }).current = null
+
+		// Execute the RAF callback
+		for (const [, cb] of rafCallbacks) {
+			cb(0)
+		}
+
+		// scrollIntoView should NOT have been called since ref is now null
+		expect(scrollIntoView).not.toHaveBeenCalled()
 	})
 
 	it('should not re-trigger when dependency stays the same', () => {

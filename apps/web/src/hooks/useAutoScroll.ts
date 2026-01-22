@@ -8,11 +8,10 @@ import { type RefObject, useEffect } from 'react'
 export function useAutoScroll(scrollRef: RefObject<HTMLElement | null>, dependency: unknown) {
 	// biome-ignore lint/correctness/useExhaustiveDependencies: dependency triggers scroll, scrollRef is stable
 	useEffect(() => {
-		const scrollTarget = scrollRef.current
-		if (!scrollTarget) return
+		if (!scrollRef.current) return
 
 		const rafId = requestAnimationFrame(() => {
-			scrollTarget.scrollIntoView({ behavior: 'smooth' })
+			scrollRef.current?.scrollIntoView({ behavior: 'smooth' })
 		})
 
 		return () => cancelAnimationFrame(rafId)
