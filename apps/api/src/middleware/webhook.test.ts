@@ -164,6 +164,72 @@ describe('verifyClerkWebhook', () => {
 		})
 	})
 
+	describe('replay attack prevention', () => {
+		it('should reject a replayed request with an old timestamp', async () => {
+			// Simulate a replay attack: attacker captures a valid webhook request
+			// and replays it 10 minutes later with the original timestamp
+			const originalTimestamp = Math.floor(Date.now() / 1000) - 10 * 60
+			const res = await app.request('/webhook', {
+				method: 'POST',
+				headers: {
+					'svix-id': 'msg_captured123',
+					'svix-timestamp': String(originalTimestamp),
+					'svix-signature': 'v1,validSignatureFromOriginalRequest',
+				},
+				body: JSON.stringify({
+					type: 'user.created',
+					data: { id: 'user_replay_target' },
+				}),
+			})
+			expect(res.status).toBe(400)
+			const data = (await res.json()) as { success: boolean; error: { message: string } }
+			expect(data.success).toBe(false)
+			expect(data.error.message).toBe('Webhook timestamp too old or in future')
+		})
+
+		it('should reject a replayed request just past the tolerance window', async () => {
+			// Attacker replays 5 minutes and 2 seconds after the original request
+			const justExpired = Math.floor(Date.now() / 1000) - 5 * 60 - 2
+			const res = await app.request('/webhook', {
+				method: 'POST',
+				headers: {
+					'svix-id': 'msg_replay456',
+					'svix-timestamp': String(justExpired),
+					'svix-signature': 'v1,anotherCapturedSignature',
+				},
+				body: JSON.stringify({
+					type: 'user.updated',
+					data: { id: 'user_replay_target2' },
+				}),
+			})
+			expect(res.status).toBe(400)
+			const data = (await res.json()) as { success: boolean; error: { message: string } }
+			expect(data.success).toBe(false)
+			expect(data.error.message).toBe('Webhook timestamp too old or in future')
+		})
+
+		it('should reject a replayed request with a very old timestamp (hours)', async () => {
+			// Attacker replays a request captured hours ago
+			const twoHoursAgo = Math.floor(Date.now() / 1000) - 2 * 60 * 60
+			const res = await app.request('/webhook', {
+				method: 'POST',
+				headers: {
+					'svix-id': 'msg_old_replay789',
+					'svix-timestamp': String(twoHoursAgo),
+					'svix-signature': 'v1,oldCapturedSignature',
+				},
+				body: JSON.stringify({
+					type: 'user.deleted',
+					data: { id: 'user_replay_target3' },
+				}),
+			})
+			expect(res.status).toBe(400)
+			const data = (await res.json()) as { success: boolean; error: { message: string } }
+			expect(data.success).toBe(false)
+			expect(data.error.message).toBe('Webhook timestamp too old or in future')
+		})
+	})
+
 	describe('missing webhook secret', () => {
 		it('should return 500 when CLERK_WEBHOOK_SECRET is not configured', async () => {
 			delete process.env['CLERK_WEBHOOK_SECRET']
