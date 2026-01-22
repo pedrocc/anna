@@ -14,6 +14,7 @@ import {
 } from '@repo/ui'
 import { AlertTriangle, FileText, Sparkles, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
+import { useAutoScroll } from '../../hooks/useAutoScroll'
 import { ChatInput } from '../brainstorm/ChatInput'
 import { ChatMessage } from '../brainstorm/ChatMessage'
 
@@ -59,12 +60,7 @@ export function ChatInterface({
 	const [activeEditMessageId, setActiveEditMessageId] = useState<string | null>(null)
 
 	// Auto-scroll on new messages
-	// biome-ignore lint/correctness/useExhaustiveDependencies: messages.length triggers scroll on new messages
-	useEffect(() => {
-		if (scrollRef.current) {
-			scrollRef.current.scrollIntoView({ behavior: 'smooth' })
-		}
-	}, [messages.length])
+	useAutoScroll(scrollRef, messages.length)
 
 	// Clear activeEditMessageId when editing is complete
 	useEffect(() => {
