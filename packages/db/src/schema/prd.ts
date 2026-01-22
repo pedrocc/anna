@@ -1,5 +1,15 @@
 import { relations } from 'drizzle-orm'
-import { index, integer, jsonb, pgEnum, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core'
+import {
+	boolean,
+	index,
+	integer,
+	jsonb,
+	pgEnum,
+	pgTable,
+	text,
+	timestamp,
+	uuid,
+} from 'drizzle-orm/pg-core'
 import { users } from './users'
 
 // ============================================
@@ -189,11 +199,11 @@ export const prdSessions = pgTable(
 		domainConcerns: jsonb('domain_concerns').$type<PrdDomainConcern[]>().default([]),
 		regulatoryRequirements: jsonb('regulatory_requirements').$type<string[]>().default([]),
 		domainExpertise: jsonb('domain_expertise').$type<string[]>().default([]),
-		skipDomainStep: text('skip_domain_step').default('false'), // boolean as text
+		skipDomainStep: boolean('skip_domain_step').default(false).notNull(),
 
 		// Innovation (Step 6 - optional)
 		innovations: jsonb('innovations').$type<PrdInnovation[]>().default([]),
-		skipInnovationStep: text('skip_innovation_step').default('false'), // boolean as text
+		skipInnovationStep: boolean('skip_innovation_step').default(false).notNull(),
 
 		// Project Type Deep Dive (Step 7)
 		projectTypeDetails: jsonb('project_type_details').$type<Record<string, unknown>>().default({}),
@@ -241,6 +251,7 @@ export const prdSessions = pgTable(
 		currentStepIdx: index('prd_sessions_current_step_idx').on(table.currentStep),
 		projectTypeIdx: index('prd_sessions_project_type_idx').on(table.projectType),
 		createdAtIdx: index('prd_sessions_created_at_idx').on(table.createdAt),
+		updatedAtIdx: index('prd_sessions_updated_at_idx').on(table.updatedAt),
 	})
 )
 

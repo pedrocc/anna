@@ -57,6 +57,20 @@
       "when": 1767811926366,
       "tag": "0007_rapid_stick",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1768822111575,
+      "tag": "0008_new_selene",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1768822761147,
+      "tag": "0009_nebulous_dreaming_celestial",
+      "breakpoints": true
     }
   ]
 }

@@ -26,4 +26,9 @@ export const RATE_LIMIT = {
 	WINDOW_MS: 60_000, // 1 minute
 	MAX_REQUESTS: 100,
 	MAX_REQUESTS_AUTH: 1000,
+	// Stricter limits for expensive operations
+	CHAT_WINDOW_MS: 60_000, // 1 minute
+	CHAT_MAX_REQUESTS: 20, // 20 chat messages per minute (streaming is expensive)
+	DOCUMENT_WINDOW_MS: 60_000, // 1 minute
+	DOCUMENT_MAX_REQUESTS: 10, // 10 document generations per minute
 } as const

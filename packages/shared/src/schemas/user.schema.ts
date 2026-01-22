@@ -7,10 +7,16 @@ export const UserSchema = z
 	.object({
 		id: IdSchema,
 		clerkId: z.string(),
-		email: z.email(),
+		email: z.email().min(5).max(255),
 		name: z.string().min(1).max(100),
 		role: UserRoleSchema.default('user'),
-		avatarUrl: z.url().optional(),
+		avatarUrl: z
+			.string()
+			.url()
+			.refine((url) => url.startsWith('https://') || url.startsWith('http://'), {
+				message: 'Avatar URL must use http or https protocol',
+			})
+			.optional(),
 		metadata: z.record(z.string(), z.unknown()).optional(),
 	})
 	.merge(TimestampsSchema)

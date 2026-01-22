@@ -37,14 +37,36 @@ describe('UserSchema', () => {
 		expect(result.role).toBe('user')
 	})
 
-	test('validates optional avatarUrl', () => {
+	test('validates optional avatarUrl with https', () => {
 		const userWithAvatar = { ...validUser, avatarUrl: 'https://example.com/avatar.png' }
 		const result = UserSchema.parse(userWithAvatar)
 		expect(result.avatarUrl).toBe('https://example.com/avatar.png')
 	})
 
+	test('validates optional avatarUrl with http', () => {
+		const userWithAvatar = { ...validUser, avatarUrl: 'http://example.com/avatar.png' }
+		const result = UserSchema.parse(userWithAvatar)
+		expect(result.avatarUrl).toBe('http://example.com/avatar.png')
+	})
+
+	test('rejects avatarUrl with non-http protocol', () => {
+		const userWithBadAvatar = { ...validUser, avatarUrl: 'ftp://example.com/avatar.png' }
+		expect(() => UserSchema.parse(userWithBadAvatar)).toThrow()
+	})
+
 	test('rejects invalid email', () => {
 		const invalidUser = { ...validUser, email: 'invalid-email' }
+		expect(() => UserSchema.parse(invalidUser)).toThrow()
+	})
+
+	test('rejects email shorter than 5 characters', () => {
+		const invalidUser = { ...validUser, email: 'a@b' }
+		expect(() => UserSchema.parse(invalidUser)).toThrow()
+	})
+
+	test('rejects email longer than 255 characters', () => {
+		const longEmail = `${'a'.repeat(250)}@b.com`
+		const invalidUser = { ...validUser, email: longEmail }
 		expect(() => UserSchema.parse(invalidUser)).toThrow()
 	})
 

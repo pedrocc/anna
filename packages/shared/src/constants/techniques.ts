@@ -1,6 +1,6 @@
-import type { TechniqueInfo } from '../schemas/brainstorm.schema.js'
+import type { BrainstormTechnique, TechniqueInfo } from '../schemas/brainstorm.schema.js'
 
-export const TECHNIQUES: Record<string, TechniqueInfo> = {
+export const TECHNIQUES: Record<BrainstormTechnique, TechniqueInfo> = {
 	scamper: {
 		id: 'scamper',
 		name: 'SCAMPER',
@@ -77,5 +77,3 @@ export const TECHNIQUES: Record<string, TechniqueInfo> = {
 } as const
 
 export const TECHNIQUE_LIST = Object.values(TECHNIQUES)
-
-export const TECHNIQUE_IDS = Object.keys(TECHNIQUES) as Array<keyof typeof TECHNIQUES>

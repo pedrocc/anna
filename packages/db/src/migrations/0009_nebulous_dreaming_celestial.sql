@@ -1,0 +1,2 @@
+CREATE INDEX "sm_epics_session_status_idx" ON "sm_epics" USING btree ("session_id","status");--> statement-breakpoint
+CREATE INDEX "sm_stories_session_status_idx" ON "sm_stories" USING btree ("session_id","status");

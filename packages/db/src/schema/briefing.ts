@@ -159,6 +159,7 @@ export const briefingSessions = pgTable(
 		statusIdx: index('briefing_sessions_status_idx').on(table.status),
 		currentStepIdx: index('briefing_sessions_current_step_idx').on(table.currentStep),
 		createdAtIdx: index('briefing_sessions_created_at_idx').on(table.createdAt),
+		updatedAtIdx: index('briefing_sessions_updated_at_idx').on(table.updatedAt),
 	})
 )
 

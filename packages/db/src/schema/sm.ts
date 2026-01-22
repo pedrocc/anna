@@ -64,7 +64,8 @@ export type SmAcceptanceCriteria = {
 	type: 'given_when_then' | 'simple'
 	given?: string
 	when?: string
-	then?: string
+	// Note: 'thenClause' instead of 'then' to avoid conflict with Promise.then
+	thenClause?: string
 }
 
 export type SmTask = {
@@ -183,6 +184,7 @@ export const smSessions = pgTable(
 		statusIdx: index('sm_sessions_status_idx').on(table.status),
 		currentStepIdx: index('sm_sessions_current_step_idx').on(table.currentStep),
 		createdAtIdx: index('sm_sessions_created_at_idx').on(table.createdAt),
+		updatedAtIdx: index('sm_sessions_updated_at_idx').on(table.updatedAt),
 	})
 )
 
@@ -249,6 +251,10 @@ export const smEpics = pgTable(
 		sessionIdIdx: index('sm_epics_session_id_idx').on(table.sessionId),
 		statusIdx: index('sm_epics_status_idx').on(table.status),
 		numberIdx: index('sm_epics_number_idx').on(table.number),
+		// Composite index for filtered queries by session and status
+		sessionStatusIdx: index('sm_epics_session_status_idx').on(table.sessionId, table.status),
+		// Composite index for ordering epics by number within a session
+		sessionNumberIdx: index('sm_epics_session_number_idx').on(table.sessionId, table.number),
 	})
 )
 
@@ -306,6 +312,8 @@ export const smStories = pgTable(
 		epicIdIdx: index('sm_stories_epic_id_idx').on(table.epicId),
 		statusIdx: index('sm_stories_status_idx').on(table.status),
 		storyKeyIdx: index('sm_stories_story_key_idx').on(table.storyKey),
+		// Composite index for filtered queries by session and status
+		sessionStatusIdx: index('sm_stories_session_status_idx').on(table.sessionId, table.status),
 	})
 )
 
