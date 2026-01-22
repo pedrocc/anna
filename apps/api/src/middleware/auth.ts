@@ -3,6 +3,7 @@ import { db, users } from '@repo/db'
 import { eq } from 'drizzle-orm'
 import type { Context } from 'hono'
 import { createMiddleware } from 'hono/factory'
+import { authLogger } from '../lib/logger.js'
 import { commonErrors, errorResponse } from '../lib/response.js'
 
 export type AuthVariables = {
@@ -15,6 +16,7 @@ export const authMiddleware = createMiddleware<{ Variables: AuthVariables }>(asy
 	const authHeader = c.req.header('Authorization')
 
 	if (!authHeader?.startsWith('Bearer ')) {
+		authLogger.warn('Auth failed: missing or invalid authorization header')
 		return commonErrors.unauthorized(c, 'Missing or invalid authorization header')
 	}
 
@@ -84,7 +86,8 @@ export const authMiddleware = createMiddleware<{ Variables: AuthVariables }>(asy
 		}
 
 		await next()
-	} catch {
+	} catch (err) {
+		authLogger.warn({ err }, 'Auth failed')
 		return commonErrors.unauthorized(c, 'Invalid token')
 	}
 })

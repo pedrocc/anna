@@ -1,5 +1,6 @@
-import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { Hono } from 'hono'
+import { authLogger } from '../lib/logger.js'
 import { type AuthVariables, authMiddleware, getAuth } from './auth.js'
 
 interface ErrorResponse {
@@ -27,6 +28,17 @@ app.get('/public', (c) => {
 })
 
 describe('Auth Middleware', () => {
+	let warnSpy: ReturnType<typeof mock>
+
+	beforeEach(() => {
+		warnSpy = mock(() => {})
+		authLogger.warn = warnSpy as typeof authLogger.warn
+	})
+
+	afterEach(() => {
+		mock.restore()
+	})
+
 	describe('Missing Authorization Header', () => {
 		test('rejects request without Authorization header', async () => {
 			const res = await app.request('/protected')
@@ -56,6 +68,11 @@ describe('Auth Middleware', () => {
 				headers: { Authorization: 'Bearer' },
 			})
 			expect(res.status).toBe(401)
+		})
+
+		test('logs warning when authorization header is missing', async () => {
+			await app.request('/protected')
+			expect(warnSpy).toHaveBeenCalledWith('Auth failed: missing or invalid authorization header')
 		})
 	})
 
@@ -92,6 +109,16 @@ describe('Auth Middleware', () => {
 				headers: { Authorization: `Bearer ${fakeToken}` },
 			})
 			expect(res.status).toBe(401)
+		})
+
+		test('logs warning with error when token verification fails', async () => {
+			await app.request('/protected', {
+				headers: { Authorization: 'Bearer invalid.jwt.token' },
+			})
+			expect(warnSpy).toHaveBeenCalledWith(
+				expect.objectContaining({ err: expect.any(Error) }),
+				'Auth failed'
+			)
 		})
 	})
 
