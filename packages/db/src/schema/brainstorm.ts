@@ -1,3 +1,4 @@
+import { TECHNIQUE_IDS } from '@repo/shared/schemas'
 import { relations } from 'drizzle-orm'
 import { index, integer, jsonb, pgEnum, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core'
 import { users } from './users'
@@ -33,18 +34,7 @@ export const brainstormMessageRoleEnum = pgEnum('brainstorm_message_role', [
 	'assistant',
 ])
 
-export const brainstormTechniqueEnum = pgEnum('brainstorm_technique', [
-	'scamper',
-	'what_if',
-	'six_hats',
-	'five_whys',
-	'mind_mapping',
-	'analogical',
-	'first_principles',
-	'yes_and',
-	'future_self',
-	'reversal',
-])
+export const brainstormTechniqueEnum = pgEnum('brainstorm_technique', TECHNIQUE_IDS)
 
 // ============================================
 // TYPES
