@@ -111,50 +111,26 @@ userRoutes.patch(
 	}
 )
 
-// Update user
-userRoutes.patch('/:id', authMiddleware, zValidator('json', UpdateUserSchema), async (c) => {
-	const { userId } = getAuth(c)
-	const id = c.req.param('id')
-	const data = c.req.valid('json')
+// Update user by ID (admin only)
+userRoutes.patch(
+	'/:id',
+	authMiddleware,
+	requireAdmin,
+	zValidator('json', UpdateUserSchema),
+	async (c) => {
+		const id = c.req.param('id')
+		const data = c.req.valid('json')
 
-	// Get current user to check permissions
-	const currentUser = await db.query.users.findFirst({
-		where: eq(users.clerkId, userId),
-	})
+		const [updatedUser] = await db
+			.update(users)
+			.set({ ...data, updatedAt: new Date() })
+			.where(eq(users.id, id))
+			.returning()
 
-	if (!currentUser) {
-		return commonErrors.notFound(c, 'User not found')
+		if (!updatedUser) {
+			return commonErrors.notFound(c, 'User not found')
+		}
+
+		return successResponse(c, updatedUser)
 	}
-
-	// Get target user to verify it exists and get clerkId
-	const targetUser = await db.query.users.findFirst({
-		where: eq(users.id, id),
-	})
-
-	if (!targetUser) {
-		return commonErrors.notFound(c, 'Target user not found')
-	}
-
-	// Only allow users to update themselves OR admins to update anyone
-	if (userId !== targetUser.clerkId && currentUser.role !== 'admin') {
-		return commonErrors.forbidden(c, 'You can only update your own profile')
-	}
-
-	// Prevent role escalation - only admins can change roles
-	const updateData = { ...data }
-	if (currentUser.role !== 'admin') {
-		delete updateData.role
-	}
-
-	const [updatedUser] = await db
-		.update(users)
-		.set({ ...updateData, updatedAt: new Date() })
-		.where(eq(users.id, id))
-		.returning()
-
-	if (!updatedUser) {
-		return commonErrors.notFound(c, 'User not found')
-	}
-
-	return successResponse(c, updatedUser)
-})
+)
