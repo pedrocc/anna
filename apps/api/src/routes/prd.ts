@@ -648,11 +648,11 @@ prdRoutes.post(
 			} catch (error) {
 				const errorDetails =
 					error instanceof OpenRouterAPIError
-						? JSON.stringify({ message: error.message, code: error.code, status: error.status })
-						: JSON.stringify({
+						? { message: error.message, code: error.code, status: error.status }
+						: {
 								message: error instanceof Error ? error.message : 'Failed to generate response',
-								code: 'UNKNOWN',
-							})
+								code: 'UNKNOWN' as const,
+							}
 
 				prdLogger.error({ err: error, sessionId }, 'Chat stream error')
 
@@ -1172,11 +1172,11 @@ prdRoutes.post(
 				prdLogger.error({ err: error, sessionId }, 'Document generation error')
 				const errorDetails =
 					error instanceof OpenRouterAPIError
-						? JSON.stringify({ message: error.message, code: error.code, status: error.status })
-						: JSON.stringify({
+						? { message: error.message, code: error.code, status: error.status }
+						: {
 								message: error instanceof Error ? error.message : 'Failed to generate document',
-								code: 'UNKNOWN',
-							})
+								code: 'UNKNOWN' as const,
+							}
 
 				// Mark generation as failed
 				await db

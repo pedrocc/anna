@@ -84,3 +84,11 @@ export const RenameSessionSchema = z.object({
 	projectName: z.string().min(1, 'Project name is required').max(200).trim(),
 })
 export type RenameSession = z.infer<typeof RenameSessionSchema>
+
+// Generation error stored as JSONB
+export const GenerationErrorSchema = z.object({
+	message: z.string(),
+	code: z.string(),
+	status: z.number().int().optional(),
+})
+export type GenerationError = z.infer<typeof GenerationErrorSchema>

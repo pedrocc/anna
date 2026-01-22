@@ -392,14 +392,7 @@ export function BriefingSessionPage() {
 									<p className="text-red-600 font-medium">Falha ao gerar documento</p>
 									{session.generationError && (
 										<p className="text-sm text-muted-foreground max-w-md text-center">
-											{(() => {
-												try {
-													const parsed = JSON.parse(session.generationError)
-													return parsed.message ?? session.generationError
-												} catch {
-													return session.generationError
-												}
-											})()}
+											{session.generationError.message}
 										</p>
 									)}
 								</>

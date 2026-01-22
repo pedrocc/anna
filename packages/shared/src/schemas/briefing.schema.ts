@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { IdSchema, TimestampsSchema } from './common.schema.js'
+import { GenerationErrorSchema, IdSchema, TimestampsSchema } from './common.schema.js'
 
 // ============================================
 // ENUMS
@@ -161,7 +161,7 @@ export const BriefingSessionSchema = z
 		// Generation state (persisted for page reload)
 		generationStatus: BriefingGenerationStatusSchema,
 		generationStartedAt: z.coerce.date().optional().nullable(),
-		generationError: z.string().optional().nullable(),
+		generationError: GenerationErrorSchema.optional().nullable(),
 
 		// Final document (Step 6)
 		documentContent: z.string().optional().nullable(),

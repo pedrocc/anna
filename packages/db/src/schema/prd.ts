@@ -235,7 +235,11 @@ export const prdSessions = pgTable(
 		// Generation state (persisted for page reload)
 		generationStatus: prdGenerationStatusEnum('generation_status').default('idle').notNull(),
 		generationStartedAt: timestamp('generation_started_at', { withTimezone: true }),
-		generationError: text('generation_error'),
+		generationError: jsonb('generation_error').$type<{
+			message: string
+			code: string
+			status?: number
+		}>(),
 
 		// Final document (Step 11)
 		documentContent: text('document_content'),

@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { IdSchema, TimestampsSchema } from './common.schema.js'
+import { GenerationErrorSchema, IdSchema, TimestampsSchema } from './common.schema.js'
 
 // ============================================
 // ENUMS
@@ -313,7 +313,7 @@ export const SmSessionSchema = z
 		// Generation state (persisted for page reload)
 		generationStatus: SmGenerationStatusSchema,
 		generationStartedAt: z.coerce.date().optional().nullable(),
-		generationError: z.string().optional().nullable(),
+		generationError: GenerationErrorSchema.optional().nullable(),
 
 		totalEpics: z.number().int(),
 		totalStories: z.number().int(),

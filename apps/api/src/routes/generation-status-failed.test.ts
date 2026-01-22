@@ -67,12 +67,12 @@ describe('generationStatus failed state on SSE stream errors', () => {
 			expect(sess.generationStatus).toBe('idle')
 			expect(sess.generationError).toBeNull()
 
-			// Simulate OpenRouterAPIError: persist JSON with message, code, status
-			const errorDetails = JSON.stringify({
+			// Simulate OpenRouterAPIError: persist JSONB with message, code, status
+			const errorDetails = {
 				message: 'Rate limit exceeded',
 				code: 'rate_limit_exceeded',
 				status: 429,
-			})
+			}
 			await db
 				.update(briefingSessions)
 				.set({
@@ -88,13 +88,12 @@ describe('generationStatus failed state on SSE stream errors', () => {
 			})
 			const result = assertDefined(updated)
 			expect(result.generationStatus).toBe('failed')
-			expect(result.generationError).toBe(errorDetails)
 
-			// Verify JSON structure is parseable
-			const parsed = JSON.parse(assertDefined(result.generationError))
-			expect(parsed.message).toBe('Rate limit exceeded')
-			expect(parsed.code).toBe('rate_limit_exceeded')
-			expect(parsed.status).toBe(429)
+			// JSONB is automatically deserialized by Drizzle
+			const error = assertDefined(result.generationError)
+			expect(error.message).toBe('Rate limit exceeded')
+			expect(error.code).toBe('rate_limit_exceeded')
+			expect(error.status).toBe(429)
 		})
 
 		it('should persist generationError with UNKNOWN code for non-API errors', async () => {
@@ -111,11 +110,11 @@ describe('generationStatus failed state on SSE stream errors', () => {
 			const sess = assertDefined(session)
 			createdBriefingIds.push(sess.id)
 
-			// Simulate non-API error: persist JSON with message and UNKNOWN code
-			const errorDetails = JSON.stringify({
+			// Simulate non-API error: persist JSONB with message and UNKNOWN code
+			const errorDetails = {
 				message: 'Network connection failed',
 				code: 'UNKNOWN',
-			})
+			}
 			await db
 				.update(briefingSessions)
 				.set({
@@ -131,18 +130,18 @@ describe('generationStatus failed state on SSE stream errors', () => {
 			const result = assertDefined(updated)
 			expect(result.generationStatus).toBe('failed')
 
-			const parsed = JSON.parse(assertDefined(result.generationError))
-			expect(parsed.message).toBe('Network connection failed')
-			expect(parsed.code).toBe('UNKNOWN')
-			expect(parsed.status).toBeUndefined()
+			const error = assertDefined(result.generationError)
+			expect(error.message).toBe('Network connection failed')
+			expect(error.code).toBe('UNKNOWN')
+			expect(error.status).toBeUndefined()
 		})
 
 		it('should allow recovery from failed state to generating (clears error)', async () => {
-			const errorDetails = JSON.stringify({
+			const errorDetails = {
 				message: 'Previous error',
 				code: 'server_error',
 				status: 500,
-			})
+			}
 			const [session] = await db
 				.insert(briefingSessions)
 				.values({
@@ -195,12 +194,12 @@ describe('generationStatus failed state on SSE stream errors', () => {
 			expect(sess.generationStatus).toBe('idle')
 			expect(sess.generationError).toBeNull()
 
-			// Simulate error with JSON details
-			const errorDetails = JSON.stringify({
+			// Simulate error with JSONB details
+			const errorDetails = {
 				message: 'Model not available',
 				code: 'model_not_found',
 				status: 404,
-			})
+			}
 			await db
 				.update(prdSessions)
 				.set({
@@ -217,17 +216,17 @@ describe('generationStatus failed state on SSE stream errors', () => {
 			const result = assertDefined(updated)
 			expect(result.generationStatus).toBe('failed')
 
-			const parsed = JSON.parse(assertDefined(result.generationError))
-			expect(parsed.message).toBe('Model not available')
-			expect(parsed.code).toBe('model_not_found')
-			expect(parsed.status).toBe(404)
+			const error = assertDefined(result.generationError)
+			expect(error.message).toBe('Model not available')
+			expect(error.code).toBe('model_not_found')
+			expect(error.status).toBe(404)
 		})
 
 		it('should allow recovery from failed state to generating', async () => {
-			const errorDetails = JSON.stringify({
+			const errorDetails = {
 				message: 'Previous error',
 				code: 'UNKNOWN',
-			})
+			}
 			const [session] = await db
 				.insert(prdSessions)
 				.values({
@@ -283,12 +282,12 @@ describe('generationStatus failed state on SSE stream errors', () => {
 			expect(sess.generationStatus).toBe('idle')
 			expect(sess.generationError).toBeNull()
 
-			// Simulate error with JSON details
-			const errorDetails = JSON.stringify({
+			// Simulate error with JSONB details
+			const errorDetails = {
 				message: 'Network timeout connecting to OpenRouter',
 				code: 'timeout',
 				status: 408,
-			})
+			}
 			await db
 				.update(smSessions)
 				.set({
@@ -305,18 +304,18 @@ describe('generationStatus failed state on SSE stream errors', () => {
 			const result = assertDefined(updated)
 			expect(result.generationStatus).toBe('failed')
 
-			const parsed = JSON.parse(assertDefined(result.generationError))
-			expect(parsed.message).toBe('Network timeout connecting to OpenRouter')
-			expect(parsed.code).toBe('timeout')
-			expect(parsed.status).toBe(408)
+			const error = assertDefined(result.generationError)
+			expect(error.message).toBe('Network timeout connecting to OpenRouter')
+			expect(error.code).toBe('timeout')
+			expect(error.status).toBe(408)
 		})
 
 		it('should allow recovery from failed state to generating', async () => {
-			const errorDetails = JSON.stringify({
+			const errorDetails = {
 				message: 'Previous error',
 				code: 'server_error',
 				status: 500,
-			})
+			}
 			const [session] = await db
 				.insert(smSessions)
 				.values({

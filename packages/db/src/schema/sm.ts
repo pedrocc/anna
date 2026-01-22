@@ -171,7 +171,11 @@ export const smSessions = pgTable(
 		// Generation state (persisted for page reload)
 		generationStatus: smGenerationStatusEnum('generation_status').default('idle').notNull(),
 		generationStartedAt: timestamp('generation_started_at', { withTimezone: true }),
-		generationError: text('generation_error'),
+		generationError: jsonb('generation_error').$type<{
+			message: string
+			code: string
+			status?: number
+		}>(),
 
 		// Summary stats (updated as stories are created)
 		totalEpics: integer('total_epics').default(0),

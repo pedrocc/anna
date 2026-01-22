@@ -2,6 +2,7 @@ import { sql } from 'drizzle-orm'
 import {
 	check,
 	index,
+	jsonb,
 	pgEnum,
 	pgTable,
 	text,
@@ -21,7 +22,7 @@ export const users = pgTable(
 		name: text('name').notNull(),
 		role: userRoleEnum('role').default('user').notNull(),
 		avatarUrl: text('avatar_url'),
-		metadata: text('metadata').$type<Record<string, unknown>>(),
+		metadata: jsonb('metadata').$type<Record<string, unknown>>(),
 		createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 		updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 	},
