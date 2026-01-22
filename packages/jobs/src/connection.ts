@@ -6,6 +6,16 @@ export const connection = new Redis(REDIS_URL, {
 	maxRetriesPerRequest: null,
 })
 
+/**
+ * Gracefully close Redis connection for BullMQ
+ * Should be called on process shutdown
+ */
+export async function closeRedis(): Promise<void> {
+	if (connection.status !== 'end') {
+		await connection.quit()
+	}
+}
+
 export const defaultJobOptions = {
 	attempts: 3,
 	backoff: {
