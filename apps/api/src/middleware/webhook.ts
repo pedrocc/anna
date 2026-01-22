@@ -25,6 +25,18 @@ export async function verifyClerkWebhook(c: Context, next: Next) {
 		return commonErrors.badRequest(c, 'Missing webhook verification headers')
 	}
 
+	// Validate timestamp is within 5 minutes to prevent replay attacks
+	const WEBHOOK_TOLERANCE_MS = 5 * 60 * 1000 // 5 minutes
+	const timestampSeconds = Number.parseInt(svixTimestamp, 10)
+	if (Number.isNaN(timestampSeconds)) {
+		return commonErrors.badRequest(c, 'Invalid webhook timestamp')
+	}
+	const timestampMs = timestampSeconds * 1000
+	const now = Date.now()
+	if (Math.abs(now - timestampMs) > WEBHOOK_TOLERANCE_MS) {
+		return commonErrors.badRequest(c, 'Webhook timestamp too old or in future')
+	}
+
 	// Get raw body for signature verification
 	const rawBody = await c.req.text()
 
