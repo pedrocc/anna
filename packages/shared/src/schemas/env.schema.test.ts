@@ -41,6 +41,41 @@ describe('ServerEnvSchema', () => {
 		})
 	})
 
+	describe('LOG_LEVEL', () => {
+		test('defaults to info when not provided', () => {
+			const result = ServerEnvSchema.parse(validServerEnv)
+			expect(result.LOG_LEVEL).toBe('info')
+		})
+
+		test('accepts debug', () => {
+			const result = ServerEnvSchema.parse({ ...validServerEnv, LOG_LEVEL: 'debug' })
+			expect(result.LOG_LEVEL).toBe('debug')
+		})
+
+		test('accepts info', () => {
+			const result = ServerEnvSchema.parse({ ...validServerEnv, LOG_LEVEL: 'info' })
+			expect(result.LOG_LEVEL).toBe('info')
+		})
+
+		test('accepts warn', () => {
+			const result = ServerEnvSchema.parse({ ...validServerEnv, LOG_LEVEL: 'warn' })
+			expect(result.LOG_LEVEL).toBe('warn')
+		})
+
+		test('accepts error', () => {
+			const result = ServerEnvSchema.parse({ ...validServerEnv, LOG_LEVEL: 'error' })
+			expect(result.LOG_LEVEL).toBe('error')
+		})
+
+		test('rejects invalid log level', () => {
+			expect(() => ServerEnvSchema.parse({ ...validServerEnv, LOG_LEVEL: 'trace' })).toThrow()
+		})
+
+		test('rejects empty string', () => {
+			expect(() => ServerEnvSchema.parse({ ...validServerEnv, LOG_LEVEL: '' })).toThrow()
+		})
+	})
+
 	describe('defaults', () => {
 		test('NODE_ENV defaults to development', () => {
 			const { NODE_ENV, ...envWithoutNodeEnv } = validServerEnv
