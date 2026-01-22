@@ -24,3 +24,11 @@ const client = postgres(connectionString, {
 export const db = drizzle(client, { schema })
 
 export type Database = typeof db
+
+/**
+ * Gracefully close database connection pool
+ * Should be called on process shutdown
+ */
+export async function closeDb(): Promise<void> {
+	await client.end()
+}

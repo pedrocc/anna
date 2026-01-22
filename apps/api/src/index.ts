@@ -1,10 +1,10 @@
+import { closeDb } from '@repo/db'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { logger } from 'hono/logger'
 import { requestId } from 'hono/request-id'
 import { secureHeaders } from 'hono/secure-headers'
 import { timing } from 'hono/timing'
-
 import { commonErrors } from './lib/response.js'
 import { errorHandler } from './middleware/error-handler.js'
 import { closeRedis, rateLimiter } from './middleware/rate-limiter.js'
@@ -58,19 +58,17 @@ app.notFound((c) => {
 const port = Number(process.env['PORT']) || 3000
 
 // Graceful shutdown handlers
-process.on('SIGTERM', async () => {
+async function gracefulShutdown(signal: string): Promise<void> {
 	// biome-ignore lint/suspicious/noConsole: Shutdown logging
-	console.log('SIGTERM received, closing connections...')
-	await closeRedis()
+	console.log(`${signal} received, closing connections...`)
+	await Promise.all([closeRedis(), closeDb()])
+	// biome-ignore lint/suspicious/noConsole: Shutdown logging
+	console.log('All connections closed')
 	process.exit(0)
-})
+}
 
-process.on('SIGINT', async () => {
-	// biome-ignore lint/suspicious/noConsole: Shutdown logging
-	console.log('SIGINT received, closing connections...')
-	await closeRedis()
-	process.exit(0)
-})
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'))
+process.on('SIGINT', () => gracefulShutdown('SIGINT'))
 
 export default {
 	port,
