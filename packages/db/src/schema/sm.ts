@@ -1,5 +1,15 @@
-import { relations } from 'drizzle-orm'
-import { index, integer, jsonb, pgEnum, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core'
+import { relations, sql } from 'drizzle-orm'
+import {
+	check,
+	index,
+	integer,
+	jsonb,
+	pgEnum,
+	pgTable,
+	text,
+	timestamp,
+	uuid,
+} from 'drizzle-orm/pg-core'
 import { prdSessions } from './prd'
 import { users } from './users'
 
@@ -184,6 +194,26 @@ export const smSessions = pgTable(
 		currentStepIdx: index('sm_sessions_current_step_idx').on(table.currentStep),
 		createdAtIdx: index('sm_sessions_created_at_idx').on(table.createdAt),
 		updatedAtIdx: index('sm_sessions_updated_at_idx').on(table.updatedAt),
+		projectNameLength: check(
+			'sm_sessions_project_name_length',
+			sql`length(${table.projectName}) > 0 AND length(${table.projectName}) <= 200`
+		),
+		projectDescriptionMaxLength: check(
+			'sm_sessions_project_description_max_length',
+			sql`${table.projectDescription} IS NULL OR length(${table.projectDescription}) <= 5000`
+		),
+		totalEpicsNonNegative: check(
+			'sm_sessions_total_epics_non_negative',
+			sql`${table.totalEpics} IS NULL OR ${table.totalEpics} >= 0`
+		),
+		totalStoriesNonNegative: check(
+			'sm_sessions_total_stories_non_negative',
+			sql`${table.totalStories} IS NULL OR ${table.totalStories} >= 0`
+		),
+		totalStoryPointsNonNegative: check(
+			'sm_sessions_total_story_points_non_negative',
+			sql`${table.totalStoryPoints} IS NULL OR ${table.totalStoryPoints} >= 0`
+		),
 	})
 )
 
@@ -213,6 +243,15 @@ export const smMessages = pgTable(
 		sessionIdIdx: index('sm_messages_session_id_idx').on(table.sessionId),
 		stepIdx: index('sm_messages_step_idx').on(table.step),
 		createdAtIdx: index('sm_messages_created_at_idx').on(table.createdAt),
+		contentNonEmpty: check('sm_messages_content_non_empty', sql`length(${table.content}) > 0`),
+		promptTokensNonNegative: check(
+			'sm_messages_prompt_tokens_non_negative',
+			sql`${table.promptTokens} IS NULL OR ${table.promptTokens} >= 0`
+		),
+		completionTokensNonNegative: check(
+			'sm_messages_completion_tokens_non_negative',
+			sql`${table.completionTokens} IS NULL OR ${table.completionTokens} >= 0`
+		),
 	})
 )
 
@@ -254,6 +293,27 @@ export const smEpics = pgTable(
 		sessionStatusIdx: index('sm_epics_session_status_idx').on(table.sessionId, table.status),
 		// Composite index for ordering epics by number within a session
 		sessionNumberIdx: index('sm_epics_session_number_idx').on(table.sessionId, table.number),
+		numberPositive: check('sm_epics_number_positive', sql`${table.number} >= 1`),
+		titleLength: check(
+			'sm_epics_title_length',
+			sql`length(${table.title}) > 0 AND length(${table.title}) <= 200`
+		),
+		descriptionLength: check(
+			'sm_epics_description_length',
+			sql`length(${table.description}) > 0 AND length(${table.description}) <= 2000`
+		),
+		businessValueMaxLength: check(
+			'sm_epics_business_value_max_length',
+			sql`${table.businessValue} IS NULL OR length(${table.businessValue}) <= 1000`
+		),
+		targetSprintPositive: check(
+			'sm_epics_target_sprint_positive',
+			sql`${table.targetSprint} IS NULL OR ${table.targetSprint} >= 1`
+		),
+		estimatedStoryPointsNonNegative: check(
+			'sm_epics_estimated_story_points_non_negative',
+			sql`${table.estimatedStoryPoints} IS NULL OR ${table.estimatedStoryPoints} >= 0`
+		),
 	})
 )
 
@@ -313,6 +373,37 @@ export const smStories = pgTable(
 		storyKeyIdx: index('sm_stories_story_key_idx').on(table.storyKey),
 		// Composite index for filtered queries by session and status
 		sessionStatusIdx: index('sm_stories_session_status_idx').on(table.sessionId, table.status),
+		epicNumberPositive: check('sm_stories_epic_number_positive', sql`${table.epicNumber} >= 1`),
+		storyNumberPositive: check('sm_stories_story_number_positive', sql`${table.storyNumber} >= 1`),
+		titleLength: check(
+			'sm_stories_title_length',
+			sql`length(${table.title}) > 0 AND length(${table.title}) <= 200`
+		),
+		asALength: check(
+			'sm_stories_as_a_length',
+			sql`length(${table.asA}) > 0 AND length(${table.asA}) <= 200`
+		),
+		iWantLength: check(
+			'sm_stories_i_want_length',
+			sql`length(${table.iWant}) > 0 AND length(${table.iWant}) <= 500`
+		),
+		soThatLength: check(
+			'sm_stories_so_that_length',
+			sql`length(${table.soThat}) > 0 AND length(${table.soThat}) <= 500`
+		),
+		descriptionMaxLength: check(
+			'sm_stories_description_max_length',
+			sql`${table.description} IS NULL OR length(${table.description}) <= 5000`
+		),
+		storyKeyNonEmpty: check('sm_stories_story_key_non_empty', sql`length(${table.storyKey}) > 0`),
+		storyPointsNonNegative: check(
+			'sm_stories_story_points_non_negative',
+			sql`${table.storyPoints} IS NULL OR ${table.storyPoints} >= 0`
+		),
+		targetSprintPositive: check(
+			'sm_stories_target_sprint_positive',
+			sql`${table.targetSprint} IS NULL OR ${table.targetSprint} >= 1`
+		),
 	})
 )
 
@@ -340,6 +431,9 @@ export const smDocuments = pgTable(
 		sessionIdIdx: index('sm_documents_session_id_idx').on(table.sessionId),
 		typeIdx: index('sm_documents_type_idx').on(table.type),
 		createdAtIdx: index('sm_documents_created_at_idx').on(table.createdAt),
+		titleNonEmpty: check('sm_documents_title_non_empty', sql`length(${table.title}) > 0`),
+		contentNonEmpty: check('sm_documents_content_non_empty', sql`length(${table.content}) > 0`),
+		versionPositive: check('sm_documents_version_positive', sql`${table.version} >= 1`),
 	})
 )
 

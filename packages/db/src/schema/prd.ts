@@ -1,6 +1,7 @@
-import { relations } from 'drizzle-orm'
+import { relations, sql } from 'drizzle-orm'
 import {
 	boolean,
+	check,
 	index,
 	integer,
 	jsonb,
@@ -252,6 +253,14 @@ export const prdSessions = pgTable(
 		projectTypeIdx: index('prd_sessions_project_type_idx').on(table.projectType),
 		createdAtIdx: index('prd_sessions_created_at_idx').on(table.createdAt),
 		updatedAtIdx: index('prd_sessions_updated_at_idx').on(table.updatedAt),
+		projectNameLength: check(
+			'prd_sessions_project_name_length',
+			sql`length(${table.projectName}) > 0 AND length(${table.projectName}) <= 200`
+		),
+		projectDescriptionMaxLength: check(
+			'prd_sessions_project_description_max_length',
+			sql`${table.projectDescription} IS NULL OR length(${table.projectDescription}) <= 5000`
+		),
 	})
 )
 
@@ -281,6 +290,15 @@ export const prdMessages = pgTable(
 		sessionIdIdx: index('prd_messages_session_id_idx').on(table.sessionId),
 		stepIdx: index('prd_messages_step_idx').on(table.step),
 		createdAtIdx: index('prd_messages_created_at_idx').on(table.createdAt),
+		contentNonEmpty: check('prd_messages_content_non_empty', sql`length(${table.content}) > 0`),
+		promptTokensNonNegative: check(
+			'prd_messages_prompt_tokens_non_negative',
+			sql`${table.promptTokens} IS NULL OR ${table.promptTokens} >= 0`
+		),
+		completionTokensNonNegative: check(
+			'prd_messages_completion_tokens_non_negative',
+			sql`${table.completionTokens} IS NULL OR ${table.completionTokens} >= 0`
+		),
 	})
 )
 
@@ -308,6 +326,9 @@ export const prdDocuments = pgTable(
 		sessionIdIdx: index('prd_documents_session_id_idx').on(table.sessionId),
 		typeIdx: index('prd_documents_type_idx').on(table.type),
 		createdAtIdx: index('prd_documents_created_at_idx').on(table.createdAt),
+		titleNonEmpty: check('prd_documents_title_non_empty', sql`length(${table.title}) > 0`),
+		contentNonEmpty: check('prd_documents_content_non_empty', sql`length(${table.content}) > 0`),
+		versionPositive: check('prd_documents_version_positive', sql`${table.version} >= 1`),
 	})
 )
 

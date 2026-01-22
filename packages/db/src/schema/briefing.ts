@@ -1,5 +1,15 @@
-import { relations } from 'drizzle-orm'
-import { index, integer, jsonb, pgEnum, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core'
+import { relations, sql } from 'drizzle-orm'
+import {
+	check,
+	index,
+	integer,
+	jsonb,
+	pgEnum,
+	pgTable,
+	text,
+	timestamp,
+	uuid,
+} from 'drizzle-orm/pg-core'
 import { users } from './users'
 
 // ============================================
@@ -160,6 +170,14 @@ export const briefingSessions = pgTable(
 		currentStepIdx: index('briefing_sessions_current_step_idx').on(table.currentStep),
 		createdAtIdx: index('briefing_sessions_created_at_idx').on(table.createdAt),
 		updatedAtIdx: index('briefing_sessions_updated_at_idx').on(table.updatedAt),
+		projectNameLength: check(
+			'briefing_sessions_project_name_length',
+			sql`length(${table.projectName}) > 0 AND length(${table.projectName}) <= 200`
+		),
+		projectDescriptionMaxLength: check(
+			'briefing_sessions_project_description_max_length',
+			sql`${table.projectDescription} IS NULL OR length(${table.projectDescription}) <= 5000`
+		),
 	})
 )
 
@@ -189,6 +207,18 @@ export const briefingMessages = pgTable(
 		sessionIdIdx: index('briefing_messages_session_id_idx').on(table.sessionId),
 		stepIdx: index('briefing_messages_step_idx').on(table.step),
 		createdAtIdx: index('briefing_messages_created_at_idx').on(table.createdAt),
+		contentNonEmpty: check(
+			'briefing_messages_content_non_empty',
+			sql`length(${table.content}) > 0`
+		),
+		promptTokensNonNegative: check(
+			'briefing_messages_prompt_tokens_non_negative',
+			sql`${table.promptTokens} IS NULL OR ${table.promptTokens} >= 0`
+		),
+		completionTokensNonNegative: check(
+			'briefing_messages_completion_tokens_non_negative',
+			sql`${table.completionTokens} IS NULL OR ${table.completionTokens} >= 0`
+		),
 	})
 )
 
@@ -216,6 +246,12 @@ export const briefingDocuments = pgTable(
 		sessionIdIdx: index('briefing_documents_session_id_idx').on(table.sessionId),
 		typeIdx: index('briefing_documents_type_idx').on(table.type),
 		createdAtIdx: index('briefing_documents_created_at_idx').on(table.createdAt),
+		titleNonEmpty: check('briefing_documents_title_non_empty', sql`length(${table.title}) > 0`),
+		contentNonEmpty: check(
+			'briefing_documents_content_non_empty',
+			sql`length(${table.content}) > 0`
+		),
+		versionPositive: check('briefing_documents_version_positive', sql`${table.version} >= 1`),
 	})
 )
 

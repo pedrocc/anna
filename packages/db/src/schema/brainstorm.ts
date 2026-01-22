@@ -1,6 +1,16 @@
 import { TECHNIQUE_IDS } from '@repo/shared/schemas'
-import { relations } from 'drizzle-orm'
-import { index, integer, jsonb, pgEnum, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core'
+import { relations, sql } from 'drizzle-orm'
+import {
+	check,
+	index,
+	integer,
+	jsonb,
+	pgEnum,
+	pgTable,
+	text,
+	timestamp,
+	uuid,
+} from 'drizzle-orm/pg-core'
 import { users } from './users'
 
 // ============================================
@@ -92,6 +102,18 @@ export const brainstormSessions = pgTable(
 		statusIdx: index('brainstorm_sessions_status_idx').on(table.status),
 		currentStepIdx: index('brainstorm_sessions_current_step_idx').on(table.currentStep),
 		createdAtIdx: index('brainstorm_sessions_created_at_idx').on(table.createdAt),
+		projectNameLength: check(
+			'brainstorm_sessions_project_name_length',
+			sql`length(${table.projectName}) > 0 AND length(${table.projectName}) <= 200`
+		),
+		projectDescriptionMaxLength: check(
+			'brainstorm_sessions_project_description_max_length',
+			sql`${table.projectDescription} IS NULL OR length(${table.projectDescription}) <= 5000`
+		),
+		techniqueIndexNonNegative: check(
+			'brainstorm_sessions_technique_index_non_negative',
+			sql`${table.currentTechniqueIndex} IS NULL OR ${table.currentTechniqueIndex} >= 0`
+		),
 	})
 )
 
@@ -122,6 +144,18 @@ export const brainstormMessages = pgTable(
 		sessionIdIdx: index('brainstorm_messages_session_id_idx').on(table.sessionId),
 		stepIdx: index('brainstorm_messages_step_idx').on(table.step),
 		createdAtIdx: index('brainstorm_messages_created_at_idx').on(table.createdAt),
+		contentNonEmpty: check(
+			'brainstorm_messages_content_non_empty',
+			sql`length(${table.content}) > 0`
+		),
+		promptTokensNonNegative: check(
+			'brainstorm_messages_prompt_tokens_non_negative',
+			sql`${table.promptTokens} IS NULL OR ${table.promptTokens} >= 0`
+		),
+		completionTokensNonNegative: check(
+			'brainstorm_messages_completion_tokens_non_negative',
+			sql`${table.completionTokens} IS NULL OR ${table.completionTokens} >= 0`
+		),
 	})
 )
 

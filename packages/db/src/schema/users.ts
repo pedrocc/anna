@@ -1,4 +1,14 @@
-import { index, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core'
+import { sql } from 'drizzle-orm'
+import {
+	check,
+	index,
+	pgEnum,
+	pgTable,
+	text,
+	timestamp,
+	uniqueIndex,
+	uuid,
+} from 'drizzle-orm/pg-core'
 
 export const userRoleEnum = pgEnum('user_role', ['admin', 'user', 'guest'])
 
@@ -20,6 +30,8 @@ export const users = pgTable(
 		emailIdx: index('users_email_idx').on(table.email),
 		roleIdx: index('users_role_idx').on(table.role),
 		createdAtIdx: index('users_created_at_idx').on(table.createdAt),
+		nameNonEmpty: check('users_name_non_empty', sql`length(${table.name}) > 0`),
+		emailMinLength: check('users_email_min_length', sql`length(${table.email}) >= 5`),
 	})
 )
 
