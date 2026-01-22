@@ -1,11 +1,13 @@
 import { toast } from '@repo/ui'
 
+interface ClerkSession {
+	getToken: (options?: { skipCache?: boolean }) => Promise<string | null>
+}
+
 interface ClerkInstance {
 	loaded?: boolean
-	session?: {
-		getToken: (options?: { skipCache?: boolean }) => Promise<string | null>
-	}
-	addListener?: (callback: (resources: { session?: unknown }) => void) => () => void
+	session?: ClerkSession
+	addListener?: (callback: (resources: { session?: ClerkSession | null }) => void) => () => void
 }
 
 interface ClerkGlobal {
@@ -17,47 +19,89 @@ declare const __API_URL__: string | undefined
 const API_URL = __API_URL__ ?? '/api'
 
 /**
- * Wait for Clerk to be fully loaded and session to be available, then get the auth token
+ * Returns a promise that resolves when Clerk is available on globalThis.
+ * Uses a brief polling loop only for the initial Clerk object availability
+ * (before addListener can be used), with a timeout.
+ */
+function waitForClerkInstance(maxWaitMs: number): Promise<ClerkInstance | null> {
+	const clerk = (globalThis as unknown as ClerkGlobal).Clerk
+	if (clerk) return Promise.resolve(clerk)
+
+	return new Promise((resolve) => {
+		const startTime = Date.now()
+		const interval = setInterval(() => {
+			const instance = (globalThis as unknown as ClerkGlobal).Clerk
+			if (instance) {
+				clearInterval(interval)
+				resolve(instance)
+			} else if (Date.now() - startTime >= maxWaitMs) {
+				clearInterval(interval)
+				resolve(null)
+			}
+		}, 50)
+	})
+}
+
+/**
+ * Uses clerk.addListener to wait for the session to become available.
+ * Resolves immediately if the session already exists.
+ */
+function waitForClerkSession(
+	clerk: ClerkInstance,
+	maxWaitMs: number
+): Promise<ClerkSession | null> {
+	if (clerk.session) return Promise.resolve(clerk.session)
+
+	return new Promise((resolve) => {
+		const timeout = setTimeout(() => {
+			unsubscribe?.()
+			resolve(null)
+		}, maxWaitMs)
+
+		const unsubscribe = clerk.addListener?.((resources) => {
+			if (resources.session) {
+				clearTimeout(timeout)
+				unsubscribe?.()
+				resolve(resources.session as ClerkSession)
+			}
+		})
+
+		// If addListener is not available, fall back to null
+		if (!unsubscribe) {
+			clearTimeout(timeout)
+			resolve(null)
+		}
+	})
+}
+
+/**
+ * Wait for Clerk to be fully loaded and session to be available, then get the auth token.
+ * Uses clerk.addListener to avoid polling for session readiness.
  * @param maxWaitMs - Maximum time to wait for Clerk to load
  * @param forceRefresh - If true, forces a fresh token fetch (bypasses cache)
  */
-async function getAuthToken(maxWaitMs = 10000, forceRefresh = false): Promise<string | null> {
-	const startTime = Date.now()
+export async function getAuthToken(
+	maxWaitMs = 10000,
+	forceRefresh = false
+): Promise<string | null> {
+	const clerk = await waitForClerkInstance(maxWaitMs)
+	if (!clerk) return null
 
-	// Wait for Clerk object to be available
-	while (!(globalThis as unknown as ClerkGlobal).Clerk && Date.now() - startTime < maxWaitMs) {
-		await new Promise((resolve) => setTimeout(resolve, 50))
+	// If Clerk is already loaded and has a session, get token directly
+	if (clerk.loaded && clerk.session) {
+		try {
+			return await clerk.session.getToken(forceRefresh ? { skipCache: true } : undefined)
+		} catch {
+			return null
+		}
 	}
 
-	const clerk = (globalThis as unknown as ClerkGlobal).Clerk
-
-	// If Clerk is not available at all, return null
-	if (!clerk) {
-		return null
-	}
-
-	// Wait for Clerk to be loaded
-	while (!clerk.loaded && Date.now() - startTime < maxWaitMs) {
-		await new Promise((resolve) => setTimeout(resolve, 50))
-	}
-
-	if (!clerk.loaded) {
-		return null
-	}
-
-	// Wait for session to be available
-	while (!clerk.session && Date.now() - startTime < maxWaitMs) {
-		await new Promise((resolve) => setTimeout(resolve, 100))
-	}
-
-	// If still no session after waiting, return null
-	if (!clerk.session) {
-		return null
-	}
+	// Use addListener to wait for the session
+	const session = await waitForClerkSession(clerk, maxWaitMs)
+	if (!session) return null
 
 	try {
-		// Clerk's getToken() accepts skipCache to force a fresh token
-		return await clerk.session.getToken(forceRefresh ? { skipCache: true } : undefined)
+		return await session.getToken(forceRefresh ? { skipCache: true } : undefined)
 	} catch {
 		return null
 	}

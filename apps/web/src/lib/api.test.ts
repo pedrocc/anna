@@ -1,6 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, mock, spyOn } from 'bun:test'
 import { toast } from '@repo/ui'
-import { apiRequest, fetcher } from './api.js'
+import { apiRequest, fetcher, getAuthToken } from './api.js'
+
+interface MockClerk {
+	loaded: boolean
+	session: { getToken: ReturnType<typeof mock> } | null
+	addListener?: (callback: (resources: { session?: unknown }) => void) => () => void
+}
 
 // Mock Clerk globally
 const mockGetToken = mock(() => Promise.resolve('test-token'))
@@ -146,5 +152,163 @@ describe('API error toast notifications', () => {
 
 			mockFetch.mockRestore()
 		})
+	})
+})
+
+describe('getAuthToken', () => {
+	let originalClerk: unknown
+
+	beforeEach(() => {
+		originalClerk = (globalThis as unknown as { Clerk: unknown }).Clerk
+	})
+
+	afterEach(() => {
+		;(globalThis as unknown as { Clerk: unknown }).Clerk = originalClerk
+	})
+
+	it('should return token immediately when Clerk is loaded with session', async () => {
+		const getToken = mock(() => Promise.resolve('immediate-token'))
+		;(globalThis as unknown as { Clerk: MockClerk }).Clerk = {
+			loaded: true,
+			session: { getToken },
+		}
+
+		const token = await getAuthToken(1000)
+		expect(token).toBe('immediate-token')
+		expect(getToken).toHaveBeenCalledTimes(1)
+	})
+
+	it('should pass skipCache when forceRefresh is true', async () => {
+		const getToken = mock(() => Promise.resolve('fresh-token'))
+		;(globalThis as unknown as { Clerk: MockClerk }).Clerk = {
+			loaded: true,
+			session: { getToken },
+		}
+
+		const token = await getAuthToken(1000, true)
+		expect(token).toBe('fresh-token')
+		expect(getToken).toHaveBeenCalledWith({ skipCache: true })
+	})
+
+	it('should return null when Clerk instance is not available within timeout', async () => {
+		;(globalThis as unknown as { Clerk: unknown }).Clerk = undefined
+
+		const token = await getAuthToken(100)
+		expect(token).toBeNull()
+	})
+
+	it('should use addListener to wait for session when not immediately available', async () => {
+		const getToken = mock(() => Promise.resolve('listener-token'))
+
+		const clerkInstance: MockClerk = {
+			loaded: true,
+			session: null,
+			addListener: (callback) => {
+				// Simulate session becoming available after a short delay
+				setTimeout(() => {
+					callback({ session: { getToken } })
+				}, 50)
+				return () => {}
+			},
+		}
+		;(globalThis as unknown as { Clerk: MockClerk }).Clerk = clerkInstance
+
+		const token = await getAuthToken(5000)
+		expect(token).toBe('listener-token')
+		expect(getToken).toHaveBeenCalledTimes(1)
+	})
+
+	it('should return null when addListener times out without session', async () => {
+		const clerkInstance: MockClerk = {
+			loaded: true,
+			session: null,
+			addListener: (_callback) => {
+				// Never calls the callback (simulates no session)
+				return () => {}
+			},
+		}
+		;(globalThis as unknown as { Clerk: MockClerk }).Clerk = clerkInstance
+
+		const token = await getAuthToken(100)
+		expect(token).toBeNull()
+	})
+
+	it('should return null when addListener is not available and no session', async () => {
+		const clerkInstance: MockClerk = {
+			loaded: true,
+			session: null,
+		}
+		;(globalThis as unknown as { Clerk: MockClerk }).Clerk = clerkInstance
+
+		const token = await getAuthToken(100)
+		expect(token).toBeNull()
+	})
+
+	it('should unsubscribe listener after session is received', async () => {
+		const getToken = mock(() => Promise.resolve('token'))
+		let unsubscribeCalled = false
+
+		const clerkInstance: MockClerk = {
+			loaded: true,
+			session: null,
+			addListener: (callback) => {
+				setTimeout(() => {
+					callback({ session: { getToken } })
+				}, 10)
+				return () => {
+					unsubscribeCalled = true
+				}
+			},
+		}
+		;(globalThis as unknown as { Clerk: MockClerk }).Clerk = clerkInstance
+
+		await getAuthToken(5000)
+		expect(unsubscribeCalled).toBe(true)
+	})
+
+	it('should unsubscribe listener on timeout', async () => {
+		let unsubscribeCalled = false
+
+		const clerkInstance: MockClerk = {
+			loaded: true,
+			session: null,
+			addListener: (_callback) => {
+				return () => {
+					unsubscribeCalled = true
+				}
+			},
+		}
+		;(globalThis as unknown as { Clerk: MockClerk }).Clerk = clerkInstance
+
+		await getAuthToken(50)
+		expect(unsubscribeCalled).toBe(true)
+	})
+
+	it('should return null when getToken throws', async () => {
+		const getToken = mock(() => Promise.reject(new Error('Token error')))
+		;(globalThis as unknown as { Clerk: MockClerk }).Clerk = {
+			loaded: true,
+			session: { getToken },
+		}
+
+		const token = await getAuthToken(1000)
+		expect(token).toBeNull()
+	})
+
+	it('should wait for Clerk instance to become available', async () => {
+		;(globalThis as unknown as { Clerk: unknown }).Clerk = undefined
+
+		const getToken = mock(() => Promise.resolve('delayed-token'))
+
+		// Set Clerk after a short delay
+		setTimeout(() => {
+			;(globalThis as unknown as { Clerk: MockClerk }).Clerk = {
+				loaded: true,
+				session: { getToken },
+			}
+		}, 50)
+
+		const token = await getAuthToken(5000)
+		expect(token).toBe('delayed-token')
 	})
 })
