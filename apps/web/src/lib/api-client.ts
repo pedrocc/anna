@@ -67,11 +67,16 @@ export const apiRoutes = {
 	},
 } as const
 
+// Default SWR config with deduping to prevent excessive revalidation
+const defaultSwrConfig: SWRConfiguration = {
+	dedupingInterval: 5000, // 5 seconds deduping window
+}
+
 /**
  * Typed SWR hook for fetching the current user
  */
 export function useCurrentUser(config?: SWRConfiguration<User>) {
-	return useSWR<User>(apiRoutes.users.me, fetcher, config)
+	return useSWR<User>(apiRoutes.users.me, fetcher, { ...defaultSwrConfig, ...config })
 }
 
 /**
@@ -88,14 +93,20 @@ export function useUsers(
 			})}`
 		: ''
 
-	return useSWR<User[]>(`${apiRoutes.users.list}${queryString}`, fetcher, config)
+	return useSWR<User[]>(`${apiRoutes.users.list}${queryString}`, fetcher, {
+		...defaultSwrConfig,
+		...config,
+	})
 }
 
 /**
  * Typed SWR hook for fetching a specific user by ID
  */
 export function useUser(id: string | null, config?: SWRConfiguration<User>) {
-	return useSWR<User>(id ? apiRoutes.users.byId(id) : null, fetcher, config)
+	return useSWR<User>(id ? apiRoutes.users.byId(id) : null, fetcher, {
+		...defaultSwrConfig,
+		...config,
+	})
 }
 
 // ============================================
@@ -116,7 +127,10 @@ export function useBriefingSessions(
 			})}`
 		: ''
 
-	return useSWR<BriefingSession[]>(`${apiRoutes.briefing.sessions}${queryString}`, fetcher, config)
+	return useSWR<BriefingSession[]>(`${apiRoutes.briefing.sessions}${queryString}`, fetcher, {
+		...defaultSwrConfig,
+		...config,
+	})
 }
 
 /**
@@ -155,6 +169,7 @@ export function useBriefingSession(
 	config?: SWRConfiguration<BriefingSessionWithMessages>
 ) {
 	return useSWR<BriefingSessionWithMessages>(id ? apiRoutes.briefing.session(id) : null, fetcher, {
+		...defaultSwrConfig,
 		...config,
 		refreshInterval: 0,
 		revalidateOnMount: true, // Always fetch fresh data on mount
@@ -172,7 +187,7 @@ export function useBriefingDocuments(
 	return useSWR<BriefingDocumentFromAPI[]>(
 		sessionId ? apiRoutes.briefing.documents(sessionId) : null,
 		fetcher,
-		config
+		{ ...defaultSwrConfig, ...config }
 	)
 }
 
@@ -586,7 +601,10 @@ export function usePrdSessions(
 			})}`
 		: ''
 
-	return useSWR<PrdSession[]>(`${apiRoutes.prd.sessions}${queryString}`, fetcher, config)
+	return useSWR<PrdSession[]>(`${apiRoutes.prd.sessions}${queryString}`, fetcher, {
+		...defaultSwrConfig,
+		...config,
+	})
 }
 
 /**
@@ -597,6 +615,7 @@ export function usePrdSession(
 	config?: SWRConfiguration<PrdSessionWithMessages>
 ) {
 	return useSWR<PrdSessionWithMessages>(id ? apiRoutes.prd.session(id) : null, fetcher, {
+		...defaultSwrConfig,
 		...config,
 		refreshInterval: 0,
 		revalidateOnMount: true, // Always fetch fresh data on mount
@@ -614,7 +633,7 @@ export function usePrdDocuments(
 	return useSWR<PrdDocumentFromAPI[]>(
 		sessionId ? apiRoutes.prd.documents(sessionId) : null,
 		fetcher,
-		config
+		{ ...defaultSwrConfig, ...config }
 	)
 }
 
@@ -684,7 +703,10 @@ export function useSmSessions(
 			})}`
 		: ''
 
-	return useSWR<SmSession[]>(`${apiRoutes.sm.sessions}${queryString}`, fetcher, config)
+	return useSWR<SmSession[]>(`${apiRoutes.sm.sessions}${queryString}`, fetcher, {
+		...defaultSwrConfig,
+		...config,
+	})
 }
 
 /**
@@ -692,6 +714,7 @@ export function useSmSessions(
  */
 export function useSmSession(id: string | null, config?: SWRConfiguration<SmSessionWithMessages>) {
 	return useSWR<SmSessionWithMessages>(id ? apiRoutes.sm.session(id) : null, fetcher, {
+		...defaultSwrConfig,
 		...config,
 		refreshInterval: 0,
 		revalidateOnMount: true, // Always fetch fresh data on mount
@@ -709,7 +732,7 @@ export function useSmDocuments(
 	return useSWR<SmDocumentFromAPI[]>(
 		sessionId ? apiRoutes.sm.documents(sessionId) : null,
 		fetcher,
-		config
+		{ ...defaultSwrConfig, ...config }
 	)
 }
 
@@ -729,7 +752,10 @@ type SmPrdSessionOption = {
  * Typed SWR hook for fetching available PRD sessions for SM
  */
 export function useSmPrdSessions(config?: SWRConfiguration<SmPrdSessionOption[]>) {
-	return useSWR<SmPrdSessionOption[]>(apiRoutes.sm.prdSessions, fetcher, config)
+	return useSWR<SmPrdSessionOption[]>(apiRoutes.sm.prdSessions, fetcher, {
+		...defaultSwrConfig,
+		...config,
+	})
 }
 
 // ============================================
@@ -872,7 +898,10 @@ export function useKanbanProjects(
 			})}`
 		: ''
 
-	return useSWR<KanbanProject[]>(`${apiRoutes.kanban.sessions}${queryString}`, fetcher, config)
+	return useSWR<KanbanProject[]>(`${apiRoutes.kanban.sessions}${queryString}`, fetcher, {
+		...defaultSwrConfig,
+		...config,
+	})
 }
 
 /**
@@ -880,6 +909,7 @@ export function useKanbanProjects(
  */
 export function useKanbanBoard(id: string | null, config?: SWRConfiguration<KanbanBoardData>) {
 	return useSWR<KanbanBoardData>(id ? apiRoutes.kanban.board(id) : null, fetcher, {
+		...defaultSwrConfig,
 		...config,
 		refreshInterval: 0,
 	})
