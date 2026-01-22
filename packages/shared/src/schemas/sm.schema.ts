@@ -436,6 +436,8 @@ export const SmExtractedEpicSchema = z.object({
 	businessValue: z.string().optional(),
 	priority: SmStoryPrioritySchema.optional(),
 	functionalRequirementCodes: z.array(z.string()).optional(),
+	targetSprint: z.number().int().optional(),
+	estimatedStoryPoints: z.number().int().optional(),
 })
 
 /**
@@ -448,6 +450,7 @@ export const SmExtractedStorySchema = z.object({
 	asA: z.string().min(1),
 	iWant: z.string().min(1),
 	soThat: z.string().min(1),
+	description: z.string().optional(),
 	acceptanceCriteria: z.array(SmExtractedAcceptanceCriteriaSchema).optional(),
 	tasks: z.array(SmExtractedTaskSchema).optional(),
 	devNotes: z
@@ -462,6 +465,8 @@ export const SmExtractedStorySchema = z.object({
 		.optional(),
 	storyPoints: z.number().int().optional(),
 	priority: SmStoryPrioritySchema.optional(),
+	targetSprint: z.number().int().optional(),
+	functionalRequirementCodes: z.array(z.string()).optional(),
 })
 
 /**

@@ -175,6 +175,8 @@ export function transformEpicForInsert(
 	functionalRequirementCodes: string[]
 	featureIds: string[]
 	status: 'backlog' | 'in_progress' | 'done'
+	targetSprint?: number
+	estimatedStoryPoints?: number
 } {
 	return {
 		sessionId,
@@ -186,6 +188,8 @@ export function transformEpicForInsert(
 		functionalRequirementCodes: epic.functionalRequirementCodes ?? [],
 		featureIds: [],
 		status: 'backlog',
+		targetSprint: epic.targetSprint,
+		estimatedStoryPoints: epic.estimatedStoryPoints,
 	}
 }
 
@@ -206,12 +210,14 @@ export function transformStoryForInsert(
 	asA: string
 	iWant: string
 	soThat: string
+	description?: string
 	acceptanceCriteria: ReturnType<typeof transformAcceptanceCriteria>
 	tasks: ReturnType<typeof transformTasks>
 	devNotes: ReturnType<typeof transformDevNotes>
 	storyPoints?: number
 	priority: 'critical' | 'high' | 'medium' | 'low'
 	status: 'backlog' | 'ready_for_dev' | 'in_progress' | 'review' | 'done'
+	targetSprint?: number
 	functionalRequirementCodes: string[]
 } {
 	return {
@@ -224,12 +230,14 @@ export function transformStoryForInsert(
 		asA: story.asA,
 		iWant: story.iWant,
 		soThat: story.soThat,
+		description: story.description,
 		acceptanceCriteria: transformAcceptanceCriteria(story.acceptanceCriteria),
 		tasks: transformTasks(story.tasks),
 		devNotes: transformDevNotes(story.devNotes),
 		storyPoints: story.storyPoints,
 		priority: story.priority ?? 'medium',
 		status: 'backlog',
-		functionalRequirementCodes: [],
+		targetSprint: story.targetSprint,
+		functionalRequirementCodes: story.functionalRequirementCodes ?? [],
 	}
 }
