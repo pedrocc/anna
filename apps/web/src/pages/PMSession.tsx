@@ -61,6 +61,7 @@ export function PMSessionPage() {
 	const [isDeleting, setIsDeleting] = useState(false)
 	const [isDeletingDoc, setIsDeletingDoc] = useState(false)
 	const [initialTabSet, setInitialTabSet] = useState(false)
+	const [actionError, setActionError] = useState<string | null>(null)
 
 	// Verifica se a geração está em andamento baseado no status persistido
 	const isGenerationInProgress = session?.generationStatus === 'generating'
@@ -94,13 +95,15 @@ export function PMSessionPage() {
 	// Get the single document (first one)
 	const document = session?.documents?.[0] ?? null
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: id ensures callback is recreated when navigating between sessions
 	const handleMessageComplete = useCallback(() => {
 		mutate()
-	}, [mutate])
+	}, [id, mutate])
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: id ensures callback is recreated when navigating between sessions
 	const handleStepUpdate = useCallback(() => {
 		mutate()
-	}, [mutate])
+	}, [id, mutate])
 
 	const {
 		sendMessage,
@@ -133,19 +136,27 @@ export function PMSessionPage() {
 	)
 
 	const handleGenerateDocument = async () => {
+		setActionError(null)
 		try {
 			await generateDocument()
 			await mutate()
 			setActiveTab('document')
-		} catch (_err) {}
+		} catch (err) {
+			console.error('Failed to generate document:', err)
+			setActionError('Falha ao gerar documento. Tente novamente.')
+		}
 	}
 
 	const handleSaveDocument = async (content: string) => {
 		if (!document) return
 		setIsSavingDoc(true)
+		setActionError(null)
 		try {
 			await api.prd.updateDocumentById(document.id, { content })
 			await mutate()
+		} catch (err) {
+			console.error('Failed to save document:', err)
+			setActionError('Falha ao salvar documento. Tente novamente.')
 		} finally {
 			setIsSavingDoc(false)
 		}
@@ -154,9 +165,13 @@ export function PMSessionPage() {
 	const handleDeleteDocument = async () => {
 		if (!document) return
 		setIsDeletingDoc(true)
+		setActionError(null)
 		try {
 			await api.prd.deleteDocumentById(document.id)
 			await mutate()
+		} catch (err) {
+			console.error('Failed to delete document:', err)
+			setActionError('Falha ao excluir documento. Tente novamente.')
 		} finally {
 			setIsDeletingDoc(false)
 		}
@@ -165,10 +180,13 @@ export function PMSessionPage() {
 	const handleDeleteSession = async () => {
 		if (!id) return
 		setIsDeleting(true)
+		setActionError(null)
 		try {
 			await api.prd.deleteSession(id)
 			navigate('/pm')
-		} catch (_err) {
+		} catch (err) {
+			console.error('Failed to delete session:', err)
+			setActionError('Falha ao excluir sessão. Tente novamente.')
 			setIsDeleting(false)
 		}
 	}
@@ -176,12 +194,15 @@ export function PMSessionPage() {
 	const handleRenameSession = async () => {
 		if (!id || !newProjectName.trim()) return
 		setIsRenaming(true)
+		setActionError(null)
 		try {
 			await api.prd.renameSession(id, newProjectName.trim())
 			await mutate()
 			setShowRenameDialog(false)
 			setNewProjectName('')
-		} catch (_err) {
+		} catch (err) {
+			console.error('Failed to rename session:', err)
+			setActionError('Falha ao renomear sessão. Tente novamente.')
 		} finally {
 			setIsRenaming(false)
 		}
@@ -308,6 +329,23 @@ export function PMSessionPage() {
 					</div>
 				</div>
 			</div>
+
+			{/* Error Alert */}
+			{actionError && (
+				<div className="shrink-0 border-b border-red-200 bg-red-50 px-6 py-3">
+					<div className="mx-auto flex max-w-7xl items-center gap-2 text-sm text-red-700">
+						<AlertTriangle className="h-4 w-4" />
+						<span>{actionError}</span>
+						<button
+							type="button"
+							onClick={() => setActionError(null)}
+							className="ml-auto text-red-500 hover:text-red-700"
+						>
+							×
+						</button>
+					</div>
+				</div>
+			)}
 
 			{/* Tabs */}
 			<Tabs
