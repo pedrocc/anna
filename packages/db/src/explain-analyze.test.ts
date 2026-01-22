@@ -185,6 +185,38 @@ describe('EXPLAIN ANALYZE - Composite Index Verification', () => {
 		})
 	})
 
+	describe('session updatedAt indexes', () => {
+		it('should produce valid plan for briefing_sessions ORDER BY updated_at', async () => {
+			const rows = await db.execute<ExplainRow>(
+				sql`EXPLAIN ANALYZE SELECT * FROM briefing_sessions ORDER BY updated_at DESC LIMIT 10`
+			)
+
+			const plan = extractPlan(rows as unknown as ExplainRow[])
+			expect(plan).toContain('Execution Time')
+			assertIndexUsed(plan, 'briefing_sessions_updated_at_idx')
+		})
+
+		it('should produce valid plan for prd_sessions ORDER BY updated_at', async () => {
+			const rows = await db.execute<ExplainRow>(
+				sql`EXPLAIN ANALYZE SELECT * FROM prd_sessions ORDER BY updated_at DESC LIMIT 10`
+			)
+
+			const plan = extractPlan(rows as unknown as ExplainRow[])
+			expect(plan).toContain('Execution Time')
+			assertIndexUsed(plan, 'prd_sessions_updated_at_idx')
+		})
+
+		it('should produce valid plan for sm_sessions ORDER BY updated_at', async () => {
+			const rows = await db.execute<ExplainRow>(
+				sql`EXPLAIN ANALYZE SELECT * FROM sm_sessions ORDER BY updated_at DESC LIMIT 10`
+			)
+
+			const plan = extractPlan(rows as unknown as ExplainRow[])
+			expect(plan).toContain('Execution Time')
+			assertIndexUsed(plan, 'sm_sessions_updated_at_idx')
+		})
+	})
+
 	describe('Index existence verification', () => {
 		it('should confirm sm_epics_session_number_idx exists in pg_indexes', async () => {
 			const rows = await db.execute<{ indexname: string }>(
@@ -205,6 +237,30 @@ describe('EXPLAIN ANALYZE - Composite Index Verification', () => {
 		it('should confirm sm_stories_session_status_idx exists in pg_indexes', async () => {
 			const rows = await db.execute<{ indexname: string }>(
 				sql`SELECT indexname FROM pg_indexes WHERE tablename = 'sm_stories' AND indexname = 'sm_stories_session_status_idx'`
+			)
+
+			expect((rows as unknown as { indexname: string }[]).length).toBe(1)
+		})
+
+		it('should confirm briefing_sessions_updated_at_idx exists in pg_indexes', async () => {
+			const rows = await db.execute<{ indexname: string }>(
+				sql`SELECT indexname FROM pg_indexes WHERE tablename = 'briefing_sessions' AND indexname = 'briefing_sessions_updated_at_idx'`
+			)
+
+			expect((rows as unknown as { indexname: string }[]).length).toBe(1)
+		})
+
+		it('should confirm prd_sessions_updated_at_idx exists in pg_indexes', async () => {
+			const rows = await db.execute<{ indexname: string }>(
+				sql`SELECT indexname FROM pg_indexes WHERE tablename = 'prd_sessions' AND indexname = 'prd_sessions_updated_at_idx'`
+			)
+
+			expect((rows as unknown as { indexname: string }[]).length).toBe(1)
+		})
+
+		it('should confirm sm_sessions_updated_at_idx exists in pg_indexes', async () => {
+			const rows = await db.execute<{ indexname: string }>(
+				sql`SELECT indexname FROM pg_indexes WHERE tablename = 'sm_sessions' AND indexname = 'sm_sessions_updated_at_idx'`
 			)
 
 			expect((rows as unknown as { indexname: string }[]).length).toBe(1)
