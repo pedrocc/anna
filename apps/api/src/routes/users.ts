@@ -1,6 +1,11 @@
 import { zValidator } from '@hono/zod-validator'
 import { db, users } from '@repo/db'
-import { CreateUserSchema, PaginationSchema, UpdateUserSchema } from '@repo/shared'
+import {
+	CreateUserSchema,
+	PaginationSchema,
+	UpdateSelfSchema,
+	UpdateUserSchema,
+} from '@repo/shared'
 import { eq, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { commonErrors, successResponse } from '../lib/response.js'
@@ -59,6 +64,24 @@ userRoutes.post('/', verifyClerkWebhook, zValidator('json', CreateUserSchema), a
 	const [newUser] = await db.insert(users).values(data).returning()
 
 	return successResponse(c, newUser, 201)
+})
+
+// Update current user's own profile
+userRoutes.patch('/me', authMiddleware, zValidator('json', UpdateSelfSchema), async (c) => {
+	const { userId } = getAuth(c)
+	const data = c.req.valid('json')
+
+	const [updatedUser] = await db
+		.update(users)
+		.set({ ...data, updatedAt: new Date() })
+		.where(eq(users.clerkId, userId))
+		.returning()
+
+	if (!updatedUser) {
+		return commonErrors.notFound(c, 'User not found')
+	}
+
+	return successResponse(c, updatedUser)
 })
 
 // Sync user name from Clerk (called from frontend)

@@ -29,7 +29,11 @@ export const CreateUserSchema = UserSchema.omit({
 
 export const UpdateUserSchema = CreateUserSchema.partial().omit({ clerkId: true })
 
+// Schema for self-updates via /me endpoint (no role changes allowed)
+export const UpdateSelfSchema = UpdateUserSchema.omit({ role: true })
+
 export type UserRole = z.infer<typeof UserRoleSchema>
 export type User = z.infer<typeof UserSchema>
 export type CreateUser = z.infer<typeof CreateUserSchema>
 export type UpdateUser = z.infer<typeof UpdateUserSchema>
+export type UpdateSelf = z.infer<typeof UpdateSelfSchema>

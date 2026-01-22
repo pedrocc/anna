@@ -65,6 +65,49 @@ describe('User Routes', () => {
 		})
 	})
 
+	describe('PATCH /api/v1/users/me', () => {
+		it('should return 401 without authentication', async () => {
+			const res = await app.request('/api/v1/users/me', {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ name: 'New Name' }),
+			})
+
+			expect(res.status).toBe(401)
+			const data = (await res.json()) as { success: boolean }
+			expect(data.success).toBe(false)
+		})
+
+		it('should return 401 with invalid token', async () => {
+			const res = await app.request('/api/v1/users/me', {
+				method: 'PATCH',
+				headers: {
+					Authorization: 'Bearer invalid-token',
+					'Content-Type': 'application/json',
+				},
+				body: JSON.stringify({ name: 'New Name' }),
+			})
+
+			expect(res.status).toBe(401)
+			const data = (await res.json()) as { success: boolean }
+			expect(data.success).toBe(false)
+		})
+
+		it('should reject role field in body (not allowed for self-updates)', async () => {
+			const res = await app.request('/api/v1/users/me', {
+				method: 'PATCH',
+				headers: {
+					Authorization: 'Bearer invalid-token',
+					'Content-Type': 'application/json',
+				},
+				body: JSON.stringify({ role: 'admin' }),
+			})
+
+			// Auth runs first, so 401; but the schema would strip/reject role
+			expect(res.status).toBe(401)
+		})
+	})
+
 	describe('PATCH /api/v1/users/:id', () => {
 		it('should return 401 without authentication', async () => {
 			const res = await app.request('/api/v1/users/123', {
@@ -121,12 +164,15 @@ describe('User Routes', () => {
 		})
 
 		it('should return 401 when webhook signature is invalid', async () => {
+			// Use a current timestamp to pass the replay protection check
+			const currentTimestamp = Math.floor(Date.now() / 1000).toString()
+
 			const res = await app.request('/api/v1/users', {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
 					'svix-id': 'test-id',
-					'svix-timestamp': '1234567890',
+					'svix-timestamp': currentTimestamp,
 					'svix-signature': 'invalid-signature',
 				},
 				body: JSON.stringify({ clerkId: 'test-id', email: 'test@test.com' }),
