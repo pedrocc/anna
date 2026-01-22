@@ -269,6 +269,179 @@ describe('trusted-proxy middleware', () => {
 			})
 		})
 
+		describe('X-Forwarded-For spoofing attack vectors', () => {
+			beforeEach(() => {
+				process.env['TRUST_ALL_PROXIES'] = 'false'
+				process.env['NODE_ENV'] = 'test'
+			})
+
+			it('should ignore x-forwarded-for when client connects directly (no proxy)', () => {
+				// Attack: Client sends X-Forwarded-For to pretend to be another IP
+				const { c } = createMockContext(
+					{ 'x-forwarded-for': '10.0.0.1' }, // Attacker claims to be internal IP
+					{ remoteAddress: '203.0.113.50' } // Actual client IP
+				)
+				// Should return actual IP, ignoring spoofed header
+				expect(getClientIp(c)).toBe('203.0.113.50')
+			})
+
+			it('should ignore x-forwarded-for with multiple IPs when not from trusted proxy', () => {
+				// Attack: Client crafts X-Forwarded-For chain to appear from internal network
+				const { c } = createMockContext(
+					{ 'x-forwarded-for': '192.168.1.1, 10.0.0.1, 172.16.0.1' },
+					{ remoteAddress: '203.0.113.50' }
+				)
+				expect(getClientIp(c)).toBe('203.0.113.50')
+			})
+
+			it('should ignore x-forwarded-for with localhost when not from trusted proxy', () => {
+				// Attack: Client tries to appear as localhost
+				const { c } = createMockContext(
+					{ 'x-forwarded-for': '127.0.0.1' },
+					{ remoteAddress: '203.0.113.50' }
+				)
+				expect(getClientIp(c)).toBe('203.0.113.50')
+			})
+
+			it('should ignore x-forwarded-for with IPv6 localhost when not from trusted proxy', () => {
+				// Attack: Client tries to appear as IPv6 localhost
+				const { c } = createMockContext(
+					{ 'x-forwarded-for': '::1' },
+					{ remoteAddress: '203.0.113.50' }
+				)
+				expect(getClientIp(c)).toBe('203.0.113.50')
+			})
+
+			it('should ignore x-forwarded-for even when it looks like Cloudflare format', () => {
+				// Attack: Client mimics Cloudflare-style header
+				const { c } = createMockContext(
+					{ 'x-forwarded-for': '1.2.3.4, 104.16.0.1' }, // Includes a Cloudflare IP
+					{ remoteAddress: '203.0.113.50' }
+				)
+				expect(getClientIp(c)).toBe('203.0.113.50')
+			})
+
+			it('should ignore x-forwarded-for completely - header is never trusted', () => {
+				// Even with TRUST_ALL_PROXIES=true, x-forwarded-for is not in trusted headers list
+				process.env['TRUST_ALL_PROXIES'] = 'true'
+				const { c } = createMockContext(
+					{ 'x-forwarded-for': '1.2.3.4' },
+					{ remoteAddress: '203.0.113.50' }
+				)
+				// x-forwarded-for is never trusted, falls back to remoteAddress
+				expect(getClientIp(c)).toBe('203.0.113.50')
+			})
+
+			it('should use cf-connecting-ip and ignore x-forwarded-for even from trusted proxy', () => {
+				// Scenario: Request through Cloudflare with both headers
+				// x-forwarded-for may contain spoofed data prepended by attacker
+				const { c } = createMockContext(
+					{
+						'x-forwarded-for': '1.2.3.4, 5.6.7.8, 203.0.113.50', // Attacker prepended IPs
+						'cf-connecting-ip': '203.0.113.50', // Real client IP from Cloudflare
+					},
+					{ remoteAddress: '104.16.0.1' } // Cloudflare proxy IP
+				)
+				// Should trust cf-connecting-ip, completely ignore x-forwarded-for
+				expect(getClientIp(c)).toBe('203.0.113.50')
+			})
+
+			it('should not trust x-forwarded-for even with malformed IP to bypass validation', () => {
+				// Attack: Send malformed IP hoping to confuse parser
+				const { c } = createMockContext(
+					{ 'x-forwarded-for': '999.999.999.999' },
+					{ remoteAddress: '203.0.113.50' }
+				)
+				expect(getClientIp(c)).toBe('203.0.113.50')
+			})
+
+			it('should not trust x-forwarded-for with empty value', () => {
+				const { c } = createMockContext(
+					{ 'x-forwarded-for': '' },
+					{ remoteAddress: '203.0.113.50' }
+				)
+				expect(getClientIp(c)).toBe('203.0.113.50')
+			})
+
+			it('should not trust x-forwarded-for with whitespace-only value', () => {
+				const { c } = createMockContext(
+					{ 'x-forwarded-for': '   ' },
+					{ remoteAddress: '203.0.113.50' }
+				)
+				expect(getClientIp(c)).toBe('203.0.113.50')
+			})
+
+			it('should not trust x-forwarded-for containing script injection attempt', () => {
+				// Attack: XSS/injection attempt via header
+				const { c } = createMockContext(
+					{ 'x-forwarded-for': '<script>alert(1)</script>' },
+					{ remoteAddress: '203.0.113.50' }
+				)
+				expect(getClientIp(c)).toBe('203.0.113.50')
+			})
+
+			it('should not trust spoofed cf-connecting-ip from non-Cloudflare IP', () => {
+				// Attack: Client directly sends cf-connecting-ip without going through Cloudflare
+				const { c } = createMockContext(
+					{ 'cf-connecting-ip': '10.0.0.1' },
+					{ remoteAddress: '203.0.113.50' } // Not a Cloudflare IP
+				)
+				// Should not trust cf-connecting-ip since request is not from Cloudflare
+				expect(getClientIp(c)).toBe('203.0.113.50')
+			})
+
+			it('should not trust spoofed x-real-ip from non-proxy IP', () => {
+				// Attack: Client directly sends x-real-ip
+				const { c } = createMockContext(
+					{ 'x-real-ip': '10.0.0.1' },
+					{ remoteAddress: '203.0.113.50' } // Not a trusted proxy
+				)
+				expect(getClientIp(c)).toBe('203.0.113.50')
+			})
+
+			it('should not trust all spoofed headers combined from non-proxy IP', () => {
+				// Attack: Client sends all possible proxy headers
+				const { c } = createMockContext(
+					{
+						'x-forwarded-for': '10.0.0.1',
+						'cf-connecting-ip': '10.0.0.2',
+						'x-real-ip': '10.0.0.3',
+						'x-client-ip': '10.0.0.4',
+						'true-client-ip': '10.0.0.5',
+						forwarded: 'for=10.0.0.6',
+					},
+					{ remoteAddress: '203.0.113.50' } // Actual client IP
+				)
+				// Should return actual connecting IP, ignoring all spoofed headers
+				expect(getClientIp(c)).toBe('203.0.113.50')
+			})
+
+			it('should handle attacker trying to spoof Cloudflare IP in x-forwarded-for', () => {
+				// Attack: Client includes Cloudflare IP in x-forwarded-for chain
+				const { c } = createMockContext(
+					{ 'x-forwarded-for': '10.0.0.1, 104.16.0.1' }, // Second IP is Cloudflare range
+					{ remoteAddress: '203.0.113.50' }
+				)
+				// x-forwarded-for is completely ignored, actual IP is used
+				expect(getClientIp(c)).toBe('203.0.113.50')
+			})
+
+			it('should not allow rate limit bypass via spoofed headers', () => {
+				// Attack: Attacker changes x-forwarded-for to get fresh rate limit
+				const { c: c1 } = createMockContext(
+					{ 'x-forwarded-for': '1.1.1.1' },
+					{ remoteAddress: '203.0.113.50' }
+				)
+				const { c: c2 } = createMockContext(
+					{ 'x-forwarded-for': '2.2.2.2' },
+					{ remoteAddress: '203.0.113.50' }
+				)
+				// Both should resolve to same IP (actual connecting IP)
+				expect(getClientIp(c1)).toBe('203.0.113.50')
+				expect(getClientIp(c2)).toBe('203.0.113.50')
+			})
+		})
+
 		describe('development mode', () => {
 			beforeEach(() => {
 				process.env['NODE_ENV'] = 'development'
