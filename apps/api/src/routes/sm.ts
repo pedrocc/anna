@@ -566,95 +566,95 @@ smRoutes.post(
 						step: session.currentStep,
 					})
 
-					// Persist extracted epics/stories
+					// Persist extracted epics/stories using batch operations
 					if (extractedData) {
 						// Map to track epic number -> epic id for story linking
 						const epicIdMap = new Map<number, string>()
 
 						// Process epics first (so stories can reference them)
 						if (extractedData.epics && extractedData.epics.length > 0) {
-							for (const epicData of extractedData.epics) {
-								if (extractedData.action === 'create') {
-									// Check if epic with this number already exists
-									const existingEpic = await tx.query.smEpics.findFirst({
-										where: and(
-											eq(smEpics.sessionId, sessionId),
-											eq(smEpics.number, epicData.number)
-										),
-									})
+							const epicNumbers = extractedData.epics.map((e) => e.number)
 
-									if (existingEpic) {
-										// Update existing epic
-										await tx
-											.update(smEpics)
-											.set({
-												title: epicData.title,
-												description: epicData.description,
-												businessValue: epicData.businessValue,
-												priority: epicData.priority ?? 'medium',
-												functionalRequirementCodes: epicData.functionalRequirementCodes ?? [],
-												updatedAt: new Date(),
-											})
-											.where(eq(smEpics.id, existingEpic.id))
-										epicIdMap.set(epicData.number, existingEpic.id)
-									} else {
-										// Create new epic
-										const [newEpic] = await tx
-											.insert(smEpics)
-											.values(transformEpicForInsert(epicData, sessionId))
-											.returning()
-										if (newEpic) {
-											epicIdMap.set(epicData.number, newEpic.id)
-										}
-									}
-								} else if (extractedData.action === 'update') {
-									// Update existing epic by number
-									const existingEpic = await tx.query.smEpics.findFirst({
-										where: and(
-											eq(smEpics.sessionId, sessionId),
-											eq(smEpics.number, epicData.number)
-										),
-									})
-									if (existingEpic) {
-										await tx
-											.update(smEpics)
-											.set({
-												title: epicData.title,
-												description: epicData.description,
-												businessValue: epicData.businessValue,
-												priority: epicData.priority ?? existingEpic.priority,
-												functionalRequirementCodes:
-													epicData.functionalRequirementCodes ??
-													existingEpic.functionalRequirementCodes,
-												updatedAt: new Date(),
-											})
-											.where(eq(smEpics.id, existingEpic.id))
-										epicIdMap.set(epicData.number, existingEpic.id)
-									}
+							// Batch fetch all existing epics for this session by number
+							const existingEpics = await tx.query.smEpics.findMany({
+								where: and(eq(smEpics.sessionId, sessionId), inArray(smEpics.number, epicNumbers)),
+							})
+							const existingEpicsByNumber = new Map(existingEpics.map((e) => [e.number, e]))
+
+							const epicsToInsert: ReturnType<typeof transformEpicForInsert>[] = []
+
+							for (const epicData of extractedData.epics) {
+								const existing = existingEpicsByNumber.get(epicData.number)
+
+								if (existing) {
+									// Update existing epic
+									const isUpdate = extractedData.action === 'update'
+									await tx
+										.update(smEpics)
+										.set({
+											title: epicData.title,
+											description: epicData.description,
+											businessValue: epicData.businessValue,
+											priority: epicData.priority ?? (isUpdate ? existing.priority : 'medium'),
+											functionalRequirementCodes:
+												epicData.functionalRequirementCodes ??
+												(isUpdate ? existing.functionalRequirementCodes : []),
+											updatedAt: new Date(),
+										})
+										.where(eq(smEpics.id, existing.id))
+									epicIdMap.set(epicData.number, existing.id)
+								} else if (extractedData.action === 'create') {
+									epicsToInsert.push(transformEpicForInsert(epicData, sessionId))
+								}
+							}
+
+							// Batch insert all new epics at once
+							if (epicsToInsert.length > 0) {
+								const insertedEpics = await tx
+									.insert(smEpics)
+									.values(epicsToInsert)
+									.returning({ id: smEpics.id, number: smEpics.number })
+								for (const epic of insertedEpics) {
+									epicIdMap.set(epic.number, epic.id)
 								}
 							}
 						}
 
 						// Process stories (after epics so we can link them)
 						if (extractedData.stories && extractedData.stories.length > 0) {
-							for (const storyData of extractedData.stories) {
-								// Find the epic for this story
-								let epicId = epicIdMap.get(storyData.epicNumber)
-								if (!epicId) {
-									// Try to find existing epic
-									const existingEpic = await tx.query.smEpics.findFirst({
-										where: and(
-											eq(smEpics.sessionId, sessionId),
-											eq(smEpics.number, storyData.epicNumber)
-										),
-									})
-									if (existingEpic) {
-										epicId = existingEpic.id
-									}
+							// Resolve epic IDs for stories not yet in epicIdMap
+							const missingEpicNumbers = [
+								...new Set(
+									extractedData.stories.map((s) => s.epicNumber).filter((n) => !epicIdMap.has(n))
+								),
+							]
+							if (missingEpicNumbers.length > 0) {
+								const foundEpics = await tx.query.smEpics.findMany({
+									where: and(
+										eq(smEpics.sessionId, sessionId),
+										inArray(smEpics.number, missingEpicNumbers)
+									),
+								})
+								for (const epic of foundEpics) {
+									epicIdMap.set(epic.number, epic.id)
 								}
+							}
 
+							// Batch fetch all existing stories for this session
+							const storyKeys = extractedData.stories.map((s) => `${s.epicNumber}-${s.storyNumber}`)
+							const existingStories = await tx.query.smStories.findMany({
+								where: and(
+									eq(smStories.sessionId, sessionId),
+									inArray(smStories.storyKey, storyKeys)
+								),
+							})
+							const existingStoriesByKey = new Map(existingStories.map((s) => [s.storyKey, s]))
+
+							const storiesToInsert: ReturnType<typeof transformStoryForInsert>[] = []
+
+							for (const storyData of extractedData.stories) {
+								const epicId = epicIdMap.get(storyData.epicNumber)
 								if (!epicId) {
-									// Skip story if no epic found
 									smLogger.warn(
 										{ epicNumber: storyData.epicNumber, storyNumber: storyData.storyNumber },
 										'Skipping story: Epic not found'
@@ -663,18 +663,11 @@ smRoutes.post(
 								}
 
 								const storyKey = `${storyData.epicNumber}-${storyData.storyNumber}`
+								const existing = existingStoriesByKey.get(storyKey)
 
-								if (extractedData.action === 'create') {
-									// Check if story already exists
-									const existingStory = await tx.query.smStories.findFirst({
-										where: and(
-											eq(smStories.sessionId, sessionId),
-											eq(smStories.storyKey, storyKey)
-										),
-									})
-
-									if (existingStory) {
-										// Update existing story
+								if (existing) {
+									// Update existing story
+									if (extractedData.action === 'create') {
 										await tx
 											.update(smStories)
 											.set({
@@ -682,26 +675,11 @@ smRoutes.post(
 												asA: storyData.asA,
 												iWant: storyData.iWant,
 												soThat: storyData.soThat,
-												priority: storyData.priority ?? existingStory.priority,
+												priority: storyData.priority ?? existing.priority,
 												updatedAt: new Date(),
 											})
-											.where(eq(smStories.id, existingStory.id))
+											.where(eq(smStories.id, existing.id))
 									} else {
-										// Create new story
-										await tx
-											.insert(smStories)
-											.values(transformStoryForInsert(storyData, sessionId, epicId))
-									}
-								} else if (extractedData.action === 'update') {
-									// Update existing story
-									const existingStory = await tx.query.smStories.findFirst({
-										where: and(
-											eq(smStories.sessionId, sessionId),
-											eq(smStories.storyKey, storyKey)
-										),
-									})
-
-									if (existingStory) {
 										const updateData = transformStoryForInsert(storyData, sessionId, epicId)
 										await tx
 											.update(smStories)
@@ -717,9 +695,16 @@ smRoutes.post(
 												priority: updateData.priority,
 												updatedAt: new Date(),
 											})
-											.where(eq(smStories.id, existingStory.id))
+											.where(eq(smStories.id, existing.id))
 									}
+								} else if (extractedData.action === 'create') {
+									storiesToInsert.push(transformStoryForInsert(storyData, sessionId, epicId))
 								}
+							}
+
+							// Batch insert all new stories at once
+							if (storiesToInsert.length > 0) {
+								await tx.insert(smStories).values(storiesToInsert)
 							}
 						}
 					}
