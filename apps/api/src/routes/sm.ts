@@ -461,13 +461,20 @@ smRoutes.post(
 		if (action === 'advanced_elicitation') mode = 'advanced_elicitation'
 		if (action === 'party_mode') mode = 'party_mode'
 
-		// Build epics context
+		// Build epics context - O(1) lookup for story counts
+		const storiesCountByEpicId = new Map<string, number>()
+		for (const s of session.stories) {
+			if (s.epicId) {
+				storiesCountByEpicId.set(s.epicId, (storiesCountByEpicId.get(s.epicId) ?? 0) + 1)
+			}
+		}
+
 		const epicsContext = session.epics.map((e) => ({
 			number: e.number,
 			title: e.title,
 			description: e.description,
 			status: e.status,
-			storiesCount: session.stories.filter((s) => s.epicId === e.id).length,
+			storiesCount: storiesCountByEpicId.get(e.id) ?? 0,
 		}))
 
 		// Build stories context
@@ -914,13 +921,23 @@ smRoutes.post(
 			return commonErrors.internalError(c, 'Failed to refresh session')
 		}
 
-		// Build epics context
+		// Build epics context - O(1) lookup for story counts
+		const updatedStoriesCountByEpicId = new Map<string, number>()
+		for (const s of updatedSession.stories) {
+			if (s.epicId) {
+				updatedStoriesCountByEpicId.set(
+					s.epicId,
+					(updatedStoriesCountByEpicId.get(s.epicId) ?? 0) + 1
+				)
+			}
+		}
+
 		const epicsContext = updatedSession.epics.map((e) => ({
 			number: e.number,
 			title: e.title,
 			description: e.description,
 			status: e.status,
-			storiesCount: updatedSession.stories.filter((s) => s.epicId === e.id).length,
+			storiesCount: updatedStoriesCountByEpicId.get(e.id) ?? 0,
 		}))
 
 		// Build stories context

@@ -7,15 +7,23 @@ import {
 	useSensor,
 	useSensors,
 } from '@dnd-kit/core'
-import { Spinner } from '@repo/ui'
+import { Spinner, toast } from '@repo/ui'
 import { LayoutGrid } from 'lucide-react'
-import { useCallback, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { useLocation, useParams } from 'wouter'
 import { AppleBoard, AppleCardOverlay, AppleFilters, AppleHeader } from '../components/kanban/apple'
 import { StoryDetailSheet } from '../components/kanban/StoryDetailSheet'
 import { api, type KanbanStory, useKanbanBoard } from '../lib/api-client'
 
 type StoryStatus = KanbanStory['status']
+
+const VALID_STATUSES: Set<StoryStatus> = new Set([
+	'backlog',
+	'ready_for_dev',
+	'in_progress',
+	'review',
+	'done',
+])
 
 export function KanbanBoardPage() {
 	const params = useParams<{ id: string }>()
@@ -37,14 +45,21 @@ export function KanbanBoardPage() {
 	const [selectedStory, setSelectedStory] = useState<KanbanStory | null>(null)
 	const [sheetOpen, setSheetOpen] = useState(false)
 
+	// O(1) story lookup by ID
+	const storiesById = useMemo(
+		() => new Map(data?.stories.map((s) => [s.id, s]) ?? []),
+		[data?.stories]
+	)
+
 	const handleDelete = useCallback(async () => {
 		if (!sessionId) return
 		setIsDeleting(true)
 		try {
 			await api.sm.deleteSession(sessionId)
 			navigate('/kanban')
-		} catch {
-			// Error handled silently - UI reflects the failure
+		} catch (err) {
+			const message = err instanceof Error ? err.message : 'Erro ao deletar sessão'
+			toast.error('Erro', { description: message })
 			setIsDeleting(false)
 		}
 	}, [sessionId, navigate])
@@ -65,12 +80,12 @@ export function KanbanBoardPage() {
 	const handleDragStart = useCallback(
 		(event: DragStartEvent) => {
 			const { active } = event
-			const story = data?.stories.find((s) => s.id === active.id)
+			const story = storiesById.get(active.id as string)
 			if (story) {
 				setActiveStory(story)
 			}
 		},
-		[data?.stories]
+		[storiesById]
 	)
 
 	const handleDragEnd = useCallback(
@@ -87,16 +102,9 @@ export function KanbanBoardPage() {
 			const newStatus = droppableId.substring(lastDashIndex + 1) as StoryStatus
 
 			// Validate that the status is valid
-			const validStatuses: StoryStatus[] = [
-				'backlog',
-				'ready_for_dev',
-				'in_progress',
-				'review',
-				'done',
-			]
-			if (!validStatuses.includes(newStatus)) return
+			if (!VALID_STATUSES.has(newStatus)) return
 
-			const story = data.stories.find((s) => s.id === storyId)
+			const story = storiesById.get(storyId)
 			if (!story || story.status === newStatus) return
 
 			// Optimistic update
@@ -118,14 +126,16 @@ export function KanbanBoardPage() {
 			try {
 				await api.sm.updateStory(storyId, { status: newStatus })
 				mutate()
-			} catch (_err) {
+			} catch (err) {
 				// Rollback on error
 				mutate(previousData, false)
+				const message = err instanceof Error ? err.message : 'Erro ao mover story'
+				toast.error('Erro', { description: message })
 			} finally {
 				setIsUpdating(false)
 			}
 		},
-		[data, mutate]
+		[data, mutate, storiesById]
 	)
 
 	// Filter stories

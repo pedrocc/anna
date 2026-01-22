@@ -81,8 +81,10 @@ export async function enrichStoriesFromConversation(
 	let enriched = 0
 	let failed = 0
 
+	const storiesByKey = new Map(stories.map((s) => [s.storyKey, s]))
+
 	for (const data of enrichedData) {
-		const story = stories.find((s) => s.storyKey === data.storyKey)
+		const story = storiesByKey.get(data.storyKey)
 		if (!story) {
 			enrichLogger.warn({ storyKey: data.storyKey }, 'Story not found')
 			failed++
