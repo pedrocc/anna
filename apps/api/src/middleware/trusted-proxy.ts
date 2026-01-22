@@ -1,4 +1,5 @@
 import type { Context } from 'hono'
+import { getConnInfo } from 'hono/bun'
 import { createMiddleware } from 'hono/factory'
 
 /**
@@ -227,18 +228,24 @@ function parseEnvProxies(): string[] {
  * This is the IP that directly connected to our server (could be proxy)
  */
 function getConnectingIp(c: Context): string {
-	// In Bun with Hono, the socket address might be available
-	// Try multiple methods to get the actual connection IP
-
-	// Method 1: Check for x-forwarded-for ONLY from Bun's internal handling
-	// This is set by Bun's server itself, not user-provided
-	const connInfo = c.env?.['remoteAddress'] as string | undefined
-	if (connInfo) {
-		return normalizeIp(connInfo)
+	// Method 1: Use Hono's getConnInfo for Bun runtime
+	// This gets the actual socket connection IP
+	try {
+		const connInfo = getConnInfo(c)
+		if (connInfo.remote.address) {
+			return normalizeIp(connInfo.remote.address)
+		}
+	} catch {
+		// getConnInfo may fail in test environments or when not running on Bun
 	}
 
-	// Method 2: For local development (127.0.0.1 or ::1)
-	// When running locally without proxy, treat as trusted for dev purposes
+	// Method 2: Check for remoteAddress in env (set by some adapters)
+	const envRemoteAddress = c.env?.['remoteAddress'] as string | undefined
+	if (envRemoteAddress) {
+		return normalizeIp(envRemoteAddress)
+	}
+
+	// Method 3: For local development fallback
 	if (process.env['NODE_ENV'] === 'development') {
 		return '127.0.0.1'
 	}
