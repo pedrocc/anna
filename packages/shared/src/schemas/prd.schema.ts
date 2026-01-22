@@ -222,11 +222,11 @@ export const PrdSessionSchema = z
 		domainConcerns: z.array(PrdDomainConcernSchema),
 		regulatoryRequirements: z.array(z.string()),
 		domainExpertise: z.array(z.string()),
-		skipDomainStep: z.string().optional().nullable(),
+		skipDomainStep: z.boolean(),
 
 		// Innovation (Step 6 - optional)
 		innovations: z.array(PrdInnovationSchema),
-		skipInnovationStep: z.string().optional().nullable(),
+		skipInnovationStep: z.boolean(),
 
 		// Project Type Deep Dive (Step 7)
 		projectTypeDetails: z.record(z.string(), z.unknown()),
@@ -250,14 +250,14 @@ export const PrdSessionSchema = z
 
 		// Generation state (persisted for page reload)
 		generationStatus: PrdGenerationStatusSchema,
-		generationStartedAt: z.date().optional().nullable(),
+		generationStartedAt: z.coerce.date().optional().nullable(),
 		generationError: z.string().optional().nullable(),
 
 		// Final document (Step 11)
 		documentContent: z.string().optional().nullable(),
 		documentTitle: z.string().optional().nullable(),
 
-		completedAt: z.date().optional().nullable(),
+		completedAt: z.coerce.date().optional().nullable(),
 	})
 	.merge(TimestampsSchema)
 
@@ -290,11 +290,11 @@ export const UpdatePrdSessionSchema = z.object({
 	domainConcerns: z.array(PrdDomainConcernSchema).optional(),
 	regulatoryRequirements: z.array(z.string()).optional(),
 	domainExpertise: z.array(z.string()).optional(),
-	skipDomainStep: z.string().optional().nullable(),
+	skipDomainStep: z.boolean().optional(),
 
 	// Innovation
 	innovations: z.array(PrdInnovationSchema).optional(),
-	skipInnovationStep: z.string().optional().nullable(),
+	skipInnovationStep: z.boolean().optional(),
 
 	// Project Type
 	projectTypeDetails: z.record(z.string(), z.unknown()).optional(),
@@ -331,7 +331,7 @@ export const PrdMessageSchema = z.object({
 	step: PrdStepSchema,
 	promptTokens: z.number().optional().nullable(),
 	completionTokens: z.number().optional().nullable(),
-	createdAt: z.date(),
+	createdAt: z.coerce.date(),
 })
 
 // ============================================
@@ -369,8 +369,8 @@ export const PrdDocumentSchema = z.object({
 	title: z.string().min(1),
 	content: z.string().min(1),
 	version: z.number().int().min(1),
-	createdAt: z.date(),
-	updatedAt: z.date(),
+	createdAt: z.coerce.date(),
+	updatedAt: z.coerce.date(),
 })
 
 export const CreatePrdDocumentSchema = z.object({

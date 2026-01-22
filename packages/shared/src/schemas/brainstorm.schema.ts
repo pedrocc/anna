@@ -16,7 +16,8 @@ export const BrainstormApproachSchema = z.enum([
 
 export const BrainstormStatusSchema = z.enum(['active', 'paused', 'completed', 'archived'])
 
-export const BrainstormTechniqueSchema = z.enum([
+// Canonical list of technique IDs - keep in sync with TECHNIQUES in constants/techniques.ts
+export const TECHNIQUE_IDS = [
 	'scamper',
 	'what_if',
 	'six_hats',
@@ -27,7 +28,9 @@ export const BrainstormTechniqueSchema = z.enum([
 	'yes_and',
 	'future_self',
 	'reversal',
-])
+] as const
+
+export const BrainstormTechniqueSchema = z.enum(TECHNIQUE_IDS)
 
 export const BrainstormMessageRoleSchema = z.enum(['system', 'user', 'assistant'])
 
@@ -53,7 +56,7 @@ export const BrainstormIdeaSchema = z.object({
 	technique: BrainstormTechniqueSchema,
 	category: z.string().optional(),
 	priority: z.enum(['high', 'medium', 'low']).optional(),
-	createdAt: z.string().datetime(),
+	createdAt: z.coerce.date(),
 })
 
 // ============================================
@@ -75,7 +78,7 @@ export const BrainstormSessionSchema = z
 		ideas: z.array(BrainstormIdeaSchema),
 		documentContent: z.string().optional().nullable(),
 		documentTitle: z.string().optional().nullable(),
-		completedAt: z.date().optional().nullable(),
+		completedAt: z.coerce.date().optional().nullable(),
 	})
 	.merge(TimestampsSchema)
 
@@ -111,7 +114,7 @@ export const BrainstormMessageSchema = z.object({
 	technique: BrainstormTechniqueSchema.optional().nullable(),
 	promptTokens: z.number().optional().nullable(),
 	completionTokens: z.number().optional().nullable(),
-	createdAt: z.date(),
+	createdAt: z.coerce.date(),
 })
 
 // ============================================

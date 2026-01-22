@@ -194,8 +194,8 @@ export const SmEpicSchema = z.object({
 	priority: SmStoryPrioritySchema,
 	targetSprint: z.number().int().optional().nullable(),
 	estimatedStoryPoints: z.number().int().optional().nullable(),
-	createdAt: z.date(),
-	updatedAt: z.date(),
+	createdAt: z.coerce.date(),
+	updatedAt: z.coerce.date(),
 })
 
 export const CreateSmEpicSchema = z.object({
@@ -246,8 +246,8 @@ export const SmStorySchema = z.object({
 	storyPoints: z.number().int().optional().nullable(),
 	targetSprint: z.number().int().optional().nullable(),
 	functionalRequirementCodes: z.array(z.string()),
-	createdAt: z.date(),
-	updatedAt: z.date(),
+	createdAt: z.coerce.date(),
+	updatedAt: z.coerce.date(),
 })
 
 export const CreateSmStorySchema = z.object({
@@ -303,7 +303,7 @@ export const SmSessionSchema = z
 
 		// Generation state (persisted for page reload)
 		generationStatus: SmGenerationStatusSchema,
-		generationStartedAt: z.date().optional().nullable(),
+		generationStartedAt: z.coerce.date().optional().nullable(),
 		generationError: z.string().optional().nullable(),
 
 		totalEpics: z.number().int(),
@@ -311,7 +311,7 @@ export const SmSessionSchema = z
 		totalStoryPoints: z.number().int(),
 		documentContent: z.string().optional().nullable(),
 		documentTitle: z.string().optional().nullable(),
-		completedAt: z.date().optional().nullable(),
+		completedAt: z.coerce.date().optional().nullable(),
 	})
 	.merge(TimestampsSchema)
 
@@ -349,7 +349,7 @@ export const SmMessageSchema = z.object({
 	step: SmStepSchema,
 	promptTokens: z.number().optional().nullable(),
 	completionTokens: z.number().optional().nullable(),
-	createdAt: z.date(),
+	createdAt: z.coerce.date(),
 })
 
 // ============================================
@@ -387,8 +387,8 @@ export const SmDocumentSchema = z.object({
 	title: z.string().min(1),
 	content: z.string().min(1),
 	version: z.number().int().min(1),
-	createdAt: z.date(),
-	updatedAt: z.date(),
+	createdAt: z.coerce.date(),
+	updatedAt: z.coerce.date(),
 })
 
 export const CreateSmDocumentSchema = z.object({

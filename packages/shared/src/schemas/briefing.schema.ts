@@ -160,7 +160,7 @@ export const BriefingSessionSchema = z
 
 		// Generation state (persisted for page reload)
 		generationStatus: BriefingGenerationStatusSchema,
-		generationStartedAt: z.date().optional().nullable(),
+		generationStartedAt: z.coerce.date().optional().nullable(),
 		generationError: z.string().optional().nullable(),
 
 		// Final document (Step 6)
@@ -168,7 +168,7 @@ export const BriefingSessionSchema = z
 		documentTitle: z.string().optional().nullable(),
 		executiveSummary: z.string().optional().nullable(),
 
-		completedAt: z.date().optional().nullable(),
+		completedAt: z.coerce.date().optional().nullable(),
 	})
 	.merge(TimestampsSchema)
 
@@ -229,7 +229,7 @@ export const BriefingMessageSchema = z.object({
 	step: BriefingStepSchema,
 	promptTokens: z.number().optional().nullable(),
 	completionTokens: z.number().optional().nullable(),
-	createdAt: z.date(),
+	createdAt: z.coerce.date(),
 })
 
 // ============================================
@@ -266,8 +266,8 @@ export const BriefingDocumentSchema = z.object({
 	title: z.string().min(1),
 	content: z.string().min(1),
 	version: z.number().int().min(1),
-	createdAt: z.date(),
-	updatedAt: z.date(),
+	createdAt: z.coerce.date(),
+	updatedAt: z.coerce.date(),
 })
 
 export const CreateBriefingDocumentSchema = z.object({
