@@ -1,8 +1,11 @@
 import { useAuth } from '@clerk/clerk-react'
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 declare const __API_URL__: string | undefined
 const API_URL = __API_URL__ ?? 'http://localhost:3000'
+
+// Max buffer size to prevent memory issues (1MB)
+const MAX_BUFFER_SIZE = 1024 * 1024
 
 /**
  * Removes the SM_DATA block from content for clean display
@@ -50,6 +53,7 @@ interface UseSmChatReturn {
 	pendingUserMessage: string | null
 	error: Error | null
 	clearError: () => void
+	cancelStream: () => void
 }
 
 export function useSmChat({
@@ -64,12 +68,40 @@ export function useSmChat({
 	const [pendingUserMessage, setPendingUserMessage] = useState<string | null>(null)
 	const [error, setError] = useState<Error | null>(null)
 
+	// Refs for cleanup and abort handling
+	const isMountedRef = useRef(true)
+	const abortControllerRef = useRef<AbortController | null>(null)
+	// Track request ID to prevent stale state updates from previous requests
+	const requestIdRef = useRef(0)
+
+	// Track mounted state
+	useEffect(() => {
+		isMountedRef.current = true
+		return () => {
+			isMountedRef.current = false
+			// Cancel any ongoing stream on unmount
+			abortControllerRef.current?.abort()
+		}
+	}, [])
+
 	const clearError = useCallback(() => {
 		setError(null)
 	}, [])
 
+	const cancelStream = useCallback(() => {
+		abortControllerRef.current?.abort()
+	}, [])
+
 	const sendMessage = useCallback(
 		async (message: string, action?: string) => {
+			// Cancel any existing stream
+			abortControllerRef.current?.abort()
+			const abortController = new AbortController()
+			abortControllerRef.current = abortController
+
+			// Increment request ID to track this specific request
+			const currentRequestId = ++requestIdRef.current
+
 			setIsStreaming(true)
 			setStreamingContent('')
 			setPendingUserMessage(message)
@@ -89,6 +121,7 @@ export function useSmChat({
 						message,
 						action,
 					}),
+					signal: abortController.signal,
 				})
 
 				if (!response.ok) {
@@ -104,58 +137,104 @@ export function useSmChat({
 				const decoder = new TextDecoder()
 				let fullContent = ''
 				let buffer = ''
+				let messageCompleted = false
 
-				while (true) {
-					const { done, value } = await reader.read()
-					if (done) break
+				try {
+					while (true) {
+						const { done, value } = await reader.read()
+						if (done) break
 
-					buffer += decoder.decode(value, { stream: true })
-					const lines = buffer.split('\n')
-					buffer = lines.pop() ?? ''
-
-					for (const line of lines) {
-						const trimmed = line.trim()
-						if (!trimmed || !trimmed.startsWith('data: ')) continue
-
-						const data = trimmed.slice(6)
-						if (data === '[DONE]') {
-							onMessageComplete?.(cleanSmDataFromContent(fullContent))
+						// Check if aborted
+						if (abortController.signal.aborted) {
+							await reader.cancel()
 							break
 						}
 
-						try {
-							const parsed = JSON.parse(data)
-							if (parsed.content) {
-								fullContent += parsed.content
-								// Clean SM_DATA block for display during streaming
-								setStreamingContent(cleanSmDataFromContent(fullContent))
-							}
-							if (parsed.stepUpdate) {
-								onStepUpdate?.(parsed.stepUpdate)
-							}
-							if (parsed.error) {
-								throw new Error(parsed.error.message)
-							}
-						} catch (parseError) {
-							// Ignore JSON parse errors for incomplete chunks
-							if (parseError instanceof SyntaxError) continue
-							throw parseError
+						buffer += decoder.decode(value, { stream: true })
+
+						// Prevent buffer overflow
+						if (buffer.length > MAX_BUFFER_SIZE) {
+							buffer = buffer.slice(-MAX_BUFFER_SIZE / 2)
 						}
+
+						const lines = buffer.split('\n')
+						buffer = lines.pop() ?? ''
+
+						for (const line of lines) {
+							const trimmed = line.trim()
+							if (!trimmed || !trimmed.startsWith('data: ')) continue
+
+							const data = trimmed.slice(6)
+							if (data === '[DONE]') {
+								messageCompleted = true
+								if (isMountedRef.current) {
+									onMessageComplete?.(cleanSmDataFromContent(fullContent))
+								}
+								break
+							}
+
+							try {
+								const parsed = JSON.parse(data)
+								if (parsed.content) {
+									fullContent += parsed.content
+									// Clean SM_DATA block for display during streaming
+									// Only update state if this is still the current request
+									if (isMountedRef.current && requestIdRef.current === currentRequestId) {
+										setStreamingContent(cleanSmDataFromContent(fullContent))
+									}
+								}
+								if (
+									parsed.stepUpdate &&
+									isMountedRef.current &&
+									requestIdRef.current === currentRequestId
+								) {
+									onStepUpdate?.(parsed.stepUpdate)
+								}
+								if (parsed.error) {
+									throw new Error(parsed.error.message)
+								}
+							} catch (parseError) {
+								// Ignore JSON parse errors for incomplete chunks
+								if (parseError instanceof SyntaxError) continue
+								throw parseError
+							}
+						}
+
+						if (messageCompleted) break
 					}
+				} finally {
+					// Always release the reader
+					await reader.cancel().catch(() => {})
+					reader.releaseLock()
 				}
 
-				// Final content - clean SM_DATA block before passing to handler
-				if (fullContent) {
+				// Only call onMessageComplete if not already called and not aborted
+				if (
+					!messageCompleted &&
+					fullContent &&
+					!abortController.signal.aborted &&
+					isMountedRef.current
+				) {
 					onMessageComplete?.(cleanSmDataFromContent(fullContent))
 				}
 			} catch (err) {
+				// Don't report abort errors
+				if (err instanceof Error && err.name === 'AbortError') {
+					return
+				}
 				const error = err instanceof Error ? err : new Error('Unknown error')
-				setError(error)
-				onError?.(error)
+				// Only update error state if this is still the current request
+				if (isMountedRef.current && requestIdRef.current === currentRequestId) {
+					setError(error)
+					onError?.(error)
+				}
 			} finally {
-				setIsStreaming(false)
-				setStreamingContent('') // Reset streaming content when done
-				setPendingUserMessage(null)
+				// Only update streaming state if this is still the current request
+				if (isMountedRef.current && requestIdRef.current === currentRequestId) {
+					setIsStreaming(false)
+					setStreamingContent('') // Reset streaming content when done
+					setPendingUserMessage(null)
+				}
 			}
 		},
 		[sessionId, getToken, onMessageComplete, onStepUpdate, onError]
@@ -168,6 +247,7 @@ export function useSmChat({
 		pendingUserMessage,
 		error,
 		clearError,
+		cancelStream,
 	}
 }
 
@@ -178,7 +258,29 @@ export function useSmDocument(sessionId: string) {
 	const [streamingContent, setStreamingContent] = useState('')
 	const [error, setError] = useState<Error | null>(null)
 
+	// Refs for cleanup and abort handling
+	const isMountedRef = useRef(true)
+	const abortControllerRef = useRef<AbortController | null>(null)
+
+	// Track mounted state
+	useEffect(() => {
+		isMountedRef.current = true
+		return () => {
+			isMountedRef.current = false
+			abortControllerRef.current?.abort()
+		}
+	}, [])
+
+	const cancelGeneration = useCallback(() => {
+		abortControllerRef.current?.abort()
+	}, [])
+
 	const generateDocument = useCallback(async () => {
+		// Cancel any existing generation
+		abortControllerRef.current?.abort()
+		const abortController = new AbortController()
+		abortControllerRef.current = abortController
+
 		setIsGenerating(true)
 		setStreamingContent('')
 		setError(null)
@@ -193,6 +295,7 @@ export function useSmDocument(sessionId: string) {
 					Authorization: `Bearer ${token}`,
 				},
 				body: JSON.stringify({}),
+				signal: abortController.signal,
 			})
 
 			if (!response.ok) {
@@ -209,46 +312,71 @@ export function useSmDocument(sessionId: string) {
 			let fullContent = ''
 			let buffer = ''
 
-			while (true) {
-				const { done, value } = await reader.read()
-				if (done) break
+			try {
+				while (true) {
+					const { done, value } = await reader.read()
+					if (done) break
 
-				buffer += decoder.decode(value, { stream: true })
-				const lines = buffer.split('\n')
-				buffer = lines.pop() ?? ''
-
-				for (const line of lines) {
-					const trimmed = line.trim()
-					if (!trimmed || !trimmed.startsWith('data: ')) continue
-
-					const data = trimmed.slice(6)
-					if (data === '[DONE]') {
-						return fullContent
+					if (abortController.signal.aborted) {
+						await reader.cancel()
+						break
 					}
 
-					try {
-						const parsed = JSON.parse(data)
-						if (parsed.content) {
-							fullContent += parsed.content
-							setStreamingContent(fullContent)
+					buffer += decoder.decode(value, { stream: true })
+
+					// Prevent buffer overflow
+					if (buffer.length > MAX_BUFFER_SIZE) {
+						buffer = buffer.slice(-MAX_BUFFER_SIZE / 2)
+					}
+
+					const lines = buffer.split('\n')
+					buffer = lines.pop() ?? ''
+
+					for (const line of lines) {
+						const trimmed = line.trim()
+						if (!trimmed || !trimmed.startsWith('data: ')) continue
+
+						const data = trimmed.slice(6)
+						if (data === '[DONE]') {
+							return fullContent
 						}
-						if (parsed.error) {
-							throw new Error(parsed.error.message)
+
+						try {
+							const parsed = JSON.parse(data)
+							if (parsed.content) {
+								fullContent += parsed.content
+								if (isMountedRef.current) {
+									setStreamingContent(fullContent)
+								}
+							}
+							if (parsed.error) {
+								throw new Error(parsed.error.message)
+							}
+						} catch (parseError) {
+							if (parseError instanceof SyntaxError) continue
+							throw parseError
 						}
-					} catch (parseError) {
-						if (parseError instanceof SyntaxError) continue
-						throw parseError
 					}
 				}
+			} finally {
+				await reader.cancel().catch(() => {})
+				reader.releaseLock()
 			}
 
 			return fullContent
 		} catch (err) {
+			if (err instanceof Error && err.name === 'AbortError') {
+				return ''
+			}
 			const error = err instanceof Error ? err : new Error('Unknown error')
-			setError(error)
+			if (isMountedRef.current) {
+				setError(error)
+			}
 			throw error
 		} finally {
-			setIsGenerating(false)
+			if (isMountedRef.current) {
+				setIsGenerating(false)
+			}
 		}
 	}, [sessionId, getToken])
 
@@ -257,5 +385,6 @@ export function useSmDocument(sessionId: string) {
 		isGenerating,
 		streamingContent,
 		error,
+		cancelGeneration,
 	}
 }
