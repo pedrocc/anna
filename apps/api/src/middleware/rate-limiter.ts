@@ -1,8 +1,11 @@
 import { RATE_LIMIT } from '@repo/shared'
 import { createMiddleware } from 'hono/factory'
 import { Redis } from 'ioredis'
+import { getClientIp } from './trusted-proxy.js'
 
 let redis: Redis | null = null
+
+type RateLimitType = 'default' | 'chat' | 'document'
 
 function getRedis(): Redis {
 	if (!redis) {
@@ -15,19 +18,53 @@ function getRedis(): Redis {
 	return redis
 }
 
-export const rateLimiter = (options?: { windowMs?: number; max?: number }) => {
-	const windowMs = options?.windowMs ?? RATE_LIMIT.WINDOW_MS
-	const maxRequests = options?.max ?? RATE_LIMIT.MAX_REQUESTS
+/**
+ * Gracefully close Redis connection
+ * Should be called on process shutdown
+ */
+export async function closeRedis(): Promise<void> {
+	if (redis) {
+		await redis.quit()
+		redis = null
+	}
+}
+
+/**
+ * Get rate limit config based on type
+ */
+function getRateLimitConfig(type: RateLimitType): { windowMs: number; max: number } {
+	switch (type) {
+		case 'chat':
+			return {
+				windowMs: RATE_LIMIT.CHAT_WINDOW_MS,
+				max: RATE_LIMIT.CHAT_MAX_REQUESTS,
+			}
+		case 'document':
+			return {
+				windowMs: RATE_LIMIT.DOCUMENT_WINDOW_MS,
+				max: RATE_LIMIT.DOCUMENT_MAX_REQUESTS,
+			}
+		default:
+			return {
+				windowMs: RATE_LIMIT.WINDOW_MS,
+				max: RATE_LIMIT.MAX_REQUESTS,
+			}
+	}
+}
+
+export const rateLimiter = (options?: {
+	windowMs?: number
+	max?: number
+	type?: RateLimitType
+}) => {
+	const config = options?.type ? getRateLimitConfig(options.type) : getRateLimitConfig('default')
+	const windowMs = options?.windowMs ?? config.windowMs
+	const maxRequests = options?.max ?? config.max
+	const keyPrefix = options?.type ? `ratelimit:${options.type}:` : 'ratelimit:'
 
 	return createMiddleware(async (c, next) => {
-		// Get client IP from headers or fallback to a unique request identifier
-		const forwardedFor = c.req.header('x-forwarded-for')
-		const realIp = c.req.header('x-real-ip')
-		const cfConnectingIp = c.req.header('cf-connecting-ip') // Cloudflare
-
-		// Use first IP from x-forwarded-for (client IP), or other headers
-		const ip = forwardedFor?.split(',')[0]?.trim() ?? realIp ?? cfConnectingIp ?? 'anonymous'
-		const key = `ratelimit:${ip}`
+		const ip = getClientIp(c)
+		const key = `${keyPrefix}${ip}`
 
 		const redisClient = getRedis()
 		const current = await redisClient.incr(key)

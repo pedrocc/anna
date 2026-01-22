@@ -7,10 +7,22 @@ export const ServerEnvSchema = z.object({
 	CLERK_SECRET_KEY: z.string().startsWith('sk_'),
 	CLERK_WEBHOOK_SECRET: z.string().startsWith('whsec_').optional(),
 	RESEND_API_KEY: z.string().startsWith('re_'),
+	OPENROUTER_API_KEY: z.string().startsWith('sk-or-'),
+	LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
 	SENTRY_DSN: z.url().optional(),
 	API_URL: z.url(),
 	WEB_URL: z.url(),
 	PORT: z.coerce.number().default(3000),
+	// Trusted proxy configuration
+	TRUST_ALL_PROXIES: z
+		.enum(['true', 'false'])
+		.default('false')
+		.transform((v) => v === 'true')
+		.describe('Trust all proxies (ONLY for development)'),
+	TRUSTED_PROXY_IPS: z
+		.string()
+		.optional()
+		.describe('Comma-separated list of additional trusted proxy IPs/CIDRs'),
 })
 
 export const ClientEnvSchema = z.object({
