@@ -1,6 +1,6 @@
 import { Button, Textarea } from '@repo/ui'
 import { Loader2, Send } from 'lucide-react'
-import { type ChangeEvent, type KeyboardEvent, useRef, useState } from 'react'
+import { type ChangeEvent, type KeyboardEvent, useEffect, useRef, useState } from 'react'
 
 interface ChatInputProps {
 	onSend: (message: string) => void
@@ -17,10 +17,20 @@ export function ChatInput({
 }: ChatInputProps) {
 	const [input, setInput] = useState('')
 	const textareaRef = useRef<HTMLTextAreaElement>(null)
+	// Synchronous guard to prevent rapid double-sends before React state propagates
+	const isSendingRef = useRef(false)
+
+	// Reset the sending guard when disabled prop changes (parent acknowledged the send)
+	useEffect(() => {
+		if (!disabled) {
+			isSendingRef.current = false
+		}
+	}, [disabled])
 
 	const handleSubmit = () => {
 		const trimmed = input.trim()
-		if (trimmed && !disabled) {
+		if (trimmed && !disabled && !isSendingRef.current) {
+			isSendingRef.current = true
 			onSend(trimmed)
 			setInput('')
 			// Manter foco no textarea após enviar
