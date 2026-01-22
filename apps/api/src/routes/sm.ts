@@ -14,6 +14,7 @@ import {
 	CreateSmDocumentSchema,
 	CreateSmEpicSchema,
 	CreateSmSessionSchema,
+	CreateSmStoriesBatchSchema,
 	CreateSmStorySchema,
 	EditSmMessageRequestSchema,
 	PaginationSchema,
@@ -1217,6 +1218,68 @@ smRoutes.post(
 		})
 
 		return successResponse(c, story, 201)
+	}
+)
+
+// Create multiple stories in batch (parallel)
+smRoutes.post(
+	'/sessions/:id/stories/batch',
+	authMiddleware,
+	zValidator('json', CreateSmStoriesBatchSchema),
+	async (c) => {
+		const { userId } = getAuth(c)
+		const sessionId = c.req.param('id')
+		const { stories: storiesData } = c.req.valid('json')
+
+		const user = await getUserByClerkId(userId)
+		if (!user) {
+			return commonErrors.notFound(c, 'User not found')
+		}
+
+		// Verify session belongs to user
+		const session = await db.query.smSessions.findFirst({
+			where: and(eq(smSessions.id, sessionId), eq(smSessions.userId, user.id)),
+		})
+
+		if (!session) {
+			return commonErrors.notFound(c, 'Session not found')
+		}
+
+		// Collect unique epic IDs and verify they all belong to session
+		const epicIds = [...new Set(storiesData.map((s) => s.epicId))]
+		const epics = await db.query.smEpics.findMany({
+			where: and(inArray(smEpics.id, epicIds), eq(smEpics.sessionId, sessionId)),
+		})
+
+		if (epics.length !== epicIds.length) {
+			return commonErrors.badRequest(c, 'One or more epics not found in this session')
+		}
+
+		// Use transaction to ensure all stories are inserted atomically with counter update
+		const createdStories = await db.transaction(async (tx) => {
+			const storyValues = storiesData.map((data) => ({
+				sessionId,
+				storyKey: `${data.epicNumber}-${data.storyNumber}`,
+				...data,
+			}))
+
+			const inserted = await tx.insert(smStories).values(storyValues).returning()
+
+			// Update session totals
+			const totalPoints = storiesData.reduce((sum, s) => sum + (s.storyPoints ?? 0), 0)
+			await tx
+				.update(smSessions)
+				.set({
+					totalStories: sql`${smSessions.totalStories} + ${storiesData.length}`,
+					totalStoryPoints: sql`${smSessions.totalStoryPoints} + ${totalPoints}`,
+					updatedAt: new Date(),
+				})
+				.where(eq(smSessions.id, sessionId))
+
+			return inserted
+		})
+
+		return successResponse(c, createdStories, 201)
 	}
 )
 

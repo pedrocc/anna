@@ -269,6 +269,10 @@ export const CreateSmStorySchema = z.object({
 	functionalRequirementCodes: z.array(z.string()).optional(),
 })
 
+export const CreateSmStoriesBatchSchema = z.object({
+	stories: z.array(CreateSmStorySchema).min(1).max(50),
+})
+
 export const UpdateSmStorySchema = z.object({
 	title: z.string().min(1).max(200).optional(),
 	asA: z.string().min(1).max(200).optional(),
