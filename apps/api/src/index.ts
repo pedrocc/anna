@@ -7,7 +7,7 @@ import { timing } from 'hono/timing'
 
 import { commonErrors } from './lib/response.js'
 import { errorHandler } from './middleware/error-handler.js'
-import { rateLimiter } from './middleware/rate-limiter.js'
+import { closeRedis, rateLimiter } from './middleware/rate-limiter.js'
 import { briefingRoutes } from './routes/briefing.js'
 import { chatRoutes } from './routes/chat.js'
 import { healthRoutes } from './routes/health.js'
@@ -56,6 +56,21 @@ app.notFound((c) => {
 })
 
 const port = Number(process.env['PORT']) || 3000
+
+// Graceful shutdown handlers
+process.on('SIGTERM', async () => {
+	// biome-ignore lint/suspicious/noConsole: Shutdown logging
+	console.log('SIGTERM received, closing connections...')
+	await closeRedis()
+	process.exit(0)
+})
+
+process.on('SIGINT', async () => {
+	// biome-ignore lint/suspicious/noConsole: Shutdown logging
+	console.log('SIGINT received, closing connections...')
+	await closeRedis()
+	process.exit(0)
+})
 
 export default {
 	port,
