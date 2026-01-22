@@ -273,6 +273,10 @@ export const CreateSmStoriesBatchSchema = z.object({
 	stories: z.array(CreateSmStorySchema).min(1).max(50),
 })
 
+export const FetchStoriesByIdsSchema = z.object({
+	ids: z.array(IdSchema).min(1).max(100),
+})
+
 export const UpdateSmStorySchema = z.object({
 	title: z.string().min(1).max(200).optional(),
 	asA: z.string().min(1).max(200).optional(),
@@ -516,6 +520,7 @@ export type UpdateSmEpic = z.infer<typeof UpdateSmEpicSchema>
 export type SmStory = z.infer<typeof SmStorySchema>
 export type CreateSmStory = z.infer<typeof CreateSmStorySchema>
 export type UpdateSmStory = z.infer<typeof UpdateSmStorySchema>
+export type FetchStoriesByIds = z.infer<typeof FetchStoriesByIdsSchema>
 export type SmSession = z.infer<typeof SmSessionSchema>
 export type CreateSmSession = z.infer<typeof CreateSmSessionSchema>
 export type UpdateSmSession = z.infer<typeof UpdateSmSessionSchema>

@@ -1,7 +1,7 @@
 import { zValidator } from '@hono/zod-validator'
 import { db, smEpics, smSessions, smStories } from '@repo/db'
-import { PaginationSchema } from '@repo/shared'
-import { and, asc, desc, eq, gt, sql } from 'drizzle-orm'
+import { FetchStoriesByIdsSchema, PaginationSchema } from '@repo/shared'
+import { and, asc, desc, eq, gt, inArray, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { getUserByClerkId } from '../lib/helpers.js'
 import { commonErrors, successResponse } from '../lib/response.js'
@@ -129,13 +129,19 @@ kanbanRoutes.get('/sessions/:id/board', authMiddleware, async (c) => {
 		return commonErrors.notFound(c, 'Session not found')
 	}
 
-	// Calculate stats per column
+	// Calculate stats per column (single pass instead of 5 filter operations)
 	const columnStats = {
-		backlog: session.stories.filter((s) => s.status === 'backlog').length,
-		ready_for_dev: session.stories.filter((s) => s.status === 'ready_for_dev').length,
-		in_progress: session.stories.filter((s) => s.status === 'in_progress').length,
-		review: session.stories.filter((s) => s.status === 'review').length,
-		done: session.stories.filter((s) => s.status === 'done').length,
+		backlog: 0,
+		ready_for_dev: 0,
+		in_progress: 0,
+		review: 0,
+		done: 0,
+	}
+	for (const story of session.stories) {
+		const status = story.status as keyof typeof columnStats
+		if (status in columnStats) {
+			columnStats[status]++
+		}
 	}
 
 	// Get unique sprints and priorities for filters
@@ -164,3 +170,62 @@ kanbanRoutes.get('/sessions/:id/board', authMiddleware, async (c) => {
 		},
 	})
 })
+
+/**
+ * Fetch stories by a list of IDs
+ * Returns only stories that belong to the authenticated user's sessions
+ */
+kanbanRoutes.post(
+	'/stories/batch-fetch',
+	authMiddleware,
+	zValidator('json', FetchStoriesByIdsSchema),
+	async (c) => {
+		const { userId } = getAuth(c)
+		const { ids } = c.req.valid('json')
+
+		const user = await getUserByClerkId(userId)
+		if (!user) {
+			return commonErrors.notFound(c, 'User not found')
+		}
+
+		// Get user's session IDs to scope the query
+		const userSessions = await db.query.smSessions.findMany({
+			where: eq(smSessions.userId, user.id),
+			columns: { id: true },
+		})
+
+		if (userSessions.length === 0) {
+			return successResponse(c, [])
+		}
+
+		const sessionIds = userSessions.map((s) => s.id)
+
+		// Fetch stories matching the provided IDs, scoped to user's sessions
+		const stories = await db.query.smStories.findMany({
+			where: and(inArray(smStories.id, ids), inArray(smStories.sessionId, sessionIds)),
+			columns: {
+				id: true,
+				sessionId: true,
+				epicId: true,
+				epicNumber: true,
+				storyNumber: true,
+				storyKey: true,
+				title: true,
+				asA: true,
+				iWant: true,
+				soThat: true,
+				description: true,
+				acceptanceCriteria: true,
+				tasks: true,
+				devNotes: true,
+				functionalRequirementCodes: true,
+				status: true,
+				priority: true,
+				storyPoints: true,
+				targetSprint: true,
+			},
+		})
+
+		return successResponse(c, stories)
+	}
+)
