@@ -53,7 +53,6 @@ function useBriefingChatBehavior(sessionId: string) {
 			setIsStreaming(true)
 			setStreamingContent('')
 			setPendingUserMessage(message)
-			setError(null)
 
 			return {
 				currentRequestId,
@@ -92,11 +91,16 @@ function useBriefingChatBehavior(sessionId: string) {
 		[sessionId]
 	)
 
+	const clearError = useCallback(() => {
+		setError(null)
+	}, [])
+
 	return {
 		isStreaming,
 		streamingContent,
 		pendingUserMessage,
 		error,
+		clearError,
 		sendMessage,
 		getRequestId: () => requestIdRef.current,
 		getSessionIdRef: () => sessionIdRef.current,
@@ -347,5 +351,96 @@ describe('useBriefingChat session navigation', () => {
 		expect(result.current.isStreaming).toBe(true)
 		expect(result.current.streamingContent).toBe('Content for session 2')
 		expect(result.current.pendingUserMessage).toBe('Message for session 2')
+	})
+})
+
+describe('useBriefingChat error persistence', () => {
+	it('should keep error visible when sending a new message', () => {
+		const { result } = renderHook(() => useBriefingChatBehavior('session-1'))
+
+		// Start request and set error
+		let request1: ReturnType<typeof result.current.sendMessage>
+		act(() => {
+			request1 = result.current.sendMessage('Message 1')
+		})
+		act(() => {
+			request1!.setErrorWithGuard(new Error('Network error'))
+			request1!.complete()
+		})
+		expect(result.current.error?.message).toBe('Network error')
+
+		// Send another message - error should persist
+		act(() => {
+			result.current.sendMessage('Message 2')
+		})
+		expect(result.current.error?.message).toBe('Network error')
+	})
+
+	it('should clear error only when clearError is called', () => {
+		const { result } = renderHook(() => useBriefingChatBehavior('session-1'))
+
+		// Set error
+		let request: ReturnType<typeof result.current.sendMessage>
+		act(() => {
+			request = result.current.sendMessage('Message 1')
+		})
+		act(() => {
+			request!.setErrorWithGuard(new Error('Server error'))
+			request!.complete()
+		})
+		expect(result.current.error?.message).toBe('Server error')
+
+		// Clear error explicitly
+		act(() => {
+			result.current.clearError()
+		})
+		expect(result.current.error).toBeNull()
+	})
+
+	it('should clear error when session changes', () => {
+		const { result, rerender } = renderHook(({ sessionId }) => useBriefingChatBehavior(sessionId), {
+			initialProps: { sessionId: 'session-1' },
+		})
+
+		// Set error in session-1
+		let request: ReturnType<typeof result.current.sendMessage>
+		act(() => {
+			request = result.current.sendMessage('Message 1')
+		})
+		act(() => {
+			request!.setErrorWithGuard(new Error('Error in session 1'))
+			request!.complete()
+		})
+		expect(result.current.error?.message).toBe('Error in session 1')
+
+		// Navigate to session-2 - error should be cleared
+		rerender({ sessionId: 'session-2' })
+		expect(result.current.error).toBeNull()
+	})
+
+	it('should replace old error with new error on subsequent failure', () => {
+		const { result } = renderHook(() => useBriefingChatBehavior('session-1'))
+
+		// First error
+		let request1: ReturnType<typeof result.current.sendMessage>
+		act(() => {
+			request1 = result.current.sendMessage('Message 1')
+		})
+		act(() => {
+			request1!.setErrorWithGuard(new Error('First error'))
+			request1!.complete()
+		})
+		expect(result.current.error?.message).toBe('First error')
+
+		// Second error from new request
+		let request2: ReturnType<typeof result.current.sendMessage>
+		act(() => {
+			request2 = result.current.sendMessage('Message 2')
+		})
+		act(() => {
+			request2!.setErrorWithGuard(new Error('Second error'))
+			request2!.complete()
+		})
+		expect(result.current.error?.message).toBe('Second error')
 	})
 })

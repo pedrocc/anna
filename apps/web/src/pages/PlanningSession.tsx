@@ -124,6 +124,7 @@ export function PlanningSessionPage() {
 		streamingContent,
 		pendingUserMessage,
 		error: chatError,
+		clearError: clearChatError,
 	} = useSmChat({
 		sessionId: id ?? '',
 		onMessageComplete: handleMessageComplete,
@@ -383,6 +384,8 @@ export function PlanningSessionPage() {
 						isEditing={isEditing}
 						editStreamingContent={editStreamingContent}
 						hasDocuments={hasDocuments}
+						error={chatError}
+						onClearError={clearChatError}
 					/>
 				</TabsContent>
 
@@ -447,13 +450,6 @@ export function PlanningSessionPage() {
 					)}
 				</TabsContent>
 			</Tabs>
-
-			{/* Error display */}
-			{chatError && (
-				<div className="border-t border-red-200 bg-red-50 px-4 py-2 text-center text-sm text-red-600">
-					{chatError.message}
-				</div>
-			)}
 
 			{/* Rename dialog */}
 			<Dialog open={showRenameDialog} onOpenChange={setShowRenameDialog}>

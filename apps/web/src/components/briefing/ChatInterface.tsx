@@ -12,7 +12,7 @@ import {
 	Spinner,
 	Textarea,
 } from '@repo/ui'
-import { FileText, Sparkles } from 'lucide-react'
+import { AlertTriangle, FileText, Sparkles, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { ChatInput } from '../brainstorm/ChatInput'
 import { ChatMessage } from '../brainstorm/ChatMessage'
@@ -30,6 +30,8 @@ interface BriefingChatInterfaceProps {
 	isEditing?: boolean
 	editStreamingContent?: string
 	hasDocuments?: boolean
+	error?: Error | null
+	onClearError?: () => void
 }
 
 export function ChatInterface({
@@ -45,6 +47,8 @@ export function ChatInterface({
 	isEditing,
 	editStreamingContent,
 	hasDocuments,
+	error,
+	onClearError,
 }: BriefingChatInterfaceProps) {
 	const scrollRef = useRef<HTMLDivElement>(null)
 
@@ -57,9 +61,14 @@ export function ChatInterface({
 	// Auto-scroll on new messages
 	// biome-ignore lint/correctness/useExhaustiveDependencies: messages.length triggers scroll on new messages
 	useEffect(() => {
-		if (scrollRef.current) {
-			scrollRef.current.scrollIntoView({ behavior: 'smooth' })
-		}
+		const scrollTarget = scrollRef.current
+		if (!scrollTarget) return
+
+		const rafId = requestAnimationFrame(() => {
+			scrollTarget.scrollIntoView({ behavior: 'smooth' })
+		})
+
+		return () => cancelAnimationFrame(rafId)
 	}, [messages.length])
 
 	// Clear activeEditMessageId when editing is complete
@@ -203,6 +212,26 @@ export function ChatInterface({
 					<div ref={scrollRef} />
 				</div>
 			</div>
+
+			{/* Error banner */}
+			{error && (
+				<div className="shrink-0 border-t border-red-200 bg-red-50 px-4 py-2.5">
+					<div className="mx-auto flex items-center gap-2" style={{ maxWidth: '1000px' }}>
+						<AlertTriangle className="h-4 w-4 shrink-0 text-red-500" />
+						<span className="flex-1 text-sm text-red-700">{error.message}</span>
+						{onClearError && (
+							<button
+								type="button"
+								onClick={onClearError}
+								className="shrink-0 rounded p-0.5 text-red-400 hover:text-red-600"
+								aria-label="Fechar erro"
+							>
+								<X className="h-4 w-4" />
+							</button>
+						)}
+					</div>
+				</div>
+			)}
 
 			{/* Fixed Chat Input at bottom (visible until complete) */}
 			{currentStep !== 'complete' && (

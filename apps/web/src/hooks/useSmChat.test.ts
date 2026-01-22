@@ -61,7 +61,6 @@ function useSessionNavigationBehavior(sessionId: string) {
 			setIsStreaming(true)
 			setStreamingContent('')
 			setPendingUserMessage(message)
-			setError(null)
 
 			// Simulate async streaming - returns helpers for test control
 			return {

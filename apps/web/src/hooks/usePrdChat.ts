@@ -91,7 +91,6 @@ export function usePrdChat({
 			setIsStreaming(true)
 			setStreamingContent('')
 			setPendingUserMessage(message)
-			setError(null)
 
 			try {
 				const token = await getToken()

@@ -109,6 +109,7 @@ export function BriefingSessionPage() {
 		streamingContent,
 		pendingUserMessage,
 		error: chatError,
+		clearError: clearChatError,
 	} = useBriefingChat({
 		sessionId: id ?? '',
 		onMessageComplete: handleMessageComplete,
@@ -366,6 +367,8 @@ export function BriefingSessionPage() {
 						isEditing={isEditing}
 						editStreamingContent={editStreamingContent}
 						hasDocuments={hasDocument}
+						error={chatError}
+						onClearError={clearChatError}
 					/>
 				</TabsContent>
 
@@ -422,13 +425,6 @@ export function BriefingSessionPage() {
 					)}
 				</TabsContent>
 			</Tabs>
-
-			{/* Error display */}
-			{chatError && (
-				<div className="border-t border-red-200 bg-red-50 px-4 py-2 text-center text-sm text-red-600">
-					{chatError.message}
-				</div>
-			)}
 
 			{/* Rename dialog */}
 			<Dialog open={showRenameDialog} onOpenChange={setShowRenameDialog}>
