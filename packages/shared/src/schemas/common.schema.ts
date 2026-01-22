@@ -61,6 +61,12 @@ export type ApiResponse<T> = {
 }
 export type ApiError = z.infer<typeof ApiErrorSchema>
 
+export const HttpUrlSchema = z
+	.url()
+	.refine((url) => url.startsWith('https://') || url.startsWith('http://'), {
+		message: 'URL must use http or https protocol',
+	})
+
 // Generic rename schema
 export const RenameSchema = z.object({
 	projectName: z.string().min(1).max(255),

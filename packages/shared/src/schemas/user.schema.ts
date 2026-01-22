@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { IdSchema, TimestampsSchema } from './common.schema.js'
+import { HttpUrlSchema, IdSchema, TimestampsSchema } from './common.schema.js'
 
 export const UserRoleSchema = z.enum(['admin', 'user', 'guest'])
 
@@ -10,13 +10,7 @@ export const UserSchema = z
 		email: z.email().min(5).max(255),
 		name: z.string().min(1).max(100),
 		role: UserRoleSchema.default('user'),
-		avatarUrl: z
-			.string()
-			.url()
-			.refine((url) => url.startsWith('https://') || url.startsWith('http://'), {
-				message: 'Avatar URL must use http or https protocol',
-			})
-			.optional(),
+		avatarUrl: HttpUrlSchema.optional(),
 		metadata: z.record(z.string(), z.unknown()).optional(),
 	})
 	.merge(TimestampsSchema)

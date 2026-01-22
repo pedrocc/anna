@@ -3,6 +3,7 @@ import { z } from 'zod'
 import {
 	ApiErrorSchema,
 	ApiResponseSchema,
+	HttpUrlSchema,
 	IdSchema,
 	PaginationSchema,
 	RenameSchema,
@@ -192,6 +193,52 @@ describe('RenameSessionSchema', () => {
 
 	test('rejects missing projectName', () => {
 		expect(() => RenameSessionSchema.parse({})).toThrow()
+	})
+})
+
+describe('HttpUrlSchema', () => {
+	test('accepts https URL', () => {
+		const result = HttpUrlSchema.parse('https://example.com')
+		expect(result).toBe('https://example.com')
+	})
+
+	test('accepts http URL', () => {
+		const result = HttpUrlSchema.parse('http://example.com')
+		expect(result).toBe('http://example.com')
+	})
+
+	test('accepts https URL with path', () => {
+		const result = HttpUrlSchema.parse('https://example.com/path/to/resource')
+		expect(result).toBe('https://example.com/path/to/resource')
+	})
+
+	test('accepts http URL with port', () => {
+		const result = HttpUrlSchema.parse('http://localhost:3000')
+		expect(result).toBe('http://localhost:3000')
+	})
+
+	test('rejects javascript: protocol', () => {
+		expect(() => HttpUrlSchema.parse('javascript:alert(1)')).toThrow()
+	})
+
+	test('rejects file: protocol', () => {
+		expect(() => HttpUrlSchema.parse('file:///etc/passwd')).toThrow()
+	})
+
+	test('rejects ftp: protocol', () => {
+		expect(() => HttpUrlSchema.parse('ftp://example.com/file')).toThrow()
+	})
+
+	test('rejects data: protocol', () => {
+		expect(() => HttpUrlSchema.parse('data:text/html,<script>alert(1)</script>')).toThrow()
+	})
+
+	test('rejects invalid URL', () => {
+		expect(() => HttpUrlSchema.parse('not-a-url')).toThrow()
+	})
+
+	test('rejects empty string', () => {
+		expect(() => HttpUrlSchema.parse('')).toThrow()
 	})
 })
 

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { HttpUrlSchema } from './common.schema.js'
 
 export const ServerEnvSchema = z.object({
 	NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
@@ -9,9 +10,9 @@ export const ServerEnvSchema = z.object({
 	RESEND_API_KEY: z.string().startsWith('re_'),
 	OPENROUTER_API_KEY: z.string().startsWith('sk-or-'),
 	LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
-	SENTRY_DSN: z.url().optional(),
-	API_URL: z.url(),
-	WEB_URL: z.url(),
+	SENTRY_DSN: HttpUrlSchema.optional(),
+	API_URL: HttpUrlSchema,
+	WEB_URL: HttpUrlSchema,
 	PORT: z.coerce.number().default(3000),
 	// Trusted proxy configuration
 	TRUST_ALL_PROXIES: z
@@ -27,8 +28,8 @@ export const ServerEnvSchema = z.object({
 
 export const ClientEnvSchema = z.object({
 	CLERK_PUBLISHABLE_KEY: z.string().startsWith('pk_'),
-	API_URL: z.url(),
-	SENTRY_DSN: z.url().optional(),
+	API_URL: HttpUrlSchema,
+	SENTRY_DSN: HttpUrlSchema.optional(),
 })
 
 export type ServerEnv = z.infer<typeof ServerEnvSchema>
