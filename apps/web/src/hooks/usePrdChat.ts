@@ -41,6 +41,8 @@ export function usePrdChat({
 	const abortControllerRef = useRef<AbortController | null>(null)
 	// Track request ID to prevent stale state updates from previous requests
 	const requestIdRef = useRef(0)
+	// Track sessionId to prevent callbacks from firing for wrong sessions
+	const sessionIdRef = useRef(sessionId)
 
 	// Track mounted state
 	useEffect(() => {
@@ -51,6 +53,21 @@ export function usePrdChat({
 			abortControllerRef.current?.abort()
 		}
 	}, [])
+
+	// Handle sessionId changes - cancel ongoing streams and reset state
+	useEffect(() => {
+		// If sessionId changed, cancel any ongoing stream and reset state
+		if (sessionIdRef.current !== sessionId) {
+			abortControllerRef.current?.abort()
+			setIsStreaming(false)
+			setStreamingContent('')
+			setPendingUserMessage(null)
+			setError(null)
+			// Increment request ID to invalidate any pending callbacks
+			requestIdRef.current++
+		}
+		sessionIdRef.current = sessionId
+	}, [sessionId])
 
 	const clearError = useCallback(() => {
 		setError(null)
@@ -153,7 +170,8 @@ export function usePrdChat({
 								if (
 									parsed.stepUpdate &&
 									isMountedRef.current &&
-									requestIdRef.current === currentRequestId
+									requestIdRef.current === currentRequestId &&
+									sessionIdRef.current === sessionId
 								) {
 									onStepUpdate?.(parsed.stepUpdate)
 								}
