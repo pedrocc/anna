@@ -5,6 +5,7 @@ import {
 	ApiResponseSchema,
 	IdSchema,
 	PaginationSchema,
+	RenameSchema,
 	SortSchema,
 	TimestampsSchema,
 } from './common.schema.js'
@@ -99,6 +100,37 @@ describe('ApiResponseSchema', () => {
 			meta: { page: 1, limit: 20, total: 100 },
 		})
 		expect(result.meta?.total).toBe(100)
+	})
+})
+
+describe('RenameSchema', () => {
+	test('validates valid project name', () => {
+		const result = RenameSchema.parse({ projectName: 'My Project' })
+		expect(result.projectName).toBe('My Project')
+	})
+
+	test('rejects empty string', () => {
+		expect(() => RenameSchema.parse({ projectName: '' })).toThrow()
+	})
+
+	test('rejects string exceeding 255 characters', () => {
+		const longName = 'a'.repeat(256)
+		expect(() => RenameSchema.parse({ projectName: longName })).toThrow()
+	})
+
+	test('accepts string at max length (255)', () => {
+		const maxName = 'a'.repeat(255)
+		const result = RenameSchema.parse({ projectName: maxName })
+		expect(result.projectName).toBe(maxName)
+	})
+
+	test('accepts single character string', () => {
+		const result = RenameSchema.parse({ projectName: 'A' })
+		expect(result.projectName).toBe('A')
+	})
+
+	test('rejects missing projectName', () => {
+		expect(() => RenameSchema.parse({})).toThrow()
 	})
 })
 

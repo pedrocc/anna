@@ -61,6 +61,12 @@ export type ApiResponse<T> = {
 }
 export type ApiError = z.infer<typeof ApiErrorSchema>
 
+// Generic rename schema
+export const RenameSchema = z.object({
+	projectName: z.string().min(1).max(255),
+})
+export type Rename = z.infer<typeof RenameSchema>
+
 // Session rename request schema
 export const RenameSessionSchema = z.object({
 	projectName: z.string().min(1, 'Project name is required').max(200).trim(),
