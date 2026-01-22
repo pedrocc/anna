@@ -95,7 +95,7 @@ export function transformAcceptanceCriteria(
 	type: 'simple' | 'given_when_then'
 	given?: string
 	when?: string
-	thenClause?: string
+	then?: string
 }> {
 	if (!criteria || criteria.length === 0) {
 		return []
@@ -107,7 +107,8 @@ export function transformAcceptanceCriteria(
 		type: ac.type ?? 'simple',
 		given: ac.given,
 		when: ac.when,
-		thenClause: ac.then,
+		// biome-ignore lint/suspicious/noThenProperty: Given-When-Then acceptance criteria, not a Promise
+		then: ac.then,
 	}))
 }
 

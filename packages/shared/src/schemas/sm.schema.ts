@@ -67,7 +67,8 @@ export const SmAcceptanceCriteriaSchema = z.object({
 	type: SmAcceptanceCriteriaTypeSchema,
 	given: z.string().optional(),
 	when: z.string().optional(),
-	thenClause: z.string().optional(),
+	// biome-ignore lint/suspicious/noThenProperty: Given-When-Then acceptance criteria, not a Promise
+	then: z.string().optional(),
 })
 
 export const SmTaskSchema = z.object({

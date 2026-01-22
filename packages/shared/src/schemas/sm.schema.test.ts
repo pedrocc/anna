@@ -18,22 +18,23 @@ describe('SmAcceptanceCriteriaSchema', () => {
 		expect(result.description).toBe('User can log in')
 	})
 
-	test('validates given_when_then acceptance criteria with thenClause', () => {
+	test('validates given_when_then acceptance criteria with then', () => {
 		const ac = {
 			id: '550e8400-e29b-41d4-a716-446655440000',
 			description: 'Login flow',
 			type: 'given_when_then' as const,
 			given: 'a registered user',
 			when: 'they enter valid credentials',
-			thenClause: 'they are redirected to the dashboard',
+			// biome-ignore lint/suspicious/noThenProperty: Given-When-Then acceptance criteria, not a Promise
+			then: 'they are redirected to the dashboard',
 		}
 		const result = SmAcceptanceCriteriaSchema.parse(ac)
-		expect(result.thenClause).toBe('they are redirected to the dashboard')
+		expect(result.then).toBe('they are redirected to the dashboard')
 		expect(result.given).toBe('a registered user')
 		expect(result.when).toBe('they enter valid credentials')
 	})
 
-	test('thenClause is optional', () => {
+	test('then is optional', () => {
 		const ac = {
 			id: '550e8400-e29b-41d4-a716-446655440000',
 			description: 'Basic criteria',
@@ -42,7 +43,7 @@ describe('SmAcceptanceCriteriaSchema', () => {
 			when: 'they click submit',
 		}
 		const result = SmAcceptanceCriteriaSchema.parse(ac)
-		expect(result.thenClause).toBeUndefined()
+		expect(result.then).toBeUndefined()
 	})
 
 	test('rejects unknown type', () => {
@@ -65,7 +66,7 @@ describe('SmAcceptanceCriteriaSchema', () => {
 })
 
 describe('SmExtractedAcceptanceCriteriaSchema', () => {
-	test('uses then (not thenClause) for AI-extracted data', () => {
+	test('validates then field for AI-extracted data', () => {
 		const extracted = {
 			description: 'Login flow',
 			type: 'given_when_then' as const,

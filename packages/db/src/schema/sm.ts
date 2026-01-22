@@ -64,8 +64,7 @@ export type SmAcceptanceCriteria = {
 	type: 'given_when_then' | 'simple'
 	given?: string
 	when?: string
-	// Note: 'thenClause' instead of 'then' to avoid conflict with Promise.then
-	thenClause?: string
+	then?: string
 }
 
 export type SmTask = {
