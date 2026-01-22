@@ -1,4 +1,5 @@
 import { useAuth } from '@clerk/clerk-react'
+import { toast } from '@repo/ui'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 declare const __API_URL__: string | undefined
@@ -244,6 +245,7 @@ export function useSmChat({
 				// Only update error state if this is still the current request
 				if (isMountedRef.current && requestIdRef.current === currentRequestId) {
 					setError(error)
+					toast.error('Erro ao enviar mensagem', { description: error.message })
 					onError?.(error)
 				}
 			} finally {
@@ -389,6 +391,7 @@ export function useSmDocument(sessionId: string) {
 			const error = err instanceof Error ? err : new Error('Unknown error')
 			if (isMountedRef.current) {
 				setError(error)
+				toast.error('Erro ao gerar documento', { description: error.message })
 			}
 			throw error
 		} finally {

@@ -1,5 +1,6 @@
 import { ClerkProvider } from '@clerk/clerk-react'
 import { ptBR } from '@clerk/localizations'
+import { Toaster } from '@repo/ui'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { SWRConfig } from 'swr'
@@ -22,6 +23,7 @@ function AppWithProviders() {
 	const content = (
 		<SWRConfig value={{ fetcher, revalidateOnFocus: false }}>
 			<App />
+			<Toaster position="bottom-right" closeButton richColors />
 		</SWRConfig>
 	)
 

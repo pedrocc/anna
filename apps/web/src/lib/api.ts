@@ -1,7 +1,9 @@
+import { toast } from '@repo/ui'
+
 interface ClerkInstance {
 	loaded?: boolean
 	session?: {
-		getToken: () => Promise<string | null>
+		getToken: (options?: { skipCache?: boolean }) => Promise<string | null>
 	}
 	addListener?: (callback: (resources: { session?: unknown }) => void) => () => void
 }
@@ -16,8 +18,10 @@ const API_URL = __API_URL__ ?? '/api'
 
 /**
  * Wait for Clerk to be fully loaded and session to be available, then get the auth token
+ * @param maxWaitMs - Maximum time to wait for Clerk to load
+ * @param forceRefresh - If true, forces a fresh token fetch (bypasses cache)
  */
-async function getAuthToken(maxWaitMs = 10000): Promise<string | null> {
+async function getAuthToken(maxWaitMs = 10000, forceRefresh = false): Promise<string | null> {
 	const startTime = Date.now()
 
 	// Wait for Clerk object to be available
@@ -52,28 +56,38 @@ async function getAuthToken(maxWaitMs = 10000): Promise<string | null> {
 	}
 
 	try {
-		return await clerk.session.getToken()
+		// Clerk's getToken() accepts skipCache to force a fresh token
+		return await clerk.session.getToken(forceRefresh ? { skipCache: true } : undefined)
 	} catch {
 		return null
 	}
 }
 
 export async function fetcher<T>(path: string): Promise<T> {
-	const token = await getAuthToken()
-
-	const url = `${API_URL}${path}`
-	const headers: Record<string, string> = {
-		'Content-Type': 'application/json',
+	const makeRequest = async (forceRefresh: boolean): Promise<Response> => {
+		const token = await getAuthToken(10000, forceRefresh)
+		const url = `${API_URL}${path}`
+		const headers: Record<string, string> = {
+			'Content-Type': 'application/json',
+		}
+		if (token) {
+			headers['Authorization'] = `Bearer ${token}`
+		}
+		return fetch(url, { headers })
 	}
-	if (token) {
-		headers['Authorization'] = `Bearer ${token}`
-	}
 
-	const res = await fetch(url, { headers })
+	let res = await makeRequest(false)
+
+	// If 401 Unauthorized, try once with a fresh token
+	if (res.status === 401) {
+		res = await makeRequest(true)
+	}
 
 	if (!res.ok) {
 		const error = await res.json().catch(() => ({ error: { message: 'Request failed' } }))
-		throw new Error(error.error?.message ?? 'Request failed')
+		const message = error.error?.message ?? 'Request failed'
+		toast.error('Erro', { description: message })
+		throw new Error(message)
 	}
 
 	const data = await res.json()
@@ -84,21 +98,31 @@ export async function apiRequest<T>(
 	path: string,
 	options?: RequestInit & { json?: unknown }
 ): Promise<T> {
-	const token = await getAuthToken()
+	const makeRequest = async (forceRefresh: boolean): Promise<Response> => {
+		const token = await getAuthToken(10000, forceRefresh)
+		return fetch(`${API_URL}${path}`, {
+			...options,
+			headers: {
+				'Content-Type': 'application/json',
+				...(token ? { Authorization: `Bearer ${token}` } : {}),
+				...options?.headers,
+			},
+			body: options?.json ? JSON.stringify(options.json) : options?.body,
+		})
+	}
 
-	const res = await fetch(`${API_URL}${path}`, {
-		...options,
-		headers: {
-			'Content-Type': 'application/json',
-			...(token ? { Authorization: `Bearer ${token}` } : {}),
-			...options?.headers,
-		},
-		body: options?.json ? JSON.stringify(options.json) : options?.body,
-	})
+	let res = await makeRequest(false)
+
+	// If 401 Unauthorized, try once with a fresh token
+	if (res.status === 401) {
+		res = await makeRequest(true)
+	}
 
 	if (!res.ok) {
 		const error = await res.json().catch(() => ({ error: { message: 'Request failed' } }))
-		throw new Error(error.error?.message ?? 'Request failed')
+		const message = error.error?.message ?? 'Request failed'
+		toast.error('Erro', { description: message })
+		throw new Error(message)
 	}
 
 	const data = await res.json()
