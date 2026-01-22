@@ -533,16 +533,33 @@ smRoutes.post(
 				// Extract structured data from AI response BEFORE saving
 				const extractedData = extractSmDataFromResponse(fullResponse)
 
-				// Save assistant response with SM_DATA block removed for clean display
+				// Save assistant response, extract data, and update counters atomically
 				const cleanedResponse = cleanResponseForDisplay(fullResponse)
-				await db.insert(smMessages).values({
-					sessionId,
-					role: 'assistant',
-					content: cleanedResponse,
-					step: session.currentStep,
-				})
-				if (extractedData) {
-					try {
+
+				// Auto-detecção de transição de etapa (igual ao PRD)
+				const normalizedResponse = fullResponse
+					.toLowerCase()
+					.normalize('NFD')
+					.replace(/[\u0300-\u036f]/g, '')
+
+				const currentPatterns = stepCompletionPatterns[session.currentStep] ?? []
+				const shouldAdvance =
+					session.currentStep !== 'complete' &&
+					currentPatterns.some((pattern) => pattern.test(normalizedResponse))
+
+				let newStep = session.currentStep
+
+				await db.transaction(async (tx) => {
+					// Insert assistant message
+					await tx.insert(smMessages).values({
+						sessionId,
+						role: 'assistant',
+						content: cleanedResponse,
+						step: session.currentStep,
+					})
+
+					// Persist extracted epics/stories
+					if (extractedData) {
 						// Map to track epic number -> epic id for story linking
 						const epicIdMap = new Map<number, string>()
 
@@ -551,7 +568,7 @@ smRoutes.post(
 							for (const epicData of extractedData.epics) {
 								if (extractedData.action === 'create') {
 									// Check if epic with this number already exists
-									const existingEpic = await db.query.smEpics.findFirst({
+									const existingEpic = await tx.query.smEpics.findFirst({
 										where: and(
 											eq(smEpics.sessionId, sessionId),
 											eq(smEpics.number, epicData.number)
@@ -560,7 +577,7 @@ smRoutes.post(
 
 									if (existingEpic) {
 										// Update existing epic
-										await db
+										await tx
 											.update(smEpics)
 											.set({
 												title: epicData.title,
@@ -574,7 +591,7 @@ smRoutes.post(
 										epicIdMap.set(epicData.number, existingEpic.id)
 									} else {
 										// Create new epic
-										const [newEpic] = await db
+										const [newEpic] = await tx
 											.insert(smEpics)
 											.values(transformEpicForInsert(epicData, sessionId))
 											.returning()
@@ -584,14 +601,14 @@ smRoutes.post(
 									}
 								} else if (extractedData.action === 'update') {
 									// Update existing epic by number
-									const existingEpic = await db.query.smEpics.findFirst({
+									const existingEpic = await tx.query.smEpics.findFirst({
 										where: and(
 											eq(smEpics.sessionId, sessionId),
 											eq(smEpics.number, epicData.number)
 										),
 									})
 									if (existingEpic) {
-										await db
+										await tx
 											.update(smEpics)
 											.set({
 												title: epicData.title,
@@ -617,7 +634,7 @@ smRoutes.post(
 								let epicId = epicIdMap.get(storyData.epicNumber)
 								if (!epicId) {
 									// Try to find existing epic
-									const existingEpic = await db.query.smEpics.findFirst({
+									const existingEpic = await tx.query.smEpics.findFirst({
 										where: and(
 											eq(smEpics.sessionId, sessionId),
 											eq(smEpics.number, storyData.epicNumber)
@@ -641,7 +658,7 @@ smRoutes.post(
 
 								if (extractedData.action === 'create') {
 									// Check if story already exists
-									const existingStory = await db.query.smStories.findFirst({
+									const existingStory = await tx.query.smStories.findFirst({
 										where: and(
 											eq(smStories.sessionId, sessionId),
 											eq(smStories.storyKey, storyKey)
@@ -650,7 +667,7 @@ smRoutes.post(
 
 									if (existingStory) {
 										// Update existing story
-										await db
+										await tx
 											.update(smStories)
 											.set({
 												title: storyData.title,
@@ -663,13 +680,13 @@ smRoutes.post(
 											.where(eq(smStories.id, existingStory.id))
 									} else {
 										// Create new story
-										await db
+										await tx
 											.insert(smStories)
 											.values(transformStoryForInsert(storyData, sessionId, epicId))
 									}
 								} else if (extractedData.action === 'update') {
 									// Update existing story
-									const existingStory = await db.query.smStories.findFirst({
+									const existingStory = await tx.query.smStories.findFirst({
 										where: and(
 											eq(smStories.sessionId, sessionId),
 											eq(smStories.storyKey, storyKey)
@@ -678,7 +695,7 @@ smRoutes.post(
 
 									if (existingStory) {
 										const updateData = transformStoryForInsert(storyData, sessionId, epicId)
-										await db
+										await tx
 											.update(smStories)
 											.set({
 												title: updateData.title,
@@ -697,63 +714,49 @@ smRoutes.post(
 								}
 							}
 						}
-					} catch (extractError) {
-						smLogger.error({ err: extractError }, 'Failed to persist extracted data')
-						// Continue without failing the chat - extraction is best-effort
 					}
-				}
 
-				// Auto-detecção de transição de etapa (igual ao PRD)
-				const normalizedResponse = fullResponse
-					.toLowerCase()
-					.normalize('NFD')
-					.replace(/[\u0300-\u036f]/g, '')
-
-				const currentPatterns = stepCompletionPatterns[session.currentStep] ?? []
-				const shouldAdvance =
-					session.currentStep !== 'complete' &&
-					currentPatterns.some((pattern) => pattern.test(normalizedResponse))
-
-				let newStep = session.currentStep
-				if (shouldAdvance) {
-					const nextStep = getNextStep(session.currentStep)
-					if (nextStep) {
-						newStep = nextStep
-						const stepsCompleted = [...(session.stepsCompleted ?? [])]
-						if (!stepsCompleted.includes(session.currentStep)) {
-							stepsCompleted.push(session.currentStep)
+					// Update session step if needed
+					if (shouldAdvance) {
+						const nextStep = getNextStep(session.currentStep)
+						if (nextStep) {
+							newStep = nextStep
+							const stepsCompleted = [...(session.stepsCompleted ?? [])]
+							if (!stepsCompleted.includes(session.currentStep)) {
+								stepsCompleted.push(session.currentStep)
+							}
+							await tx
+								.update(smSessions)
+								.set({
+									currentStep: nextStep,
+									stepsCompleted,
+									...(nextStep === 'complete' && { status: 'completed', completedAt: new Date() }),
+									updatedAt: new Date(),
+								})
+								.where(eq(smSessions.id, sessionId))
 						}
-						await db
-							.update(smSessions)
-							.set({
-								currentStep: nextStep,
-								stepsCompleted,
-								...(nextStep === 'complete' && { status: 'completed', completedAt: new Date() }),
-								updatedAt: new Date(),
-							})
-							.where(eq(smSessions.id, sessionId))
 					}
-				}
 
-				// Update session with totals (fetch fresh counts from DB after extraction)
-				const [updatedEpics, updatedStories] = await Promise.all([
-					db.query.smEpics.findMany({
-						where: eq(smEpics.sessionId, sessionId),
-					}),
-					db.query.smStories.findMany({
-						where: eq(smStories.sessionId, sessionId),
-					}),
-				])
+					// Update session with totals (fresh counts within same transaction)
+					const [updatedEpics, updatedStories] = await Promise.all([
+						tx.query.smEpics.findMany({
+							where: eq(smEpics.sessionId, sessionId),
+						}),
+						tx.query.smStories.findMany({
+							where: eq(smStories.sessionId, sessionId),
+						}),
+					])
 
-				await db
-					.update(smSessions)
-					.set({
-						updatedAt: new Date(),
-						totalEpics: updatedEpics.length,
-						totalStories: updatedStories.length,
-						totalStoryPoints: updatedStories.reduce((sum, s) => sum + (s.storyPoints ?? 0), 0),
-					})
-					.where(eq(smSessions.id, sessionId))
+					await tx
+						.update(smSessions)
+						.set({
+							updatedAt: new Date(),
+							totalEpics: updatedEpics.length,
+							totalStories: updatedStories.length,
+							totalStoryPoints: updatedStories.reduce((sum, s) => sum + (s.storyPoints ?? 0), 0),
+						})
+						.where(eq(smSessions.id, sessionId))
+				})
 
 				// Enviar stepUpdate se houve avanço
 				if (newStep !== session.currentStep) {
