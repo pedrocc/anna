@@ -70,6 +70,7 @@ export const apiRoutes = {
 // Default SWR config with deduping to prevent excessive revalidation
 const defaultSwrConfig: SWRConfiguration = {
 	dedupingInterval: 5000, // 5 seconds deduping window
+	revalidateOnFocus: false,
 }
 
 /**
@@ -172,8 +173,7 @@ export function useBriefingSession(
 		...defaultSwrConfig,
 		...config,
 		refreshInterval: 0,
-		revalidateOnMount: true, // Always fetch fresh data on mount
-		revalidateOnFocus: true, // Refresh when window regains focus
+		revalidateOnMount: true,
 	})
 }
 
@@ -618,8 +618,7 @@ export function usePrdSession(
 		...defaultSwrConfig,
 		...config,
 		refreshInterval: 0,
-		revalidateOnMount: true, // Always fetch fresh data on mount
-		revalidateOnFocus: true, // Refresh when window regains focus
+		revalidateOnMount: true,
 	})
 }
 
@@ -717,8 +716,7 @@ export function useSmSession(id: string | null, config?: SWRConfiguration<SmSess
 		...defaultSwrConfig,
 		...config,
 		refreshInterval: 0,
-		revalidateOnMount: true, // Always fetch fresh data on mount
-		revalidateOnFocus: true, // Refresh when window regains focus
+		revalidateOnMount: true,
 	})
 }
 

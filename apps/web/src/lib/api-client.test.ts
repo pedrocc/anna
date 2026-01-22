@@ -54,15 +54,25 @@ describe('api-client', () => {
 		})
 	})
 
-	describe('defaultSwrConfig (dedupingInterval)', () => {
-		it('should export hooks that apply dedupingInterval: 5000 via defaultSwrConfig', async () => {
-			// Verify the module source contains the defaultSwrConfig with correct value
+	describe('defaultSwrConfig', () => {
+		it('should have dedupingInterval: 5000', async () => {
 			const moduleSource = await Bun.file(
 				new URL('./api-client.ts', import.meta.url).pathname
 			).text()
 
 			expect(moduleSource).toContain('dedupingInterval: 5000')
 			expect(moduleSource).toContain('const defaultSwrConfig: SWRConfiguration')
+		})
+
+		it('should have revalidateOnFocus: false', async () => {
+			const moduleSource = await Bun.file(
+				new URL('./api-client.ts', import.meta.url).pathname
+			).text()
+
+			expect(moduleSource).toContain('revalidateOnFocus: false')
+
+			// Ensure no hook overrides it back to true
+			expect(moduleSource).not.toContain('revalidateOnFocus: true')
 		})
 
 		it('should spread defaultSwrConfig into all hook useSWR calls', async () => {
