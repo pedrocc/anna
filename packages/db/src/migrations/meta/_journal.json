@@ -71,6 +71,13 @@
       "when": 1768822761147,
       "tag": "0009_nebulous_dreaming_celestial",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1769114542932,
+      "tag": "0010_colorful_khan",
+      "breakpoints": true
     }
   ]
 }
