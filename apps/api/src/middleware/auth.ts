@@ -1,4 +1,5 @@
 import { verifyToken } from '@clerk/backend'
+import { TokenVerificationError, TokenVerificationErrorReason } from '@clerk/backend/errors'
 import { db, users } from '@repo/db'
 import { eq } from 'drizzle-orm'
 import type { Context } from 'hono'
@@ -87,7 +88,15 @@ export const authMiddleware = createMiddleware<{ Variables: AuthVariables }>(asy
 
 		await next()
 	} catch (err) {
-		authLogger.warn({ err }, 'Auth failed')
+		if (err instanceof TokenVerificationError) {
+			if (err.reason === TokenVerificationErrorReason.TokenExpired) {
+				authLogger.warn({ reason: err.reason }, 'Auth failed: token expired')
+				return errorResponse(c, 'TOKEN_EXPIRED', 'Token expired', 401)
+			}
+			authLogger.warn({ reason: err.reason }, 'Auth failed: invalid token')
+			return errorResponse(c, 'TOKEN_INVALID', 'Invalid token', 401)
+		}
+		authLogger.warn({ err }, 'Auth failed: unexpected error')
 		return commonErrors.unauthorized(c, 'Invalid token')
 	}
 })
