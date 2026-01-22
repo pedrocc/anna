@@ -1,5 +1,14 @@
-import { describe, expect, test } from 'bun:test'
-import { formatDate, generateId, omit, pick, sleep } from './index.js'
+import { afterEach, describe, expect, test } from 'bun:test'
+import {
+	fetchWithTimeout,
+	formatDate,
+	generateId,
+	omit,
+	pick,
+	sleep,
+	TimeoutError,
+	withTimeout,
+} from './index.js'
 
 describe('sleep', () => {
 	test('resolves after specified time', async () => {
@@ -90,5 +99,86 @@ describe('formatDate', () => {
 		const result = formatDate(date, 'en-US')
 		expect(result).toContain('1')
 		expect(result).toContain('15')
+	})
+})
+
+describe('TimeoutError', () => {
+	test('has correct name and message', () => {
+		const err = new TimeoutError(5000)
+		expect(err.name).toBe('TimeoutError')
+		expect(err.message).toBe('Operation timed out after 5000ms')
+		expect(err).toBeInstanceOf(Error)
+	})
+})
+
+describe('withTimeout', () => {
+	test('resolves when promise finishes before timeout', async () => {
+		const result = await withTimeout(Promise.resolve('ok'), 1000)
+		expect(result).toBe('ok')
+	})
+
+	test('rejects with TimeoutError when promise exceeds timeout', async () => {
+		const slow = new Promise((resolve) => setTimeout(resolve, 500))
+		await expect(withTimeout(slow, 50)).rejects.toBeInstanceOf(TimeoutError)
+	})
+
+	test('propagates original error if promise rejects before timeout', async () => {
+		const failing = Promise.reject(new Error('original'))
+		await expect(withTimeout(failing, 1000)).rejects.toThrow('original')
+	})
+
+	test('cleans up timeout when promise resolves quickly', async () => {
+		const start = Date.now()
+		await withTimeout(Promise.resolve('fast'), 5000)
+		const elapsed = Date.now() - start
+		expect(elapsed).toBeLessThan(100)
+	})
+})
+
+describe('fetchWithTimeout', () => {
+	const originalFetch = globalThis.fetch
+
+	afterEach(() => {
+		globalThis.fetch = originalFetch
+	})
+
+	test('rejects when fetch exceeds timeout', async () => {
+		globalThis.fetch = () => new Promise(() => {}) as Promise<Response>
+
+		try {
+			await fetchWithTimeout('http://example.com', { timeout: 50 })
+			expect.unreachable('should have thrown')
+		} catch (err) {
+			expect(
+				err instanceof TimeoutError || (err instanceof Error && err.name === 'AbortError')
+			).toBe(true)
+		}
+	})
+
+	test('respects pre-aborted signal', async () => {
+		const controller = new AbortController()
+		controller.abort()
+		await expect(
+			fetchWithTimeout('http://example.com', { signal: controller.signal, timeout: 5000 })
+		).rejects.toThrow()
+	})
+
+	test('resolves when fetch completes within timeout', async () => {
+		globalThis.fetch = () => Promise.resolve(new Response('ok', { status: 200 }))
+
+		const response = await fetchWithTimeout('http://example.com', { timeout: 5000 })
+		expect(response.status).toBe(200)
+	})
+
+	test('passes abort signal to underlying fetch', async () => {
+		let receivedSignal: AbortSignal | undefined
+		globalThis.fetch = ((_url: string | URL | Request, init?: RequestInit) => {
+			receivedSignal = init?.signal ?? undefined
+			return Promise.resolve(new Response('ok', { status: 200 }))
+		}) as typeof fetch
+
+		await fetchWithTimeout('http://example.com', { timeout: 5000 })
+		expect(receivedSignal).toBeDefined()
+		expect(receivedSignal?.aborted).toBe(false)
 	})
 })

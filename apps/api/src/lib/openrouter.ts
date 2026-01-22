@@ -3,6 +3,7 @@
  * https://openrouter.ai/docs
  */
 
+import { fetchWithTimeout, TimeoutError, withTimeout } from '@repo/shared'
 import { openrouterLogger } from './logger.js'
 
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1'
@@ -51,23 +52,41 @@ export interface OpenRouterError {
 	}
 }
 
+export interface OpenRouterClientOptions {
+	apiKey?: string
+	defaultModel?: string
+	/** Timeout for non-streaming requests in ms (default: 60000) */
+	timeout?: number
+	/** Timeout for streaming connection in ms (default: 30000) */
+	streamConnectTimeout?: number
+	/** Timeout for individual stream reads in ms (default: 30000) */
+	streamReadTimeout?: number
+}
+
 export class OpenRouterClient {
 	private apiKey: string
 	private defaultModel: string
+	private timeout: number
+	private streamConnectTimeout: number
+	private streamReadTimeout: number
 
-	constructor(apiKey?: string, defaultModel?: string) {
-		const key = apiKey ?? process.env['OPENROUTER_API_KEY']
+	constructor(options: OpenRouterClientOptions = {}) {
+		const key = options.apiKey ?? process.env['OPENROUTER_API_KEY']
 		if (!key) {
 			throw new Error('OPENROUTER_API_KEY is required')
 		}
 		this.apiKey = key
 		this.defaultModel =
-			defaultModel ?? process.env['OPENROUTER_DEFAULT_MODEL'] ?? 'deepseek/deepseek-v3.2'
+			options.defaultModel ?? process.env['OPENROUTER_DEFAULT_MODEL'] ?? 'deepseek/deepseek-v3.2'
+		this.timeout = options.timeout ?? 60_000
+		this.streamConnectTimeout = options.streamConnectTimeout ?? 30_000
+		this.streamReadTimeout = options.streamReadTimeout ?? 30_000
 	}
 
 	async chat(request: ChatCompletionRequest): Promise<ChatCompletionResponse> {
-		const response = await fetch(`${OPENROUTER_API_URL}/chat/completions`, {
+		const response = await fetchWithTimeout(`${OPENROUTER_API_URL}/chat/completions`, {
 			method: 'POST',
+			timeout: this.timeout,
 			headers: {
 				'Content-Type': 'application/json',
 				Authorization: `Bearer ${this.apiKey}`,
@@ -106,8 +125,9 @@ export class OpenRouterClient {
 			'Starting stream request'
 		)
 
-		const response = await fetch(`${OPENROUTER_API_URL}/chat/completions`, {
+		const response = await fetchWithTimeout(`${OPENROUTER_API_URL}/chat/completions`, {
 			method: 'POST',
+			timeout: this.streamConnectTimeout,
 			headers: {
 				'Content-Type': 'application/json',
 				Authorization: `Bearer ${this.apiKey}`,
@@ -150,33 +170,38 @@ export class OpenRouterClient {
 		const decoder = new TextDecoder()
 		let buffer = ''
 
-		while (true) {
-			const { done, value } = await reader.read()
-			if (done) break
+		try {
+			while (true) {
+				const { done, value } = await withTimeout(reader.read(), this.streamReadTimeout)
+				if (done) break
 
-			buffer += decoder.decode(value, { stream: true })
-			const lines = buffer.split('\n')
-			buffer = lines.pop() ?? ''
+				buffer += decoder.decode(value, { stream: true })
+				const lines = buffer.split('\n')
+				buffer = lines.pop() ?? ''
 
-			for (const line of lines) {
-				const trimmed = line.trim()
-				if (!trimmed || !trimmed.startsWith('data: ')) continue
+				for (const line of lines) {
+					const trimmed = line.trim()
+					if (!trimmed || !trimmed.startsWith('data: ')) continue
 
-				const data = trimmed.slice(6)
-				if (data === '[DONE]') return
+					const data = trimmed.slice(6)
+					if (data === '[DONE]') return
 
-				try {
-					const parsed = JSON.parse(data) as {
-						choices: Array<{ delta: { content?: string } }>
+					try {
+						const parsed = JSON.parse(data) as {
+							choices: Array<{ delta: { content?: string } }>
+						}
+						const content = parsed.choices[0]?.delta?.content
+						if (content) {
+							yield content
+						}
+					} catch {
+						// Ignore JSON parse errors for incomplete chunks
 					}
-					const content = parsed.choices[0]?.delta?.content
-					if (content) {
-						yield content
-					}
-				} catch {
-					// Ignore JSON parse errors for incomplete chunks
 				}
 			}
+		} finally {
+			// Always release the reader lock to prevent memory leaks
+			reader.releaseLock()
 		}
 	}
 }
@@ -192,12 +217,14 @@ export class OpenRouterAPIError extends Error {
 	}
 }
 
+export { TimeoutError }
+
 // Singleton instance
 let clientInstance: OpenRouterClient | null = null
 
-export function getOpenRouterClient(): OpenRouterClient {
+export function getOpenRouterClient(options?: OpenRouterClientOptions): OpenRouterClient {
 	if (!clientInstance) {
-		clientInstance = new OpenRouterClient()
+		clientInstance = new OpenRouterClient(options)
 	}
 	return clientInstance
 }
