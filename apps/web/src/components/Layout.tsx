@@ -8,21 +8,33 @@ interface LayoutProps {
 	readonly children: ReactNode
 }
 
-function UserSync() {
+export function UserSync() {
 	const { user, isLoaded } = useUser()
-	const hasSynced = useRef(false)
+	const syncedUserId = useRef<string | null>(null)
+	const isSyncing = useRef(false)
 
 	useEffect(() => {
-		if (isLoaded && user && !hasSynced.current) {
-			const fullName = user.fullName || `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim()
-			if (fullName) {
-				hasSynced.current = true
-				// Sync user name to our database
-				api.users.syncName(fullName).catch(() => {
-					// Silently fail - not critical
-				})
-			}
+		if (!isLoaded || !user || isSyncing.current || syncedUserId.current === user.id) {
+			return
 		}
+
+		const fullName = user.fullName || `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim()
+		if (!fullName) {
+			return
+		}
+
+		isSyncing.current = true
+		api.users
+			.syncName(fullName)
+			.then(() => {
+				syncedUserId.current = user.id
+			})
+			.catch(() => {
+				// Don't mark as synced on failure, allowing retry on next effect
+			})
+			.finally(() => {
+				isSyncing.current = false
+			})
 	}, [isLoaded, user])
 
 	return null
