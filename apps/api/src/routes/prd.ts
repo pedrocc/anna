@@ -15,10 +15,11 @@ import {
 	EditPrdMessageRequestSchema,
 	PaginationSchema,
 	PrdChatRequestSchema,
+	RenameSessionSchema,
 	UpdatePrdDocumentSchema,
 	UpdatePrdSessionSchema,
 } from '@repo/shared'
-import { and, desc, eq, gte, sql } from 'drizzle-orm'
+import { and, desc, eq, gte, ne, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { streamSSE } from 'hono/streaming'
 import { getUserByClerkId } from '../lib/helpers.js'
@@ -39,6 +40,7 @@ import {
 } from '../lib/prd-prompts.js'
 import { commonErrors, successResponse } from '../lib/response.js'
 import { type AuthVariables, authMiddleware, getAuth } from '../middleware/auth.js'
+import { rateLimiter } from '../middleware/rate-limiter.js'
 
 export const prdRoutes = new Hono<{ Variables: AuthVariables }>()
 
@@ -254,59 +256,12 @@ prdRoutes.post(
 			}
 		}
 
-		// Create session
-		const [newSession] = await db
-			.insert(prdSessions)
-			.values({
-				userId: user.id,
-				projectName: data.projectName,
-				projectDescription: data.projectDescription,
-				inputDocuments: briefing
-					? [
-							{
-								name: briefing.projectName,
-								path: data.briefingSessionId ?? '',
-								type: 'briefing' as const,
-								loadedAt: new Date().toISOString(),
-							},
-						]
-					: [],
-			})
-			.returning()
-
-		if (!newSession) {
-			return commonErrors.internalError(c, 'Failed to create session')
-		}
-
-		// 1. Create welcome message from Anna
-		const welcomeMessage = buildPrdWelcomeMessage(
-			data.projectName,
-			data.projectDescription,
-			!!briefingContent
-		)
-
-		await db.insert(prdMessages).values({
-			sessionId: newSession.id,
-			role: 'assistant',
-			content: welcomeMessage,
-			step: 'init',
-		})
-
-		// If briefing is provided, add its content and generate AI analysis
+		// Generate AI analysis first if briefing is provided (before transaction)
+		let annaAnalysis = ''
 		if (briefingContent) {
-			// 2. Insert briefing document as user message
-			await db.insert(prdMessages).values({
-				sessionId: newSession.id,
-				role: 'user',
-				content: `**Documento do Briefing:**\n\n${briefingContent}`,
-				step: 'init',
-			})
-
-			// 3. Generate Anna's analysis of the briefing
 			const openRouter = getOpenRouterClient()
 			const analysisPrompt = buildBriefingAnalysisPrompt(briefingContent, data.projectName)
 
-			let annaAnalysis = ''
 			try {
 				const response = await openRouter.chat({
 					model: 'deepseek/deepseek-chat-v3-0324',
@@ -324,24 +279,80 @@ prdRoutes.post(
 
 Com base no briefing, vamos avancar para a etapa de **Descoberta**. Me conte: qual e o tipo de projeto que estamos construindo? (API, Mobile App, SaaS, etc.)`
 			}
-
-			await db.insert(prdMessages).values({
-				sessionId: newSession.id,
-				role: 'assistant',
-				content: annaAnalysis,
-				step: 'init',
-			})
 		}
 
-		// Get session with messages
-		const sessionWithMessages = await db.query.prdSessions.findFirst({
-			where: eq(prdSessions.id, newSession.id),
-			with: {
-				messages: {
-					orderBy: [desc(prdMessages.createdAt)],
+		// Create session and messages in a transaction
+		const sessionWithMessages = await db.transaction(async (tx) => {
+			const [newSession] = await tx
+				.insert(prdSessions)
+				.values({
+					userId: user.id,
+					projectName: data.projectName,
+					projectDescription: data.projectDescription,
+					inputDocuments: briefing
+						? [
+								{
+									name: briefing.projectName,
+									path: data.briefingSessionId ?? '',
+									type: 'briefing' as const,
+									loadedAt: new Date().toISOString(),
+								},
+							]
+						: [],
+				})
+				.returning()
+
+			if (!newSession) {
+				throw new Error('Failed to create session')
+			}
+
+			// 1. Create welcome message from Anna
+			const welcomeMessage = buildPrdWelcomeMessage(
+				data.projectName,
+				data.projectDescription,
+				!!briefingContent
+			)
+
+			await tx.insert(prdMessages).values({
+				sessionId: newSession.id,
+				role: 'assistant',
+				content: welcomeMessage,
+				step: 'init',
+			})
+
+			// If briefing is provided, add its content and AI analysis
+			if (briefingContent) {
+				// 2. Insert briefing document as user message
+				await tx.insert(prdMessages).values({
+					sessionId: newSession.id,
+					role: 'user',
+					content: `**Documento do Briefing:**\n\n${briefingContent}`,
+					step: 'init',
+				})
+
+				// 3. Insert Anna's analysis
+				await tx.insert(prdMessages).values({
+					sessionId: newSession.id,
+					role: 'assistant',
+					content: annaAnalysis,
+					step: 'init',
+				})
+			}
+
+			// Get session with messages
+			return await tx.query.prdSessions.findFirst({
+				where: eq(prdSessions.id, newSession.id),
+				with: {
+					messages: {
+						orderBy: [desc(prdMessages.createdAt)],
+					},
 				},
-			},
+			})
 		})
+
+		if (!sessionWithMessages) {
+			return commonErrors.internalError(c, 'Failed to create session')
+		}
 
 		return successResponse(
 			c,
@@ -406,240 +417,248 @@ prdRoutes.delete('/sessions/:id', authMiddleware, async (c) => {
 })
 
 // Rename session with cascade to linked Briefing and SM sessions
-prdRoutes.post('/sessions/:id/rename', authMiddleware, async (c) => {
-	const { userId } = getAuth(c)
-	const sessionId = c.req.param('id')
-	const body = await c.req.json<{ projectName: string }>()
+prdRoutes.post(
+	'/sessions/:id/rename',
+	authMiddleware,
+	zValidator('json', RenameSessionSchema),
+	async (c) => {
+		const { userId } = getAuth(c)
+		const sessionId = c.req.param('id')
+		const { projectName: newName } = c.req.valid('json')
 
-	if (!body.projectName?.trim()) {
-		return commonErrors.badRequest(c, 'Project name is required')
+		const user = await getUserByClerkId(userId)
+		if (!user) {
+			return commonErrors.notFound(c, 'User not found')
+		}
+
+		// Get current PRD session to find linked briefing
+		const currentSession = await db.query.prdSessions.findFirst({
+			where: and(eq(prdSessions.id, sessionId), eq(prdSessions.userId, user.id)),
+		})
+
+		if (!currentSession) {
+			return commonErrors.notFound(c, 'Session not found')
+		}
+
+		// Update PRD and cascade to linked sessions in a transaction
+		await db.transaction(async (tx) => {
+			// Update PRD session
+			await tx
+				.update(prdSessions)
+				.set({ projectName: newName, updatedAt: new Date() })
+				.where(eq(prdSessions.id, sessionId))
+
+			// Find linked briefing from inputDocuments and update it
+			const docs = currentSession.inputDocuments as Array<{ path?: string; type?: string }> | null
+			const briefingDoc = docs?.find((d) => d.type === 'briefing')
+			if (briefingDoc?.path) {
+				await tx
+					.update(briefingSessions)
+					.set({ projectName: newName, updatedAt: new Date() })
+					.where(and(eq(briefingSessions.id, briefingDoc.path), eq(briefingSessions.userId, user.id)))
+			}
+
+			// Update all SM sessions linked to this PRD
+			await tx
+				.update(smSessions)
+				.set({ projectName: newName, updatedAt: new Date() })
+				.where(and(eq(smSessions.prdSessionId, sessionId), eq(smSessions.userId, user.id)))
+		})
+
+		return successResponse(c, {
+			updated: true,
+			projectName: newName,
+		})
 	}
-
-	const newName = body.projectName.trim()
-
-	const user = await getUserByClerkId(userId)
-	if (!user) {
-		return commonErrors.notFound(c, 'User not found')
-	}
-
-	// Get current PRD session to find linked briefing
-	const currentSession = await db.query.prdSessions.findFirst({
-		where: and(eq(prdSessions.id, sessionId), eq(prdSessions.userId, user.id)),
-	})
-
-	if (!currentSession) {
-		return commonErrors.notFound(c, 'Session not found')
-	}
-
-	// Update PRD session
-	await db
-		.update(prdSessions)
-		.set({ projectName: newName, updatedAt: new Date() })
-		.where(eq(prdSessions.id, sessionId))
-
-	// Find linked briefing from inputDocuments and update it
-	const docs = currentSession.inputDocuments as Array<{ path?: string; type?: string }> | null
-	const briefingDoc = docs?.find((d) => d.type === 'briefing')
-	if (briefingDoc?.path) {
-		await db
-			.update(briefingSessions)
-			.set({ projectName: newName, updatedAt: new Date() })
-			.where(and(eq(briefingSessions.id, briefingDoc.path), eq(briefingSessions.userId, user.id)))
-	}
-
-	// Update all SM sessions linked to this PRD
-	await db
-		.update(smSessions)
-		.set({ projectName: newName, updatedAt: new Date() })
-		.where(and(eq(smSessions.prdSessionId, sessionId), eq(smSessions.userId, user.id)))
-
-	return successResponse(c, {
-		updated: true,
-		projectName: newName,
-	})
-})
+)
 
 // ============================================
 // CHAT ENDPOINT (STREAMING)
 // ============================================
 
-prdRoutes.post('/chat', authMiddleware, zValidator('json', PrdChatRequestSchema), async (c) => {
-	const { userId } = getAuth(c)
-	const { sessionId, message, action } = c.req.valid('json')
+prdRoutes.post(
+	'/chat',
+	rateLimiter({ type: 'chat' }),
+	authMiddleware,
+	zValidator('json', PrdChatRequestSchema),
+	async (c) => {
+		const { userId } = getAuth(c)
+		const { sessionId, message, action } = c.req.valid('json')
 
-	const user = await getUserByClerkId(userId)
-	if (!user) {
-		return commonErrors.notFound(c, 'User not found')
-	}
+		const user = await getUserByClerkId(userId)
+		if (!user) {
+			return commonErrors.notFound(c, 'User not found')
+		}
 
-	// Get session with messages
-	const session = await db.query.prdSessions.findFirst({
-		where: and(eq(prdSessions.id, sessionId), eq(prdSessions.userId, user.id)),
-		with: {
-			messages: {
-				orderBy: [desc(prdMessages.createdAt)],
-				limit: 50, // Last 50 messages for context
+		// Get session with messages
+		const session = await db.query.prdSessions.findFirst({
+			where: and(eq(prdSessions.id, sessionId), eq(prdSessions.userId, user.id)),
+			with: {
+				messages: {
+					orderBy: [desc(prdMessages.createdAt)],
+					limit: 50, // Last 50 messages for context
+				},
 			},
-		},
-	})
+		})
 
-	if (!session) {
-		return commonErrors.notFound(c, 'Session not found')
-	}
+		if (!session) {
+			return commonErrors.notFound(c, 'Session not found')
+		}
 
-	// Save user message
-	await db.insert(prdMessages).values({
-		sessionId,
-		role: 'user',
-		content: message,
-		step: session.currentStep,
-	})
+		// Save user message
+		await db.insert(prdMessages).values({
+			sessionId,
+			role: 'user',
+			content: message,
+			step: session.currentStep,
+		})
 
-	// Determine mode based on action
-	let mode: 'advanced_elicitation' | 'party_mode' | undefined
-	if (action === 'advanced_elicitation') mode = 'advanced_elicitation'
-	if (action === 'party_mode') mode = 'party_mode'
+		// Determine mode based on action
+		let mode: 'advanced_elicitation' | 'party_mode' | undefined
+		if (action === 'advanced_elicitation') mode = 'advanced_elicitation'
+		if (action === 'party_mode') mode = 'party_mode'
 
-	// Build system prompt with session context
-	const systemPrompt = buildPrdSystemPrompt(
-		{
-			projectName: session.projectName,
-			projectDescription: session.projectDescription,
-			projectType: session.projectType,
-			domain: session.domain,
-			domainComplexity: session.domainComplexity,
-			executiveSummary: session.executiveSummary,
-			differentiators: session.differentiators ?? [],
-			successCriteria: session.successCriteria ?? [],
-			personas: session.personas ?? [],
-			userJourneys: session.userJourneys ?? [],
-			domainConcerns: session.domainConcerns ?? [],
-			regulatoryRequirements: session.regulatoryRequirements ?? [],
-			skipDomainStep: session.skipDomainStep,
-			innovations: session.innovations ?? [],
-			skipInnovationStep: session.skipInnovationStep,
-			projectTypeDetails: session.projectTypeDetails ?? {},
-			projectTypeQuestions: session.projectTypeQuestions ?? {},
-			features: session.features ?? [],
-			outOfScope: session.outOfScope ?? [],
-			mvpSuccessCriteria: session.mvpSuccessCriteria ?? [],
-			functionalRequirements: session.functionalRequirements ?? [],
-			nonFunctionalRequirements: session.nonFunctionalRequirements ?? [],
-			stepsCompleted: session.stepsCompleted ?? [],
-			inputDocuments: session.inputDocuments ?? [],
-		},
-		session.currentStep,
-		mode
-	)
+		// Build system prompt with session context
+		const systemPrompt = buildPrdSystemPrompt(
+			{
+				projectName: session.projectName,
+				projectDescription: session.projectDescription,
+				projectType: session.projectType,
+				domain: session.domain,
+				domainComplexity: session.domainComplexity,
+				executiveSummary: session.executiveSummary,
+				differentiators: session.differentiators ?? [],
+				successCriteria: session.successCriteria ?? [],
+				personas: session.personas ?? [],
+				userJourneys: session.userJourneys ?? [],
+				domainConcerns: session.domainConcerns ?? [],
+				regulatoryRequirements: session.regulatoryRequirements ?? [],
+				skipDomainStep: session.skipDomainStep,
+				innovations: session.innovations ?? [],
+				skipInnovationStep: session.skipInnovationStep,
+				projectTypeDetails: session.projectTypeDetails ?? {},
+				projectTypeQuestions: session.projectTypeQuestions ?? {},
+				features: session.features ?? [],
+				outOfScope: session.outOfScope ?? [],
+				mvpSuccessCriteria: session.mvpSuccessCriteria ?? [],
+				functionalRequirements: session.functionalRequirements ?? [],
+				nonFunctionalRequirements: session.nonFunctionalRequirements ?? [],
+				stepsCompleted: session.stepsCompleted ?? [],
+				inputDocuments: session.inputDocuments ?? [],
+			},
+			session.currentStep,
+			mode
+		)
 
-	// Build conversation history (reverse to chronological, then map)
-	const historyMessages = [...session.messages]
-		.reverse()
-		.filter((m) => m.role !== 'system')
-		.map((m) => ({
-			role: m.role as 'user' | 'assistant',
-			content: m.content,
-		}))
+		// Build conversation history (reverse to chronological, then map)
+		const historyMessages = [...session.messages]
+			.reverse()
+			.filter((m) => m.role !== 'system')
+			.map((m) => ({
+				role: m.role as 'user' | 'assistant',
+				content: m.content,
+			}))
 
-	const llmMessages = [
-		{ role: 'system' as const, content: systemPrompt },
-		...historyMessages,
-		{ role: 'user' as const, content: message },
-	]
+		const llmMessages = [
+			{ role: 'system' as const, content: systemPrompt },
+			...historyMessages,
+			{ role: 'user' as const, content: message },
+		]
 
-	// Stream response
-	return streamSSE(c, async (stream) => {
-		try {
-			const client = getOpenRouterClient()
-			let fullResponse = ''
+		// Stream response
+		return streamSSE(c, async (stream) => {
+			try {
+				const client = getOpenRouterClient()
+				let fullResponse = ''
 
-			const generator = client.chatStream({
-				messages: llmMessages,
-				model: 'deepseek/deepseek-v3.2',
-				temperature: 0.7,
-				max_tokens: 16384, // DeepSeek V3 via OpenRouter max output
-			})
-
-			for await (const chunk of generator) {
-				fullResponse += chunk
-				await stream.writeSSE({
-					data: JSON.stringify({ content: chunk }),
+				const generator = client.chatStream({
+					messages: llmMessages,
+					model: 'deepseek/deepseek-v3.2',
+					temperature: 0.7,
+					max_tokens: 16384, // DeepSeek V3 via OpenRouter max output
 				})
-			}
 
-			// Save assistant response
-			await db.insert(prdMessages).values({
-				sessionId,
-				role: 'assistant',
-				content: fullResponse,
-				step: session.currentStep,
-			})
+				for await (const chunk of generator) {
+					fullResponse += chunk
+					await stream.writeSSE({
+						data: JSON.stringify({ content: chunk }),
+					})
+				}
 
-			// Auto-advance step based on AI response content (padrão Briefing)
-			const normalizedResponse = fullResponse
-				.toLowerCase()
-				.normalize('NFD')
-				.replace(/[\u0300-\u036f]/g, '')
+				// Save assistant response
+				await db.insert(prdMessages).values({
+					sessionId,
+					role: 'assistant',
+					content: fullResponse,
+					step: session.currentStep,
+				})
 
-			const currentPatterns = stepCompletionPatterns[session.currentStep] ?? []
-			const shouldAdvance =
-				session.currentStep !== 'complete' &&
-				currentPatterns.some((pattern) => pattern.test(normalizedResponse))
+				// Auto-advance step based on AI response content (padrão Briefing)
+				const normalizedResponse = fullResponse
+					.toLowerCase()
+					.normalize('NFD')
+					.replace(/[\u0300-\u036f]/g, '')
 
-			let newStep = session.currentStep
-			if (shouldAdvance) {
-				const nextStep = getNextStep(session.currentStep)
-				if (nextStep) {
-					newStep = nextStep
-					const stepsCompleted = [...(session.stepsCompleted ?? [])]
-					if (!stepsCompleted.includes(session.currentStep)) {
-						stepsCompleted.push(session.currentStep)
+				const currentPatterns = stepCompletionPatterns[session.currentStep] ?? []
+				const shouldAdvance =
+					session.currentStep !== 'complete' &&
+					currentPatterns.some((pattern) => pattern.test(normalizedResponse))
+
+				let newStep = session.currentStep
+				if (shouldAdvance) {
+					const nextStep = getNextStep(session.currentStep)
+					if (nextStep) {
+						newStep = nextStep
+						const stepsCompleted = [...(session.stepsCompleted ?? [])]
+						if (!stepsCompleted.includes(session.currentStep)) {
+							stepsCompleted.push(session.currentStep)
+						}
+						await db
+							.update(prdSessions)
+							.set({
+								currentStep: nextStep,
+								stepsCompleted,
+								...(nextStep === 'complete' && { status: 'completed', completedAt: new Date() }),
+								updatedAt: new Date(),
+							})
+							.where(eq(prdSessions.id, sessionId))
 					}
+				}
+
+				// Update session timestamp if no step change
+				if (!shouldAdvance) {
 					await db
 						.update(prdSessions)
-						.set({
-							currentStep: nextStep,
-							stepsCompleted,
-							...(nextStep === 'complete' && { status: 'completed', completedAt: new Date() }),
-							updatedAt: new Date(),
-						})
+						.set({ updatedAt: new Date() })
 						.where(eq(prdSessions.id, sessionId))
 				}
-			}
 
-			// Update session timestamp if no step change
-			if (!shouldAdvance) {
-				await db
-					.update(prdSessions)
-					.set({ updatedAt: new Date() })
-					.where(eq(prdSessions.id, sessionId))
-			}
+				// Send step update event if step changed
+				if (newStep !== session.currentStep) {
+					await stream.writeSSE({
+						data: JSON.stringify({ stepUpdate: newStep }),
+					})
+				}
 
-			// Send step update event if step changed
-			if (newStep !== session.currentStep) {
-				await stream.writeSSE({
-					data: JSON.stringify({ stepUpdate: newStep }),
-				})
+				await stream.writeSSE({ data: '[DONE]' })
+			} catch (error) {
+				if (error instanceof OpenRouterAPIError) {
+					await stream.writeSSE({
+						data: JSON.stringify({
+							error: { code: error.code, message: error.message },
+						}),
+					})
+				} else {
+					await stream.writeSSE({
+						data: JSON.stringify({
+							error: { message: 'Failed to generate response' },
+						}),
+					})
+				}
 			}
-
-			await stream.writeSSE({ data: '[DONE]' })
-		} catch (error) {
-			if (error instanceof OpenRouterAPIError) {
-				await stream.writeSSE({
-					data: JSON.stringify({
-						error: { code: error.code, message: error.message },
-					}),
-				})
-			} else {
-				await stream.writeSSE({
-					data: JSON.stringify({
-						error: { message: 'Failed to generate response' },
-					}),
-				})
-			}
-		}
-	})
-})
+		})
+	}
+)
 
 // ============================================
 // MESSAGE EDIT ENDPOINT
@@ -686,41 +705,44 @@ prdRoutes.post(
 		const editedStep = message.step
 		const messageTimestamp = message.createdAt
 
-		// 4. Delete all messages from this point onwards (inclusive)
-		await db
-			.delete(prdMessages)
-			.where(
-				and(eq(prdMessages.sessionId, sessionId), gte(prdMessages.createdAt, messageTimestamp))
-			)
+		// 4-6. Use transaction to ensure atomicity of message edit operations
+		await db.transaction(async (tx) => {
+			// 4. Delete all messages from this point onwards (inclusive)
+			await tx
+				.delete(prdMessages)
+				.where(
+					and(eq(prdMessages.sessionId, sessionId), gte(prdMessages.createdAt, messageTimestamp))
+				)
 
-		// 5. Check if we need to rollback the step
-		const currentStepIndex = PRD_STEPS_ORDER.indexOf(session.currentStep)
-		const editedStepIndex = PRD_STEPS_ORDER.indexOf(editedStep)
+			// 5. Check if we need to rollback the step
+			const currentStepIndex = PRD_STEPS_ORDER.indexOf(session.currentStep)
+			const editedStepIndex = PRD_STEPS_ORDER.indexOf(editedStep)
 
-		if (currentStepIndex > editedStepIndex) {
-			// Rollback to the edited step
-			const newStepsCompleted = (session.stepsCompleted ?? []).filter(
-				(s) => PRD_STEPS_ORDER.indexOf(s as PrdStep) < editedStepIndex
-			)
+			if (currentStepIndex > editedStepIndex) {
+				// Rollback to the edited step
+				const newStepsCompleted = (session.stepsCompleted ?? []).filter(
+					(s) => PRD_STEPS_ORDER.indexOf(s as PrdStep) < editedStepIndex
+				)
 
-			await db
-				.update(prdSessions)
-				.set({
-					currentStep: editedStep,
-					stepsCompleted: newStepsCompleted,
-					status: 'active',
-					completedAt: null,
-					updatedAt: new Date(),
-				})
-				.where(eq(prdSessions.id, sessionId))
-		}
+				await tx
+					.update(prdSessions)
+					.set({
+						currentStep: editedStep,
+						stepsCompleted: newStepsCompleted,
+						status: 'active',
+						completedAt: null,
+						updatedAt: new Date(),
+					})
+					.where(eq(prdSessions.id, sessionId))
+			}
 
-		// 6. Insert the new edited user message
-		await db.insert(prdMessages).values({
-			sessionId,
-			role: 'user',
-			content,
-			step: editedStep,
+			// 6. Insert the new edited user message
+			await tx.insert(prdMessages).values({
+				sessionId,
+				role: 'user',
+				content,
+				step: editedStep,
+			})
 		})
 
 		// 7. Refresh session data for LLM context
@@ -883,6 +905,7 @@ prdRoutes.post(
 // Generate document from session
 prdRoutes.post(
 	'/sessions/:id/document',
+	rateLimiter({ type: 'document' }),
 	authMiddleware,
 	zValidator('json', CreatePrdDocumentSchema.optional()),
 	async (c) => {
@@ -910,6 +933,11 @@ prdRoutes.post(
 			return commonErrors.notFound(c, 'Session not found')
 		}
 
+		// Check if generation is already in progress
+		if (session.generationStatus === 'generating') {
+			return commonErrors.badRequest(c, 'Document generation already in progress')
+		}
+
 		// Get messages in chronological order for document generation
 		const messagesChronological = [...(session.messages ?? [])].reverse()
 
@@ -920,15 +948,22 @@ prdRoutes.post(
 		})
 		const nextVersion = existingDoc ? existingDoc.version + 1 : 1
 
-		// Mark generation as started BEFORE streaming
-		await db
+		// Atomic update: mark generation as started only if not already generating
+		// This prevents race conditions when multiple requests come in simultaneously
+		const updateResult = await db
 			.update(prdSessions)
 			.set({
 				generationStatus: 'generating',
 				generationStartedAt: new Date(),
 				generationError: null,
 			})
-			.where(eq(prdSessions.id, sessionId))
+			.where(and(eq(prdSessions.id, sessionId), ne(prdSessions.generationStatus, 'generating')))
+			.returning({ id: prdSessions.id })
+
+		// If no rows were updated, another request already started generation
+		if (updateResult.length === 0) {
+			return commonErrors.badRequest(c, 'Document generation already in progress')
+		}
 
 		// Stream document generation
 		prdLogger.info(
@@ -1369,9 +1404,9 @@ prdRoutes.post('/sessions/:id/skip', authMiddleware, async (c) => {
 	}
 
 	// Update skip flag based on current step
-	const skipFlags: Record<string, Record<string, string>> = {
-		domain: { skipDomainStep: 'true' },
-		innovation: { skipInnovationStep: 'true' },
+	const skipFlags: Record<string, Record<string, boolean>> = {
+		domain: { skipDomainStep: true },
+		innovation: { skipInnovationStep: true },
 	}
 
 	// Update steps completed

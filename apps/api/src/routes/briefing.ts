@@ -15,10 +15,11 @@ import {
 	CreateBriefingSessionSchema,
 	EditBriefingMessageRequestSchema,
 	PaginationSchema,
+	RenameSessionSchema,
 	UpdateBriefingDocumentSchema,
 	UpdateBriefingSessionSchema,
 } from '@repo/shared'
-import { and, desc, eq, gte, sql } from 'drizzle-orm'
+import { and, desc, eq, gte, ne, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { streamSSE } from 'hono/streaming'
 import {
@@ -37,6 +38,7 @@ import { commonErrors, successResponse } from '../lib/response.js'
 const briefingLogger = createLogger('briefing')
 
 import { type AuthVariables, authMiddleware, getAuth } from '../middleware/auth.js'
+import { rateLimiter } from '../middleware/rate-limiter.js'
 
 export const briefingRoutes = new Hono<{ Variables: AuthVariables }>()
 
@@ -150,53 +152,59 @@ briefingRoutes.post(
 			hasBrainstorm = !!brainstorm
 		}
 
-		// Create session
-		const [newSession] = await db
-			.insert(briefingSessions)
-			.values({
-				userId: user.id,
-				projectName: data.projectName,
-				projectDescription: data.projectDescription,
-				inputDocuments: data.brainstormSessionId
-					? [
-							{
-								name: 'Brainstorm Session',
-								path: data.brainstormSessionId,
-								type: 'brainstorm' as const,
-								loadedAt: new Date().toISOString(),
-							},
-						]
-					: [],
-			})
-			.returning()
+		// Create session and welcome message in a transaction
+		const sessionWithMessages = await db.transaction(async (tx) => {
+			const [newSession] = await tx
+				.insert(briefingSessions)
+				.values({
+					userId: user.id,
+					projectName: data.projectName,
+					projectDescription: data.projectDescription,
+					inputDocuments: data.brainstormSessionId
+						? [
+								{
+									name: 'Brainstorm Session',
+									path: data.brainstormSessionId,
+									type: 'brainstorm' as const,
+									loadedAt: new Date().toISOString(),
+								},
+							]
+						: [],
+				})
+				.returning()
 
-		if (!newSession) {
+			if (!newSession) {
+				throw new Error('Failed to create session')
+			}
+
+			// Create welcome message from Anna
+			const welcomeMessage = buildBriefingWelcomeMessage(
+				data.projectName,
+				data.projectDescription,
+				hasBrainstorm
+			)
+
+			await tx.insert(briefingMessages).values({
+				sessionId: newSession.id,
+				role: 'assistant',
+				content: welcomeMessage,
+				step: 'init',
+			})
+
+			// Get session with messages
+			return await tx.query.briefingSessions.findFirst({
+				where: eq(briefingSessions.id, newSession.id),
+				with: {
+					messages: {
+						orderBy: [desc(briefingMessages.createdAt)],
+					},
+				},
+			})
+		})
+
+		if (!sessionWithMessages) {
 			return commonErrors.internalError(c, 'Failed to create session')
 		}
-
-		// Create welcome message from Anna
-		const welcomeMessage = buildBriefingWelcomeMessage(
-			data.projectName,
-			data.projectDescription,
-			hasBrainstorm
-		)
-
-		await db.insert(briefingMessages).values({
-			sessionId: newSession.id,
-			role: 'assistant',
-			content: welcomeMessage,
-			step: 'init',
-		})
-
-		// Get session with messages
-		const sessionWithMessages = await db.query.briefingSessions.findFirst({
-			where: eq(briefingSessions.id, newSession.id),
-			with: {
-				messages: {
-					orderBy: [desc(briefingMessages.createdAt)],
-				},
-			},
-		})
 
 		return successResponse(
 			c,
@@ -261,67 +269,74 @@ briefingRoutes.delete('/sessions/:id', authMiddleware, async (c) => {
 })
 
 // Rename session with cascade to linked PRD and SM sessions
-briefingRoutes.post('/sessions/:id/rename', authMiddleware, async (c) => {
-	const { userId } = getAuth(c)
-	const sessionId = c.req.param('id')
-	const body = await c.req.json<{ projectName: string }>()
+briefingRoutes.post(
+	'/sessions/:id/rename',
+	authMiddleware,
+	zValidator('json', RenameSessionSchema),
+	async (c) => {
+		const { userId } = getAuth(c)
+		const sessionId = c.req.param('id')
+		const { projectName: newName } = c.req.valid('json')
 
-	if (!body.projectName?.trim()) {
-		return commonErrors.badRequest(c, 'Project name is required')
-	}
-
-	const newName = body.projectName.trim()
-
-	const user = await getUserByClerkId(userId)
-	if (!user) {
-		return commonErrors.notFound(c, 'User not found')
-	}
-
-	// Update briefing session
-	const [updated] = await db
-		.update(briefingSessions)
-		.set({ projectName: newName, updatedAt: new Date() })
-		.where(and(eq(briefingSessions.id, sessionId), eq(briefingSessions.userId, user.id)))
-		.returning()
-
-	if (!updated) {
-		return commonErrors.notFound(c, 'Session not found')
-	}
-
-	// Find all PRD sessions that reference this briefing in inputDocuments
-	const allPrdSessions = await db.query.prdSessions.findMany({
-		where: eq(prdSessions.userId, user.id),
-	})
-
-	const linkedPrdIds: string[] = []
-	for (const prd of allPrdSessions) {
-		const docs = prd.inputDocuments as Array<{ path?: string; type?: string }> | null
-		if (docs?.some((d) => d.path === sessionId && d.type === 'briefing')) {
-			linkedPrdIds.push(prd.id)
-			// Update PRD project name
-			await db
-				.update(prdSessions)
-				.set({ projectName: newName, updatedAt: new Date() })
-				.where(eq(prdSessions.id, prd.id))
+		const user = await getUserByClerkId(userId)
+		if (!user) {
+			return commonErrors.notFound(c, 'User not found')
 		}
-	}
 
-	// Update all SM sessions linked to those PRDs
-	if (linkedPrdIds.length > 0) {
-		for (const prdId of linkedPrdIds) {
-			await db
-				.update(smSessions)
+		// Update briefing session and cascade to linked sessions in a transaction
+		const result = await db.transaction(async (tx) => {
+			const [updated] = await tx
+				.update(briefingSessions)
 				.set({ projectName: newName, updatedAt: new Date() })
-				.where(and(eq(smSessions.prdSessionId, prdId), eq(smSessions.userId, user.id)))
-		}
-	}
+				.where(and(eq(briefingSessions.id, sessionId), eq(briefingSessions.userId, user.id)))
+				.returning()
 
-	return successResponse(c, {
-		updated: true,
-		projectName: newName,
-		linkedPrds: linkedPrdIds.length,
-	})
-})
+			if (!updated) {
+				return null
+			}
+
+			// Find all PRD sessions that reference this briefing in inputDocuments
+			const allPrdSessions = await tx.query.prdSessions.findMany({
+				where: eq(prdSessions.userId, user.id),
+			})
+
+			const linkedPrdIds: string[] = []
+			for (const prd of allPrdSessions) {
+				const docs = prd.inputDocuments as Array<{ path?: string; type?: string }> | null
+				if (docs?.some((d) => d.path === sessionId && d.type === 'briefing')) {
+					linkedPrdIds.push(prd.id)
+					// Update PRD project name
+					await tx
+						.update(prdSessions)
+						.set({ projectName: newName, updatedAt: new Date() })
+						.where(eq(prdSessions.id, prd.id))
+				}
+			}
+
+			// Update all SM sessions linked to those PRDs
+			if (linkedPrdIds.length > 0) {
+				for (const prdId of linkedPrdIds) {
+					await tx
+						.update(smSessions)
+						.set({ projectName: newName, updatedAt: new Date() })
+						.where(and(eq(smSessions.prdSessionId, prdId), eq(smSessions.userId, user.id)))
+				}
+			}
+
+			return { updated, linkedPrdIds }
+		})
+
+		if (!result) {
+			return commonErrors.notFound(c, 'Session not found')
+		}
+
+		return successResponse(c, {
+			updated: true,
+			projectName: newName,
+			linkedPrds: result.linkedPrdIds.length,
+		})
+	}
+)
 
 // ============================================
 // CHAT ENDPOINT (STREAMING)
@@ -329,6 +344,7 @@ briefingRoutes.post('/sessions/:id/rename', authMiddleware, async (c) => {
 
 briefingRoutes.post(
 	'/chat',
+	rateLimiter({ type: 'chat' }),
 	authMiddleware,
 	zValidator('json', BriefingChatRequestSchema),
 	async (c) => {
@@ -594,44 +610,47 @@ briefingRoutes.post(
 		const editedStep = message.step
 		const messageTimestamp = message.createdAt
 
-		// 4. Delete all messages from this point onwards (inclusive)
-		await db
-			.delete(briefingMessages)
-			.where(
-				and(
-					eq(briefingMessages.sessionId, sessionId),
-					gte(briefingMessages.createdAt, messageTimestamp)
+		// 4-6. Use transaction to ensure atomicity of message edit operations
+		await db.transaction(async (tx) => {
+			// 4. Delete all messages from this point onwards (inclusive)
+			await tx
+				.delete(briefingMessages)
+				.where(
+					and(
+						eq(briefingMessages.sessionId, sessionId),
+						gte(briefingMessages.createdAt, messageTimestamp)
+					)
 				)
-			)
 
-		// 5. Check if we need to rollback the step
-		const currentStepIndex = BRIEFING_STEPS_ORDER.indexOf(session.currentStep)
-		const editedStepIndex = BRIEFING_STEPS_ORDER.indexOf(editedStep)
+			// 5. Check if we need to rollback the step
+			const currentStepIndex = BRIEFING_STEPS_ORDER.indexOf(session.currentStep)
+			const editedStepIndex = BRIEFING_STEPS_ORDER.indexOf(editedStep)
 
-		if (currentStepIndex > editedStepIndex) {
-			// Rollback to the edited step
-			const newStepsCompleted = (session.stepsCompleted ?? []).filter(
-				(s) => BRIEFING_STEPS_ORDER.indexOf(s as BriefingStep) < editedStepIndex
-			)
+			if (currentStepIndex > editedStepIndex) {
+				// Rollback to the edited step
+				const newStepsCompleted = (session.stepsCompleted ?? []).filter(
+					(s) => BRIEFING_STEPS_ORDER.indexOf(s as BriefingStep) < editedStepIndex
+				)
 
-			await db
-				.update(briefingSessions)
-				.set({
-					currentStep: editedStep,
-					stepsCompleted: newStepsCompleted,
-					status: 'active',
-					completedAt: null,
-					updatedAt: new Date(),
-				})
-				.where(eq(briefingSessions.id, sessionId))
-		}
+				await tx
+					.update(briefingSessions)
+					.set({
+						currentStep: editedStep,
+						stepsCompleted: newStepsCompleted,
+						status: 'active',
+						completedAt: null,
+						updatedAt: new Date(),
+					})
+					.where(eq(briefingSessions.id, sessionId))
+			}
 
-		// 6. Insert the new edited user message
-		await db.insert(briefingMessages).values({
-			sessionId,
-			role: 'user',
-			content,
-			step: editedStep,
+			// 6. Insert the new edited user message
+			await tx.insert(briefingMessages).values({
+				sessionId,
+				role: 'user',
+				content,
+				step: editedStep,
+			})
 		})
 
 		// 7. Refresh session data for LLM context
@@ -823,6 +842,7 @@ briefingRoutes.post(
 // Generate document from session
 briefingRoutes.post(
 	'/sessions/:id/document',
+	rateLimiter({ type: 'document' }),
 	authMiddleware,
 	zValidator('json', CreateBriefingDocumentSchema.optional()),
 	async (c) => {
@@ -845,6 +865,11 @@ briefingRoutes.post(
 			return commonErrors.notFound(c, 'Session not found')
 		}
 
+		// Check if generation is already in progress
+		if (session.generationStatus === 'generating') {
+			return commonErrors.badRequest(c, 'Document generation already in progress')
+		}
+
 		// Get all messages from the session to use as context for document generation
 		const messages = await db.query.briefingMessages.findMany({
 			where: eq(briefingMessages.sessionId, sessionId),
@@ -862,15 +887,24 @@ briefingRoutes.post(
 		})
 		const nextVersion = existingDoc ? existingDoc.version + 1 : 1
 
-		// Mark generation as started BEFORE streaming
-		await db
+		// Atomic update: mark generation as started only if not already generating
+		// This prevents race conditions when multiple requests come in simultaneously
+		const updateResult = await db
 			.update(briefingSessions)
 			.set({
 				generationStatus: 'generating',
 				generationStartedAt: new Date(),
 				generationError: null,
 			})
-			.where(eq(briefingSessions.id, sessionId))
+			.where(
+				and(eq(briefingSessions.id, sessionId), ne(briefingSessions.generationStatus, 'generating'))
+			)
+			.returning({ id: briefingSessions.id })
+
+		// If no rows were updated, another request already started generation
+		if (updateResult.length === 0) {
+			return commonErrors.badRequest(c, 'Document generation already in progress')
+		}
 
 		// Stream document generation
 		return streamSSE(c, async (stream) => {

@@ -17,13 +17,14 @@ import {
 	CreateSmStorySchema,
 	EditSmMessageRequestSchema,
 	PaginationSchema,
+	RenameSessionSchema,
 	SmChatRequestSchema,
 	UpdateSmDocumentSchema,
 	UpdateSmEpicSchema,
 	UpdateSmSessionSchema,
 	UpdateSmStorySchema,
 } from '@repo/shared'
-import { and, asc, desc, eq, gte, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, gte, inArray, ne, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { streamSSE } from 'hono/streaming'
 import { getUserByClerkId } from '../lib/helpers.js'
@@ -48,6 +49,7 @@ import {
 	SM_STEPS_ORDER,
 } from '../lib/sm-prompts.js'
 import { type AuthVariables, authMiddleware, getAuth } from '../middleware/auth.js'
+import { rateLimiter } from '../middleware/rate-limiter.js'
 
 export const smRoutes = new Hono<{ Variables: AuthVariables }>()
 
@@ -233,42 +235,48 @@ smRoutes.post('/sessions', authMiddleware, zValidator('json', CreateSmSessionSch
 		}
 	}
 
-	// Create session
-	const [newSession] = await db
-		.insert(smSessions)
-		.values({
-			userId: user.id,
-			projectName: data.projectName,
-			projectDescription: data.projectDescription,
-			prdSessionId: data.prdSessionId,
-			prdContext,
-			sprintConfig: data.sprintConfig ?? { sprintDuration: 14 },
-		})
-		.returning()
+	// Create session and welcome message in a transaction
+	const sessionWithMessages = await db.transaction(async (tx) => {
+		const [newSession] = await tx
+			.insert(smSessions)
+			.values({
+				userId: user.id,
+				projectName: data.projectName,
+				projectDescription: data.projectDescription,
+				prdSessionId: data.prdSessionId,
+				prdContext,
+				sprintConfig: data.sprintConfig ?? { sprintDuration: 14 },
+			})
+			.returning()
 
-	if (!newSession) {
+		if (!newSession) {
+			throw new Error('Failed to create session')
+		}
+
+		// Create welcome message from Bob with PRD context
+		const welcomeMessage = buildSmWelcomeMessage(data.projectName, data.projectDescription, hasPrd)
+
+		await tx.insert(smMessages).values({
+			sessionId: newSession.id,
+			role: 'assistant',
+			content: welcomeMessage,
+			step: 'init',
+		})
+
+		// Get session with messages
+		return await tx.query.smSessions.findFirst({
+			where: eq(smSessions.id, newSession.id),
+			with: {
+				messages: {
+					orderBy: [desc(smMessages.createdAt)],
+				},
+			},
+		})
+	})
+
+	if (!sessionWithMessages) {
 		return commonErrors.internalError(c, 'Failed to create session')
 	}
-
-	// Create welcome message from Bob with PRD context
-	const welcomeMessage = buildSmWelcomeMessage(data.projectName, data.projectDescription, hasPrd)
-
-	await db.insert(smMessages).values({
-		sessionId: newSession.id,
-		role: 'assistant',
-		content: welcomeMessage,
-		step: 'init',
-	})
-
-	// Get session with messages
-	const sessionWithMessages = await db.query.smSessions.findFirst({
-		where: eq(smSessions.id, newSession.id),
-		with: {
-			messages: {
-				orderBy: [desc(smMessages.createdAt)],
-			},
-		},
-	})
 
 	return successResponse(
 		c,
@@ -332,424 +340,447 @@ smRoutes.delete('/sessions/:id', authMiddleware, async (c) => {
 })
 
 // Rename session with cascade to linked PRD and Briefing sessions
-smRoutes.post('/sessions/:id/rename', authMiddleware, async (c) => {
-	const { userId } = getAuth(c)
-	const sessionId = c.req.param('id')
-	const body = await c.req.json<{ projectName: string }>()
+smRoutes.post(
+	'/sessions/:id/rename',
+	authMiddleware,
+	zValidator('json', RenameSessionSchema),
+	async (c) => {
+		const { userId } = getAuth(c)
+		const sessionId = c.req.param('id')
+		const { projectName: newName } = c.req.valid('json')
 
-	if (!body.projectName?.trim()) {
-		return commonErrors.badRequest(c, 'Project name is required')
-	}
+		const user = await getUserByClerkId(userId)
+		if (!user) {
+			return commonErrors.notFound(c, 'User not found')
+		}
 
-	const newName = body.projectName.trim()
-
-	const user = await getUserByClerkId(userId)
-	if (!user) {
-		return commonErrors.notFound(c, 'User not found')
-	}
-
-	// Get current SM session to find linked PRD
-	const currentSession = await db.query.smSessions.findFirst({
-		where: and(eq(smSessions.id, sessionId), eq(smSessions.userId, user.id)),
-	})
-
-	if (!currentSession) {
-		return commonErrors.notFound(c, 'Session not found')
-	}
-
-	// Update SM session
-	await db
-		.update(smSessions)
-		.set({ projectName: newName, updatedAt: new Date() })
-		.where(eq(smSessions.id, sessionId))
-
-	// Update linked PRD session if exists
-	if (currentSession.prdSessionId) {
-		const prdSession = await db.query.prdSessions.findFirst({
-			where: and(eq(prdSessions.id, currentSession.prdSessionId), eq(prdSessions.userId, user.id)),
+		// Get current SM session to find linked PRD
+		const currentSession = await db.query.smSessions.findFirst({
+			where: and(eq(smSessions.id, sessionId), eq(smSessions.userId, user.id)),
 		})
 
-		if (prdSession) {
-			await db
-				.update(prdSessions)
-				.set({ projectName: newName, updatedAt: new Date() })
-				.where(eq(prdSessions.id, currentSession.prdSessionId))
-
-			// Find linked briefing from PRD's inputDocuments and update it
-			const docs = prdSession.inputDocuments as Array<{ path?: string; type?: string }> | null
-			const briefingDoc = docs?.find((d) => d.type === 'briefing')
-			if (briefingDoc?.path) {
-				await db
-					.update(briefingSessions)
-					.set({ projectName: newName, updatedAt: new Date() })
-					.where(
-						and(eq(briefingSessions.id, briefingDoc.path), eq(briefingSessions.userId, user.id))
-					)
-			}
+		if (!currentSession) {
+			return commonErrors.notFound(c, 'Session not found')
 		}
-	}
 
-	return successResponse(c, {
-		updated: true,
-		projectName: newName,
-	})
-})
+		// Update SM and cascade to linked sessions in a transaction
+		await db.transaction(async (tx) => {
+			// Update SM session
+			await tx
+				.update(smSessions)
+				.set({ projectName: newName, updatedAt: new Date() })
+				.where(eq(smSessions.id, sessionId))
+
+			// Update linked PRD session if exists
+			if (currentSession.prdSessionId) {
+				const prdSession = await tx.query.prdSessions.findFirst({
+					where: and(
+						eq(prdSessions.id, currentSession.prdSessionId),
+						eq(prdSessions.userId, user.id)
+					),
+				})
+
+				if (prdSession) {
+					await tx
+						.update(prdSessions)
+						.set({ projectName: newName, updatedAt: new Date() })
+						.where(eq(prdSessions.id, currentSession.prdSessionId))
+
+					// Find linked briefing from PRD's inputDocuments and update it
+					const docs = prdSession.inputDocuments as Array<{ path?: string; type?: string }> | null
+					const briefingDoc = docs?.find((d) => d.type === 'briefing')
+					if (briefingDoc?.path) {
+						await tx
+							.update(briefingSessions)
+							.set({ projectName: newName, updatedAt: new Date() })
+							.where(
+								and(eq(briefingSessions.id, briefingDoc.path), eq(briefingSessions.userId, user.id))
+							)
+					}
+				}
+			}
+		})
+
+		return successResponse(c, {
+			updated: true,
+			projectName: newName,
+		})
+	}
+)
 
 // ============================================
 // CHAT ENDPOINT (STREAMING)
 // ============================================
 
-smRoutes.post('/chat', authMiddleware, zValidator('json', SmChatRequestSchema), async (c) => {
-	const { userId } = getAuth(c)
-	const { sessionId, message, action } = c.req.valid('json')
+smRoutes.post(
+	'/chat',
+	rateLimiter({ type: 'chat' }),
+	authMiddleware,
+	zValidator('json', SmChatRequestSchema),
+	async (c) => {
+		const { userId } = getAuth(c)
+		const { sessionId, message, action } = c.req.valid('json')
 
-	const user = await getUserByClerkId(userId)
-	if (!user) {
-		return commonErrors.notFound(c, 'User not found')
-	}
+		const user = await getUserByClerkId(userId)
+		if (!user) {
+			return commonErrors.notFound(c, 'User not found')
+		}
 
-	// Get session with messages and related data
-	const session = await db.query.smSessions.findFirst({
-		where: and(eq(smSessions.id, sessionId), eq(smSessions.userId, user.id)),
-		with: {
-			messages: {
-				orderBy: [desc(smMessages.createdAt)],
-				limit: 50,
+		// Get session with messages and related data
+		const session = await db.query.smSessions.findFirst({
+			where: and(eq(smSessions.id, sessionId), eq(smSessions.userId, user.id)),
+			with: {
+				messages: {
+					orderBy: [desc(smMessages.createdAt)],
+					limit: 50,
+				},
+				epics: {
+					orderBy: [asc(smEpics.number)],
+				},
+				stories: {
+					orderBy: [asc(smStories.epicNumber), asc(smStories.storyNumber)],
+				},
 			},
-			epics: {
-				orderBy: [asc(smEpics.number)],
-			},
-			stories: {
-				orderBy: [asc(smStories.epicNumber), asc(smStories.storyNumber)],
-			},
-		},
-	})
+		})
 
-	if (!session) {
-		return commonErrors.notFound(c, 'Session not found')
-	}
+		if (!session) {
+			return commonErrors.notFound(c, 'Session not found')
+		}
 
-	// Save user message
-	await db.insert(smMessages).values({
-		sessionId,
-		role: 'user',
-		content: message,
-		step: session.currentStep,
-	})
+		// Save user message
+		await db.insert(smMessages).values({
+			sessionId,
+			role: 'user',
+			content: message,
+			step: session.currentStep,
+		})
 
-	// Determine mode based on action
-	let mode: 'advanced_elicitation' | 'party_mode' | undefined
-	if (action === 'advanced_elicitation') mode = 'advanced_elicitation'
-	if (action === 'party_mode') mode = 'party_mode'
+		// Determine mode based on action
+		let mode: 'advanced_elicitation' | 'party_mode' | undefined
+		if (action === 'advanced_elicitation') mode = 'advanced_elicitation'
+		if (action === 'party_mode') mode = 'party_mode'
 
-	// Build epics context
-	const epicsContext = session.epics.map((e) => ({
-		number: e.number,
-		title: e.title,
-		description: e.description,
-		status: e.status,
-		storiesCount: session.stories.filter((s) => s.epicId === e.id).length,
-	}))
-
-	// Build stories context
-	const storiesContext = session.stories.map((s) => ({
-		storyKey: s.storyKey,
-		title: s.title,
-		status: s.status,
-		storyPoints: s.storyPoints,
-	}))
-
-	// Build system prompt with session context
-	const systemPrompt = buildSmSystemPrompt(
-		{
-			projectName: session.projectName,
-			projectDescription: session.projectDescription,
-			prdContext: session.prdContext ?? undefined,
-			sprintConfig: session.sprintConfig ?? undefined,
-			stepsCompleted: session.stepsCompleted ?? [],
-			totalEpics: session.totalEpics,
-			totalStories: session.totalStories,
-			epics: epicsContext,
-			stories: storiesContext,
-		},
-		session.currentStep,
-		mode
-	)
-
-	// Build conversation history
-	const historyMessages = [...session.messages]
-		.reverse()
-		.filter((m) => m.role !== 'system')
-		.map((m) => ({
-			role: m.role as 'user' | 'assistant',
-			content: m.content,
+		// Build epics context
+		const epicsContext = session.epics.map((e) => ({
+			number: e.number,
+			title: e.title,
+			description: e.description,
+			status: e.status,
+			storiesCount: session.stories.filter((s) => s.epicId === e.id).length,
 		}))
 
-	const llmMessages = [
-		{ role: 'system' as const, content: systemPrompt },
-		...historyMessages,
-		{ role: 'user' as const, content: message },
-	]
+		// Build stories context
+		const storiesContext = session.stories.map((s) => ({
+			storyKey: s.storyKey,
+			title: s.title,
+			status: s.status,
+			storyPoints: s.storyPoints,
+		}))
 
-	// Stream response
-	return streamSSE(c, async (stream) => {
-		try {
-			const client = getOpenRouterClient()
-			let fullResponse = ''
+		// Build system prompt with session context
+		const systemPrompt = buildSmSystemPrompt(
+			{
+				projectName: session.projectName,
+				projectDescription: session.projectDescription,
+				prdContext: session.prdContext ?? undefined,
+				sprintConfig: session.sprintConfig ?? undefined,
+				stepsCompleted: session.stepsCompleted ?? [],
+				totalEpics: session.totalEpics,
+				totalStories: session.totalStories,
+				epics: epicsContext,
+				stories: storiesContext,
+			},
+			session.currentStep,
+			mode
+		)
 
-			const generator = client.chatStream({
-				messages: llmMessages,
-				model: 'deepseek/deepseek-v3.2',
-				temperature: 0.7,
-				max_tokens: 16384, // DeepSeek V3 via OpenRouter max output
-			})
+		// Build conversation history
+		const historyMessages = [...session.messages]
+			.reverse()
+			.filter((m) => m.role !== 'system')
+			.map((m) => ({
+				role: m.role as 'user' | 'assistant',
+				content: m.content,
+			}))
 
-			// Stream response diretamente ao cliente
-			for await (const chunk of generator) {
-				fullResponse += chunk
-				await stream.writeSSE({
-					data: JSON.stringify({ content: chunk }),
+		const llmMessages = [
+			{ role: 'system' as const, content: systemPrompt },
+			...historyMessages,
+			{ role: 'user' as const, content: message },
+		]
+
+		// Stream response
+		return streamSSE(c, async (stream) => {
+			try {
+				const client = getOpenRouterClient()
+				let fullResponse = ''
+
+				const generator = client.chatStream({
+					messages: llmMessages,
+					model: 'deepseek/deepseek-v3.2',
+					temperature: 0.7,
+					max_tokens: 16384, // DeepSeek V3 via OpenRouter max output
 				})
-			}
 
-			// Extract structured data from AI response BEFORE saving
-			const extractedData = extractSmDataFromResponse(fullResponse)
+				// Stream response diretamente ao cliente
+				for await (const chunk of generator) {
+					fullResponse += chunk
+					await stream.writeSSE({
+						data: JSON.stringify({ content: chunk }),
+					})
+				}
 
-			// Save assistant response with SM_DATA block removed for clean display
-			const cleanedResponse = cleanResponseForDisplay(fullResponse)
-			await db.insert(smMessages).values({
-				sessionId,
-				role: 'assistant',
-				content: cleanedResponse,
-				step: session.currentStep,
-			})
-			if (extractedData) {
-				try {
-					// Map to track epic number -> epic id for story linking
-					const epicIdMap = new Map<number, string>()
+				// Extract structured data from AI response BEFORE saving
+				const extractedData = extractSmDataFromResponse(fullResponse)
 
-					// Process epics first (so stories can reference them)
-					if (extractedData.epics && extractedData.epics.length > 0) {
-						for (const epicData of extractedData.epics) {
-							if (extractedData.action === 'create') {
-								// Check if epic with this number already exists
-								const existingEpic = await db.query.smEpics.findFirst({
-									where: and(eq(smEpics.sessionId, sessionId), eq(smEpics.number, epicData.number)),
-								})
+				// Save assistant response with SM_DATA block removed for clean display
+				const cleanedResponse = cleanResponseForDisplay(fullResponse)
+				await db.insert(smMessages).values({
+					sessionId,
+					role: 'assistant',
+					content: cleanedResponse,
+					step: session.currentStep,
+				})
+				if (extractedData) {
+					try {
+						// Map to track epic number -> epic id for story linking
+						const epicIdMap = new Map<number, string>()
 
-								if (existingEpic) {
-									// Update existing epic
-									await db
-										.update(smEpics)
-										.set({
-											title: epicData.title,
-											description: epicData.description,
-											businessValue: epicData.businessValue,
-											priority: epicData.priority ?? 'medium',
-											functionalRequirementCodes: epicData.functionalRequirementCodes ?? [],
-											updatedAt: new Date(),
-										})
-										.where(eq(smEpics.id, existingEpic.id))
-									epicIdMap.set(epicData.number, existingEpic.id)
-								} else {
-									// Create new epic
-									const [newEpic] = await db
-										.insert(smEpics)
-										.values(transformEpicForInsert(epicData, sessionId))
-										.returning()
-									if (newEpic) {
-										epicIdMap.set(epicData.number, newEpic.id)
+						// Process epics first (so stories can reference them)
+						if (extractedData.epics && extractedData.epics.length > 0) {
+							for (const epicData of extractedData.epics) {
+								if (extractedData.action === 'create') {
+									// Check if epic with this number already exists
+									const existingEpic = await db.query.smEpics.findFirst({
+										where: and(
+											eq(smEpics.sessionId, sessionId),
+											eq(smEpics.number, epicData.number)
+										),
+									})
+
+									if (existingEpic) {
+										// Update existing epic
+										await db
+											.update(smEpics)
+											.set({
+												title: epicData.title,
+												description: epicData.description,
+												businessValue: epicData.businessValue,
+												priority: epicData.priority ?? 'medium',
+												functionalRequirementCodes: epicData.functionalRequirementCodes ?? [],
+												updatedAt: new Date(),
+											})
+											.where(eq(smEpics.id, existingEpic.id))
+										epicIdMap.set(epicData.number, existingEpic.id)
+									} else {
+										// Create new epic
+										const [newEpic] = await db
+											.insert(smEpics)
+											.values(transformEpicForInsert(epicData, sessionId))
+											.returning()
+										if (newEpic) {
+											epicIdMap.set(epicData.number, newEpic.id)
+										}
+									}
+								} else if (extractedData.action === 'update') {
+									// Update existing epic by number
+									const existingEpic = await db.query.smEpics.findFirst({
+										where: and(
+											eq(smEpics.sessionId, sessionId),
+											eq(smEpics.number, epicData.number)
+										),
+									})
+									if (existingEpic) {
+										await db
+											.update(smEpics)
+											.set({
+												title: epicData.title,
+												description: epicData.description,
+												businessValue: epicData.businessValue,
+												priority: epicData.priority ?? existingEpic.priority,
+												functionalRequirementCodes:
+													epicData.functionalRequirementCodes ??
+													existingEpic.functionalRequirementCodes,
+												updatedAt: new Date(),
+											})
+											.where(eq(smEpics.id, existingEpic.id))
+										epicIdMap.set(epicData.number, existingEpic.id)
 									}
 								}
-							} else if (extractedData.action === 'update') {
-								// Update existing epic by number
-								const existingEpic = await db.query.smEpics.findFirst({
-									where: and(eq(smEpics.sessionId, sessionId), eq(smEpics.number, epicData.number)),
-								})
-								if (existingEpic) {
-									await db
-										.update(smEpics)
-										.set({
-											title: epicData.title,
-											description: epicData.description,
-											businessValue: epicData.businessValue,
-											priority: epicData.priority ?? existingEpic.priority,
-											functionalRequirementCodes:
-												epicData.functionalRequirementCodes ??
-												existingEpic.functionalRequirementCodes,
-											updatedAt: new Date(),
-										})
-										.where(eq(smEpics.id, existingEpic.id))
-									epicIdMap.set(epicData.number, existingEpic.id)
-								}
 							}
 						}
-					}
 
-					// Process stories (after epics so we can link them)
-					if (extractedData.stories && extractedData.stories.length > 0) {
-						for (const storyData of extractedData.stories) {
-							// Find the epic for this story
-							let epicId = epicIdMap.get(storyData.epicNumber)
-							if (!epicId) {
-								// Try to find existing epic
-								const existingEpic = await db.query.smEpics.findFirst({
-									where: and(
-										eq(smEpics.sessionId, sessionId),
-										eq(smEpics.number, storyData.epicNumber)
-									),
-								})
-								if (existingEpic) {
-									epicId = existingEpic.id
+						// Process stories (after epics so we can link them)
+						if (extractedData.stories && extractedData.stories.length > 0) {
+							for (const storyData of extractedData.stories) {
+								// Find the epic for this story
+								let epicId = epicIdMap.get(storyData.epicNumber)
+								if (!epicId) {
+									// Try to find existing epic
+									const existingEpic = await db.query.smEpics.findFirst({
+										where: and(
+											eq(smEpics.sessionId, sessionId),
+											eq(smEpics.number, storyData.epicNumber)
+										),
+									})
+									if (existingEpic) {
+										epicId = existingEpic.id
+									}
 								}
-							}
 
-							if (!epicId) {
-								// Skip story if no epic found
-								smLogger.warn(
-									{ epicNumber: storyData.epicNumber, storyNumber: storyData.storyNumber },
-									'Skipping story: Epic not found'
-								)
-								continue
-							}
+								if (!epicId) {
+									// Skip story if no epic found
+									smLogger.warn(
+										{ epicNumber: storyData.epicNumber, storyNumber: storyData.storyNumber },
+										'Skipping story: Epic not found'
+									)
+									continue
+								}
 
-							const storyKey = `${storyData.epicNumber}-${storyData.storyNumber}`
+								const storyKey = `${storyData.epicNumber}-${storyData.storyNumber}`
 
-							if (extractedData.action === 'create') {
-								// Check if story already exists
-								const existingStory = await db.query.smStories.findFirst({
-									where: and(eq(smStories.sessionId, sessionId), eq(smStories.storyKey, storyKey)),
-								})
+								if (extractedData.action === 'create') {
+									// Check if story already exists
+									const existingStory = await db.query.smStories.findFirst({
+										where: and(
+											eq(smStories.sessionId, sessionId),
+											eq(smStories.storyKey, storyKey)
+										),
+									})
 
-								if (existingStory) {
+									if (existingStory) {
+										// Update existing story
+										await db
+											.update(smStories)
+											.set({
+												title: storyData.title,
+												asA: storyData.asA,
+												iWant: storyData.iWant,
+												soThat: storyData.soThat,
+												priority: storyData.priority ?? existingStory.priority,
+												updatedAt: new Date(),
+											})
+											.where(eq(smStories.id, existingStory.id))
+									} else {
+										// Create new story
+										await db
+											.insert(smStories)
+											.values(transformStoryForInsert(storyData, sessionId, epicId))
+									}
+								} else if (extractedData.action === 'update') {
 									// Update existing story
-									await db
-										.update(smStories)
-										.set({
-											title: storyData.title,
-											asA: storyData.asA,
-											iWant: storyData.iWant,
-											soThat: storyData.soThat,
-											priority: storyData.priority ?? existingStory.priority,
-											updatedAt: new Date(),
-										})
-										.where(eq(smStories.id, existingStory.id))
-								} else {
-									// Create new story
-									await db
-										.insert(smStories)
-										.values(transformStoryForInsert(storyData, sessionId, epicId))
-								}
-							} else if (extractedData.action === 'update') {
-								// Update existing story
-								const existingStory = await db.query.smStories.findFirst({
-									where: and(eq(smStories.sessionId, sessionId), eq(smStories.storyKey, storyKey)),
-								})
+									const existingStory = await db.query.smStories.findFirst({
+										where: and(
+											eq(smStories.sessionId, sessionId),
+											eq(smStories.storyKey, storyKey)
+										),
+									})
 
-								if (existingStory) {
-									const updateData = transformStoryForInsert(storyData, sessionId, epicId)
-									await db
-										.update(smStories)
-										.set({
-											title: updateData.title,
-											asA: updateData.asA,
-											iWant: updateData.iWant,
-											soThat: updateData.soThat,
-											acceptanceCriteria: updateData.acceptanceCriteria,
-											tasks: updateData.tasks,
-											devNotes: updateData.devNotes,
-											storyPoints: updateData.storyPoints,
-											priority: updateData.priority,
-											updatedAt: new Date(),
-										})
-										.where(eq(smStories.id, existingStory.id))
+									if (existingStory) {
+										const updateData = transformStoryForInsert(storyData, sessionId, epicId)
+										await db
+											.update(smStories)
+											.set({
+												title: updateData.title,
+												asA: updateData.asA,
+												iWant: updateData.iWant,
+												soThat: updateData.soThat,
+												acceptanceCriteria: updateData.acceptanceCriteria,
+												tasks: updateData.tasks,
+												devNotes: updateData.devNotes,
+												storyPoints: updateData.storyPoints,
+												priority: updateData.priority,
+												updatedAt: new Date(),
+											})
+											.where(eq(smStories.id, existingStory.id))
+									}
 								}
 							}
 						}
+					} catch (extractError) {
+						smLogger.error({ err: extractError }, 'Failed to persist extracted data')
+						// Continue without failing the chat - extraction is best-effort
 					}
-				} catch (extractError) {
-					smLogger.error({ err: extractError }, 'Failed to persist extracted data')
-					// Continue without failing the chat - extraction is best-effort
+				}
+
+				// Auto-detecção de transição de etapa (igual ao PRD)
+				const normalizedResponse = fullResponse
+					.toLowerCase()
+					.normalize('NFD')
+					.replace(/[\u0300-\u036f]/g, '')
+
+				const currentPatterns = stepCompletionPatterns[session.currentStep] ?? []
+				const shouldAdvance =
+					session.currentStep !== 'complete' &&
+					currentPatterns.some((pattern) => pattern.test(normalizedResponse))
+
+				let newStep = session.currentStep
+				if (shouldAdvance) {
+					const nextStep = getNextStep(session.currentStep)
+					if (nextStep) {
+						newStep = nextStep
+						const stepsCompleted = [...(session.stepsCompleted ?? [])]
+						if (!stepsCompleted.includes(session.currentStep)) {
+							stepsCompleted.push(session.currentStep)
+						}
+						await db
+							.update(smSessions)
+							.set({
+								currentStep: nextStep,
+								stepsCompleted,
+								...(nextStep === 'complete' && { status: 'completed', completedAt: new Date() }),
+								updatedAt: new Date(),
+							})
+							.where(eq(smSessions.id, sessionId))
+					}
+				}
+
+				// Update session with totals (fetch fresh counts from DB after extraction)
+				const [updatedEpics, updatedStories] = await Promise.all([
+					db.query.smEpics.findMany({
+						where: eq(smEpics.sessionId, sessionId),
+					}),
+					db.query.smStories.findMany({
+						where: eq(smStories.sessionId, sessionId),
+					}),
+				])
+
+				await db
+					.update(smSessions)
+					.set({
+						updatedAt: new Date(),
+						totalEpics: updatedEpics.length,
+						totalStories: updatedStories.length,
+						totalStoryPoints: updatedStories.reduce((sum, s) => sum + (s.storyPoints ?? 0), 0),
+					})
+					.where(eq(smSessions.id, sessionId))
+
+				// Enviar stepUpdate se houve avanço
+				if (newStep !== session.currentStep) {
+					await stream.writeSSE({
+						data: JSON.stringify({ stepUpdate: newStep }),
+					})
+				}
+
+				await stream.writeSSE({ data: '[DONE]' })
+			} catch (error) {
+				if (error instanceof OpenRouterAPIError) {
+					await stream.writeSSE({
+						data: JSON.stringify({
+							error: { code: error.code, message: error.message },
+						}),
+					})
+				} else {
+					await stream.writeSSE({
+						data: JSON.stringify({
+							error: { message: 'Failed to generate response' },
+						}),
+					})
 				}
 			}
-
-			// Auto-detecção de transição de etapa (igual ao PRD)
-			const normalizedResponse = fullResponse
-				.toLowerCase()
-				.normalize('NFD')
-				.replace(/[\u0300-\u036f]/g, '')
-
-			const currentPatterns = stepCompletionPatterns[session.currentStep] ?? []
-			const shouldAdvance =
-				session.currentStep !== 'complete' &&
-				currentPatterns.some((pattern) => pattern.test(normalizedResponse))
-
-			let newStep = session.currentStep
-			if (shouldAdvance) {
-				const nextStep = getNextStep(session.currentStep)
-				if (nextStep) {
-					newStep = nextStep
-					const stepsCompleted = [...(session.stepsCompleted ?? [])]
-					if (!stepsCompleted.includes(session.currentStep)) {
-						stepsCompleted.push(session.currentStep)
-					}
-					await db
-						.update(smSessions)
-						.set({
-							currentStep: nextStep,
-							stepsCompleted,
-							...(nextStep === 'complete' && { status: 'completed', completedAt: new Date() }),
-							updatedAt: new Date(),
-						})
-						.where(eq(smSessions.id, sessionId))
-				}
-			}
-
-			// Update session with totals (fetch fresh counts from DB after extraction)
-			const [updatedEpics, updatedStories] = await Promise.all([
-				db.query.smEpics.findMany({
-					where: eq(smEpics.sessionId, sessionId),
-				}),
-				db.query.smStories.findMany({
-					where: eq(smStories.sessionId, sessionId),
-				}),
-			])
-
-			await db
-				.update(smSessions)
-				.set({
-					updatedAt: new Date(),
-					totalEpics: updatedEpics.length,
-					totalStories: updatedStories.length,
-					totalStoryPoints: updatedStories.reduce((sum, s) => sum + (s.storyPoints ?? 0), 0),
-				})
-				.where(eq(smSessions.id, sessionId))
-
-			// Enviar stepUpdate se houve avanço
-			if (newStep !== session.currentStep) {
-				await stream.writeSSE({
-					data: JSON.stringify({ stepUpdate: newStep }),
-				})
-			}
-
-			await stream.writeSSE({ data: '[DONE]' })
-		} catch (error) {
-			if (error instanceof OpenRouterAPIError) {
-				await stream.writeSSE({
-					data: JSON.stringify({
-						error: { code: error.code, message: error.message },
-					}),
-				})
-			} else {
-				await stream.writeSSE({
-					data: JSON.stringify({
-						error: { message: 'Failed to generate response' },
-					}),
-				})
-			}
-		}
-	})
-})
+		})
+	}
+)
 
 // ============================================
 // MESSAGE EDIT ENDPOINT
@@ -796,62 +827,66 @@ smRoutes.post(
 		const editedStep = message.step
 		const messageTimestamp = message.createdAt
 
-		// 4. Delete all messages from this point onwards (inclusive)
-		await db
-			.delete(smMessages)
-			.where(and(eq(smMessages.sessionId, sessionId), gte(smMessages.createdAt, messageTimestamp)))
+		// 4-7. Use transaction to ensure atomicity of message edit operations
+		await db.transaction(async (tx) => {
+			// 4. Delete all messages from this point onwards (inclusive)
+			await tx
+				.delete(smMessages)
+				.where(
+					and(eq(smMessages.sessionId, sessionId), gte(smMessages.createdAt, messageTimestamp))
+				)
 
-		// 5. Delete epics and stories created after this message
-		// First get epics to delete
-		const epicsToDelete = await db.query.smEpics.findMany({
-			where: and(eq(smEpics.sessionId, sessionId), gte(smEpics.createdAt, messageTimestamp)),
-		})
+			// 5. Delete epics and stories created after this message
+			// First get epics to delete
+			const epicsToDelete = await tx.query.smEpics.findMany({
+				where: and(eq(smEpics.sessionId, sessionId), gte(smEpics.createdAt, messageTimestamp)),
+			})
 
-		// Delete stories for those epics
-		for (const epic of epicsToDelete) {
-			await db.delete(smStories).where(eq(smStories.epicId, epic.id))
-		}
+			// Delete stories for those epics using batch operation
+			if (epicsToDelete.length > 0) {
+				const epicIds = epicsToDelete.map((e) => e.id)
+				await tx.delete(smStories).where(inArray(smStories.epicId, epicIds))
 
-		// Delete the epics
-		if (epicsToDelete.length > 0) {
-			await db
-				.delete(smEpics)
-				.where(and(eq(smEpics.sessionId, sessionId), gte(smEpics.createdAt, messageTimestamp)))
-		}
+				// Delete the epics
+				await tx
+					.delete(smEpics)
+					.where(and(eq(smEpics.sessionId, sessionId), gte(smEpics.createdAt, messageTimestamp)))
+			}
 
-		// Also delete stories created after message timestamp that might belong to older epics
-		await db
-			.delete(smStories)
-			.where(and(eq(smStories.sessionId, sessionId), gte(smStories.createdAt, messageTimestamp)))
+			// Also delete stories created after message timestamp that might belong to older epics
+			await tx
+				.delete(smStories)
+				.where(and(eq(smStories.sessionId, sessionId), gte(smStories.createdAt, messageTimestamp)))
 
-		// 6. Check if we need to rollback the step
-		const currentStepIndex = SM_STEPS_ORDER.indexOf(session.currentStep)
-		const editedStepIndex = SM_STEPS_ORDER.indexOf(editedStep)
+			// 6. Check if we need to rollback the step
+			const currentStepIndex = SM_STEPS_ORDER.indexOf(session.currentStep)
+			const editedStepIndex = SM_STEPS_ORDER.indexOf(editedStep)
 
-		if (currentStepIndex > editedStepIndex) {
-			// Rollback to the edited step
-			const newStepsCompleted = (session.stepsCompleted ?? []).filter(
-				(s) => SM_STEPS_ORDER.indexOf(s as SmStep) < editedStepIndex
-			)
+			if (currentStepIndex > editedStepIndex) {
+				// Rollback to the edited step
+				const newStepsCompleted = (session.stepsCompleted ?? []).filter(
+					(s) => SM_STEPS_ORDER.indexOf(s as SmStep) < editedStepIndex
+				)
 
-			await db
-				.update(smSessions)
-				.set({
-					currentStep: editedStep,
-					stepsCompleted: newStepsCompleted,
-					status: 'active',
-					completedAt: null,
-					updatedAt: new Date(),
-				})
-				.where(eq(smSessions.id, sessionId))
-		}
+				await tx
+					.update(smSessions)
+					.set({
+						currentStep: editedStep,
+						stepsCompleted: newStepsCompleted,
+						status: 'active',
+						completedAt: null,
+						updatedAt: new Date(),
+					})
+					.where(eq(smSessions.id, sessionId))
+			}
 
-		// 7. Insert the new edited user message
-		await db.insert(smMessages).values({
-			sessionId,
-			role: 'user',
-			content,
-			step: editedStep,
+			// 7. Insert the new edited user message
+			await tx.insert(smMessages).values({
+				sessionId,
+				role: 'user',
+				content,
+				step: editedStep,
+			})
 		})
 
 		// 8. Refresh session data for LLM context
@@ -1010,22 +1045,27 @@ smRoutes.post(
 			return commonErrors.notFound(c, 'Session not found')
 		}
 
-		const [epic] = await db
-			.insert(smEpics)
-			.values({
-				sessionId,
-				...data,
-			})
-			.returning()
+		// Use transaction to ensure epic insert and counter update are atomic
+		const epic = await db.transaction(async (tx) => {
+			const [insertedEpic] = await tx
+				.insert(smEpics)
+				.values({
+					sessionId,
+					...data,
+				})
+				.returning()
 
-		// Update session totals
-		await db
-			.update(smSessions)
-			.set({
-				totalEpics: sql`${smSessions.totalEpics} + 1`,
-				updatedAt: new Date(),
-			})
-			.where(eq(smSessions.id, sessionId))
+			// Update session totals
+			await tx
+				.update(smSessions)
+				.set({
+					totalEpics: sql`${smSessions.totalEpics} + 1`,
+					updatedAt: new Date(),
+				})
+				.where(eq(smSessions.id, sessionId))
+
+			return insertedEpic
+		})
 
 		return successResponse(c, epic, 201)
 	}
@@ -1092,16 +1132,19 @@ smRoutes.delete('/epics/:id', authMiddleware, async (c) => {
 		return commonErrors.forbidden(c, 'Access denied')
 	}
 
-	await db.delete(smEpics).where(eq(smEpics.id, epicId))
+	// Delete epic and update session totals in a transaction
+	await db.transaction(async (tx) => {
+		await tx.delete(smEpics).where(eq(smEpics.id, epicId))
 
-	// Update session totals
-	await db
-		.update(smSessions)
-		.set({
-			totalEpics: sql`GREATEST(${smSessions.totalEpics} - 1, 0)`,
-			updatedAt: new Date(),
-		})
-		.where(eq(smSessions.id, epic.sessionId))
+		// Update session totals
+		await tx
+			.update(smSessions)
+			.set({
+				totalEpics: sql`GREATEST(${smSessions.totalEpics} - 1, 0)`,
+				updatedAt: new Date(),
+			})
+			.where(eq(smSessions.id, epic.sessionId))
+	})
 
 	return successResponse(c, { deleted: true })
 })
@@ -1145,25 +1188,30 @@ smRoutes.post(
 
 		const storyKey = `${data.epicNumber}-${data.storyNumber}`
 
-		const [story] = await db
-			.insert(smStories)
-			.values({
-				sessionId,
-				storyKey,
-				...data,
-			})
-			.returning()
+		// Use transaction to ensure story insert and counter update are atomic
+		const story = await db.transaction(async (tx) => {
+			const [insertedStory] = await tx
+				.insert(smStories)
+				.values({
+					sessionId,
+					storyKey,
+					...data,
+				})
+				.returning()
 
-		// Update session totals
-		const storyPoints = data.storyPoints ?? 0
-		await db
-			.update(smSessions)
-			.set({
-				totalStories: sql`${smSessions.totalStories} + 1`,
-				totalStoryPoints: sql`${smSessions.totalStoryPoints} + ${storyPoints}`,
-				updatedAt: new Date(),
-			})
-			.where(eq(smSessions.id, sessionId))
+			// Update session totals
+			const storyPoints = data.storyPoints ?? 0
+			await tx
+				.update(smSessions)
+				.set({
+					totalStories: sql`${smSessions.totalStories} + 1`,
+					totalStoryPoints: sql`${smSessions.totalStoryPoints} + ${storyPoints}`,
+					updatedAt: new Date(),
+				})
+				.where(eq(smSessions.id, sessionId))
+
+			return insertedStory
+		})
 
 		return successResponse(c, story, 201)
 	}
@@ -1237,17 +1285,20 @@ smRoutes.delete('/stories/:id', authMiddleware, async (c) => {
 
 	const storyPoints = story.storyPoints ?? 0
 
-	await db.delete(smStories).where(eq(smStories.id, storyId))
+	// Delete story and update session totals in a transaction
+	await db.transaction(async (tx) => {
+		await tx.delete(smStories).where(eq(smStories.id, storyId))
 
-	// Update session totals
-	await db
-		.update(smSessions)
-		.set({
-			totalStories: sql`GREATEST(${smSessions.totalStories} - 1, 0)`,
-			totalStoryPoints: sql`GREATEST(${smSessions.totalStoryPoints} - ${storyPoints}, 0)`,
-			updatedAt: new Date(),
-		})
-		.where(eq(smSessions.id, story.sessionId))
+		// Update session totals
+		await tx
+			.update(smSessions)
+			.set({
+				totalStories: sql`GREATEST(${smSessions.totalStories} - 1, 0)`,
+				totalStoryPoints: sql`GREATEST(${smSessions.totalStoryPoints} - ${storyPoints}, 0)`,
+				updatedAt: new Date(),
+			})
+			.where(eq(smSessions.id, story.sessionId))
+	})
 
 	return successResponse(c, { deleted: true })
 })
@@ -1310,6 +1361,7 @@ smRoutes.post('/sessions/:id/enrich', authMiddleware, async (c) => {
 // Generate document from session
 smRoutes.post(
 	'/sessions/:id/document',
+	rateLimiter({ type: 'document' }),
 	authMiddleware,
 	zValidator('json', CreateSmDocumentSchema.optional()),
 	async (c) => {
@@ -1338,6 +1390,11 @@ smRoutes.post(
 
 		if (!session) {
 			return commonErrors.notFound(c, 'Session not found')
+		}
+
+		// Check if generation is already in progress
+		if (session.generationStatus === 'generating') {
+			return commonErrors.badRequest(c, 'Document generation already in progress')
 		}
 
 		// Enrich stories with AC, Tasks, DevNotes before generating document
@@ -1389,15 +1446,22 @@ smRoutes.post(
 		})
 		const nextVersion = existingDoc ? existingDoc.version + 1 : 1
 
-		// Mark generation as started BEFORE streaming
-		await db
+		// Atomic update: mark generation as started only if not already generating
+		// This prevents race conditions when multiple requests come in simultaneously
+		const updateResult = await db
 			.update(smSessions)
 			.set({
 				generationStatus: 'generating',
 				generationStartedAt: new Date(),
 				generationError: null,
 			})
-			.where(eq(smSessions.id, sessionId))
+			.where(and(eq(smSessions.id, sessionId), ne(smSessions.generationStatus, 'generating')))
+			.returning({ id: smSessions.id })
+
+		// If no rows were updated, another request already started generation
+		if (updateResult.length === 0) {
+			return commonErrors.badRequest(c, 'Document generation already in progress')
+		}
 
 		// Stream document generation
 		return streamSSE(c, async (stream) => {
