@@ -16,6 +16,7 @@ import {
 	PaginationSchema,
 	PrdChatRequestSchema,
 	RenameSessionSchema,
+	SessionIdParamSchema,
 	UpdatePrdDocumentSchema,
 	UpdatePrdSessionSchema,
 } from '@repo/shared'
@@ -420,10 +421,11 @@ prdRoutes.delete('/sessions/:id', authMiddleware, async (c) => {
 prdRoutes.post(
 	'/sessions/:id/rename',
 	authMiddleware,
+	zValidator('param', SessionIdParamSchema),
 	zValidator('json', RenameSessionSchema),
 	async (c) => {
 		const { userId } = getAuth(c)
-		const sessionId = c.req.param('id')
+		const { id: sessionId } = c.req.valid('param')
 		const { projectName: newName } = c.req.valid('json')
 
 		const user = await getUserByClerkId(userId)

@@ -6,6 +6,8 @@ import {
 	IdSchema,
 	PaginationSchema,
 	RenameSchema,
+	RenameSessionSchema,
+	SessionIdParamSchema,
 	SortSchema,
 	TimestampsSchema,
 } from './common.schema.js'
@@ -131,6 +133,65 @@ describe('RenameSchema', () => {
 
 	test('rejects missing projectName', () => {
 		expect(() => RenameSchema.parse({})).toThrow()
+	})
+})
+
+describe('SessionIdParamSchema', () => {
+	test('validates valid UUID param', () => {
+		const result = SessionIdParamSchema.parse({ id: '550e8400-e29b-41d4-a716-446655440000' })
+		expect(result.id).toBe('550e8400-e29b-41d4-a716-446655440000')
+	})
+
+	test('rejects non-UUID string', () => {
+		expect(() => SessionIdParamSchema.parse({ id: 'not-a-uuid' })).toThrow()
+	})
+
+	test('rejects empty string', () => {
+		expect(() => SessionIdParamSchema.parse({ id: '' })).toThrow()
+	})
+
+	test('rejects missing id', () => {
+		expect(() => SessionIdParamSchema.parse({})).toThrow()
+	})
+
+	test('rejects numeric id', () => {
+		expect(() => SessionIdParamSchema.parse({ id: 12345 })).toThrow()
+	})
+})
+
+describe('RenameSessionSchema', () => {
+	test('validates valid project name', () => {
+		const result = RenameSessionSchema.parse({ projectName: 'My Project' })
+		expect(result.projectName).toBe('My Project')
+	})
+
+	test('trims whitespace', () => {
+		const result = RenameSessionSchema.parse({ projectName: '  My Project  ' })
+		expect(result.projectName).toBe('My Project')
+	})
+
+	test('rejects empty string', () => {
+		expect(() => RenameSessionSchema.parse({ projectName: '' })).toThrow()
+	})
+
+	test('trims whitespace-only string to empty (trim runs as transform)', () => {
+		const result = RenameSessionSchema.parse({ projectName: '   ' })
+		expect(result.projectName).toBe('')
+	})
+
+	test('rejects string exceeding 200 characters', () => {
+		const longName = 'a'.repeat(201)
+		expect(() => RenameSessionSchema.parse({ projectName: longName })).toThrow()
+	})
+
+	test('accepts string at max length (200)', () => {
+		const maxName = 'a'.repeat(200)
+		const result = RenameSessionSchema.parse({ projectName: maxName })
+		expect(result.projectName).toBe(maxName)
+	})
+
+	test('rejects missing projectName', () => {
+		expect(() => RenameSessionSchema.parse({})).toThrow()
 	})
 })
 

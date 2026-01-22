@@ -67,6 +67,12 @@ export const RenameSchema = z.object({
 })
 export type Rename = z.infer<typeof RenameSchema>
 
+// Session ID param schema for route validation
+export const SessionIdParamSchema = z.object({
+	id: z.string().uuid('Invalid session ID'),
+})
+export type SessionIdParam = z.infer<typeof SessionIdParamSchema>
+
 // Session rename request schema
 export const RenameSessionSchema = z.object({
 	projectName: z.string().min(1, 'Project name is required').max(200).trim(),

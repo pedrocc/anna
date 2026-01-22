@@ -19,6 +19,7 @@ import {
 	EditSmMessageRequestSchema,
 	PaginationSchema,
 	RenameSessionSchema,
+	SessionIdParamSchema,
 	SmChatRequestSchema,
 	UpdateSmDocumentSchema,
 	UpdateSmEpicSchema,
@@ -344,10 +345,11 @@ smRoutes.delete('/sessions/:id', authMiddleware, async (c) => {
 smRoutes.post(
 	'/sessions/:id/rename',
 	authMiddleware,
+	zValidator('param', SessionIdParamSchema),
 	zValidator('json', RenameSessionSchema),
 	async (c) => {
 		const { userId } = getAuth(c)
-		const sessionId = c.req.param('id')
+		const { id: sessionId } = c.req.valid('param')
 		const { projectName: newName } = c.req.valid('json')
 
 		const user = await getUserByClerkId(userId)

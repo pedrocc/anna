@@ -16,6 +16,7 @@ import {
 	EditBriefingMessageRequestSchema,
 	PaginationSchema,
 	RenameSessionSchema,
+	SessionIdParamSchema,
 	UpdateBriefingDocumentSchema,
 	UpdateBriefingSessionSchema,
 } from '@repo/shared'
@@ -272,10 +273,11 @@ briefingRoutes.delete('/sessions/:id', authMiddleware, async (c) => {
 briefingRoutes.post(
 	'/sessions/:id/rename',
 	authMiddleware,
+	zValidator('param', SessionIdParamSchema),
 	zValidator('json', RenameSessionSchema),
 	async (c) => {
 		const { userId } = getAuth(c)
-		const sessionId = c.req.param('id')
+		const { id: sessionId } = c.req.valid('param')
 		const { projectName: newName } = c.req.valid('json')
 
 		const user = await getUserByClerkId(userId)

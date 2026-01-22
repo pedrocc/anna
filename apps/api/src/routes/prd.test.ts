@@ -167,11 +167,14 @@ describe('PRD Routes', () => {
 
 	describe('POST /api/v1/prd/sessions/:id/rename', () => {
 		it('should return 401 without authentication', async () => {
-			const res = await app.request('/api/v1/prd/sessions/test-session-id/rename', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ projectName: 'New Name' }),
-			})
+			const res = await app.request(
+				'/api/v1/prd/sessions/550e8400-e29b-41d4-a716-446655440000/rename',
+				{
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ projectName: 'New Name' }),
+				}
+			)
 
 			expect(res.status).toBe(401)
 			const data = (await res.json()) as { success: boolean }
@@ -179,18 +182,31 @@ describe('PRD Routes', () => {
 		})
 
 		it('should return 401 with invalid token', async () => {
-			const res = await app.request('/api/v1/prd/sessions/test-session-id/rename', {
-				method: 'POST',
-				headers: {
-					Authorization: 'Bearer invalid-token',
-					'Content-Type': 'application/json',
-				},
-				body: JSON.stringify({ projectName: 'New Name' }),
-			})
+			const res = await app.request(
+				'/api/v1/prd/sessions/550e8400-e29b-41d4-a716-446655440000/rename',
+				{
+					method: 'POST',
+					headers: {
+						Authorization: 'Bearer invalid-token',
+						'Content-Type': 'application/json',
+					},
+					body: JSON.stringify({ projectName: 'New Name' }),
+				}
+			)
 
 			expect(res.status).toBe(401)
 			const data = (await res.json()) as { success: boolean }
 			expect(data.success).toBe(false)
+		})
+
+		it('should return 401 with invalid session ID and no auth (auth checked first)', async () => {
+			const res = await app.request('/api/v1/prd/sessions/not-a-valid-uuid/rename', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ projectName: 'New Name' }),
+			})
+
+			expect(res.status).toBe(401)
 		})
 	})
 
