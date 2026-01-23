@@ -3,6 +3,7 @@ import { z } from 'zod'
 import {
 	ApiErrorSchema,
 	ApiResponseSchema,
+	createSortSchema,
 	HttpUrlSchema,
 	IdSchema,
 	PaginationSchema,
@@ -76,6 +77,64 @@ describe('SortSchema', () => {
 
 	test('rejects invalid order', () => {
 		expect(() => SortSchema.parse({ field: 'name', order: 'invalid' })).toThrow()
+	})
+})
+
+describe('createSortSchema', () => {
+	const UserSortSchema = createSortSchema(['name', 'email'] as const)
+
+	test('accepts valid sortBy field', () => {
+		const result = UserSortSchema.parse({ sortBy: 'name' })
+		expect(result.sortBy).toBe('name')
+		expect(result.order).toBe('desc')
+	})
+
+	test('accepts all allowed fields', () => {
+		expect(UserSortSchema.parse({ sortBy: 'name' }).sortBy).toBe('name')
+		expect(UserSortSchema.parse({ sortBy: 'email' }).sortBy).toBe('email')
+	})
+
+	test('uses desc as default order', () => {
+		const result = UserSortSchema.parse({ sortBy: 'name' })
+		expect(result.order).toBe('desc')
+	})
+
+	test('accepts explicit asc order', () => {
+		const result = UserSortSchema.parse({ sortBy: 'name', order: 'asc' })
+		expect(result.order).toBe('asc')
+	})
+
+	test('accepts explicit desc order', () => {
+		const result = UserSortSchema.parse({ sortBy: 'email', order: 'desc' })
+		expect(result.order).toBe('desc')
+	})
+
+	test('rejects invalid sortBy field', () => {
+		expect(() => UserSortSchema.parse({ sortBy: 'invalid' })).toThrow()
+	})
+
+	test('rejects invalid order value', () => {
+		expect(() => UserSortSchema.parse({ sortBy: 'name', order: 'invalid' })).toThrow()
+	})
+
+	test('sortBy is optional', () => {
+		const result = UserSortSchema.parse({})
+		expect(result.sortBy).toBeUndefined()
+		expect(result.order).toBe('desc')
+	})
+
+	test('works with different field sets', () => {
+		const DateSortSchema = createSortSchema(['createdAt', 'updatedAt', 'deletedAt'] as const)
+		expect(DateSortSchema.parse({ sortBy: 'createdAt' }).sortBy).toBe('createdAt')
+		expect(DateSortSchema.parse({ sortBy: 'updatedAt' }).sortBy).toBe('updatedAt')
+		expect(DateSortSchema.parse({ sortBy: 'deletedAt' }).sortBy).toBe('deletedAt')
+		expect(() => DateSortSchema.parse({ sortBy: 'name' })).toThrow()
+	})
+
+	test('works with single field', () => {
+		const SingleSortSchema = createSortSchema(['id'] as const)
+		expect(SingleSortSchema.parse({ sortBy: 'id' }).sortBy).toBe('id')
+		expect(() => SingleSortSchema.parse({ sortBy: 'name' })).toThrow()
 	})
 })
 

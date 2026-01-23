@@ -7,19 +7,21 @@ export const PaginationSchema = z.object({
 	limit: z.coerce.number().int().min(1).max(100).default(20),
 })
 
+export const SortOrderSchema = z.enum(['asc', 'desc'])
+
 export const SortSchema = z.object({
 	field: z.string(),
-	order: z.enum(['asc', 'desc']).default('desc'),
+	order: SortOrderSchema.default('desc'),
 })
 
 /**
  * Create a sort schema with validated field names
  * @param allowedFields - Array of allowed field names for sorting
  */
-export function createSortSchema<T extends readonly string[]>(allowedFields: T) {
+export function createSortSchema<const T extends readonly [string, ...string[]]>(allowedFields: T) {
 	return z.object({
-		field: z.enum(allowedFields as unknown as [string, ...string[]]),
-		order: z.enum(['asc', 'desc']).default('desc'),
+		sortBy: z.enum(allowedFields).optional(),
+		order: SortOrderSchema.default('desc'),
 	})
 }
 
@@ -53,6 +55,7 @@ export const ApiErrorSchema = z.object({
 export type Id = z.infer<typeof IdSchema>
 export type Pagination = z.infer<typeof PaginationSchema>
 export type Sort = z.infer<typeof SortSchema>
+export type SortOrder = z.infer<typeof SortOrderSchema>
 export type Timestamps = z.infer<typeof TimestampsSchema>
 export type ApiResponse<T> = {
 	success: true
