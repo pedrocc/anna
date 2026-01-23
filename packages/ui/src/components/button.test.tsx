@@ -5,6 +5,7 @@ import { Button } from './button.js'
 describe('Button', () => {
 	beforeEach(() => {
 		cleanup()
+		document.body.innerHTML = ''
 	})
 
 	describe('type attribute', () => {
