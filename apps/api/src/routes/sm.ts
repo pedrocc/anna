@@ -26,7 +26,7 @@ import {
 	UpdateSmSessionSchema,
 	UpdateSmStorySchema,
 } from '@repo/shared'
-import { and, asc, desc, eq, gte, inArray, ne, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, gte, inArray, isNull, ne, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { streamSSE } from 'hono/streaming'
 import { getUserByClerkId } from '../lib/helpers.js'
@@ -134,7 +134,7 @@ smRoutes.get('/sessions', authMiddleware, zValidator('query', PaginationSchema),
 
 	const [sessions, countResult] = await Promise.all([
 		db.query.smSessions.findMany({
-			where: eq(smSessions.userId, user.id),
+			where: and(eq(smSessions.userId, user.id), isNull(smSessions.deletedAt)),
 			limit,
 			offset,
 			orderBy: [desc(smSessions.updatedAt)],
@@ -142,7 +142,7 @@ smRoutes.get('/sessions', authMiddleware, zValidator('query', PaginationSchema),
 		db
 			.select({ count: sql<number>`count(*)` })
 			.from(smSessions)
-			.where(eq(smSessions.userId, user.id)),
+			.where(and(eq(smSessions.userId, user.id), isNull(smSessions.deletedAt))),
 	])
 
 	return successResponse(c, sessions, 200, {
@@ -163,16 +163,22 @@ smRoutes.get('/sessions/:id', authMiddleware, async (c) => {
 	}
 
 	const session = await db.query.smSessions.findFirst({
-		where: and(eq(smSessions.id, sessionId), eq(smSessions.userId, user.id)),
+		where: and(
+			eq(smSessions.id, sessionId),
+			eq(smSessions.userId, user.id),
+			isNull(smSessions.deletedAt)
+		),
 		with: {
 			messages: {
 				orderBy: [desc(smMessages.createdAt)],
 				limit: 100,
 			},
 			epics: {
+				where: isNull(smEpics.deletedAt),
 				orderBy: [asc(smEpics.number)],
 			},
 			stories: {
+				where: isNull(smStories.deletedAt),
 				orderBy: [asc(smStories.epicNumber), asc(smStories.storyNumber)],
 			},
 			documents: {
@@ -319,7 +325,7 @@ smRoutes.patch(
 	}
 )
 
-// Delete session
+// Delete session (soft delete)
 smRoutes.delete('/sessions/:id', authMiddleware, async (c) => {
 	const { userId } = getAuth(c)
 	const sessionId = c.req.param('id')
@@ -330,8 +336,15 @@ smRoutes.delete('/sessions/:id', authMiddleware, async (c) => {
 	}
 
 	const [deleted] = await db
-		.delete(smSessions)
-		.where(and(eq(smSessions.id, sessionId), eq(smSessions.userId, user.id)))
+		.update(smSessions)
+		.set({ deletedAt: new Date() })
+		.where(
+			and(
+				eq(smSessions.id, sessionId),
+				eq(smSessions.userId, user.id),
+				isNull(smSessions.deletedAt)
+			)
+		)
 		.returning()
 
 	if (!deleted) {
@@ -1136,7 +1149,7 @@ smRoutes.patch('/epics/:id', authMiddleware, zValidator('json', UpdateSmEpicSche
 	return successResponse(c, updated)
 })
 
-// Delete epic
+// Delete epic (soft delete)
 smRoutes.delete('/epics/:id', authMiddleware, async (c) => {
 	const { userId } = getAuth(c)
 	const epicId = c.req.param('id')
@@ -1147,7 +1160,7 @@ smRoutes.delete('/epics/:id', authMiddleware, async (c) => {
 	}
 
 	const epic = await db.query.smEpics.findFirst({
-		where: eq(smEpics.id, epicId),
+		where: and(eq(smEpics.id, epicId), isNull(smEpics.deletedAt)),
 		with: {
 			session: true,
 		},
@@ -1161,16 +1174,20 @@ smRoutes.delete('/epics/:id', authMiddleware, async (c) => {
 		return commonErrors.forbidden(c, 'Access denied')
 	}
 
-	// Delete epic and update session totals in a transaction
+	// Soft delete epic and its stories, update session totals in a transaction
+	const now = new Date()
 	await db.transaction(async (tx) => {
-		await tx.delete(smEpics).where(eq(smEpics.id, epicId))
+		await tx.update(smEpics).set({ deletedAt: now }).where(eq(smEpics.id, epicId))
+
+		// Soft delete related stories
+		await tx.update(smStories).set({ deletedAt: now }).where(eq(smStories.epicId, epicId))
 
 		// Update session totals
 		await tx
 			.update(smSessions)
 			.set({
 				totalEpics: sql`GREATEST(${smSessions.totalEpics} - 1, 0)`,
-				updatedAt: new Date(),
+				updatedAt: now,
 			})
 			.where(eq(smSessions.id, epic.sessionId))
 	})
@@ -1349,7 +1366,7 @@ smRoutes.patch(
 	}
 )
 
-// Delete story
+// Delete story (soft delete)
 smRoutes.delete('/stories/:id', authMiddleware, async (c) => {
 	const { userId } = getAuth(c)
 	const storyId = c.req.param('id')
@@ -1360,7 +1377,7 @@ smRoutes.delete('/stories/:id', authMiddleware, async (c) => {
 	}
 
 	const story = await db.query.smStories.findFirst({
-		where: eq(smStories.id, storyId),
+		where: and(eq(smStories.id, storyId), isNull(smStories.deletedAt)),
 		with: {
 			session: true,
 		},
@@ -1376,9 +1393,10 @@ smRoutes.delete('/stories/:id', authMiddleware, async (c) => {
 
 	const storyPoints = story.storyPoints ?? 0
 
-	// Delete story and update session totals in a transaction
+	// Soft delete story and update session totals in a transaction
+	const now = new Date()
 	await db.transaction(async (tx) => {
-		await tx.delete(smStories).where(eq(smStories.id, storyId))
+		await tx.update(smStories).set({ deletedAt: now }).where(eq(smStories.id, storyId))
 
 		// Update session totals
 		await tx
@@ -1386,7 +1404,7 @@ smRoutes.delete('/stories/:id', authMiddleware, async (c) => {
 			.set({
 				totalStories: sql`GREATEST(${smSessions.totalStories} - 1, 0)`,
 				totalStoryPoints: sql`GREATEST(${smSessions.totalStoryPoints} - ${storyPoints}, 0)`,
-				updatedAt: new Date(),
+				updatedAt: now,
 			})
 			.where(eq(smSessions.id, story.sessionId))
 	})
@@ -1829,7 +1847,11 @@ smRoutes.get('/prd-sessions', authMiddleware, async (c) => {
 
 	// Get completed PRD sessions
 	const prds = await db.query.prdSessions.findMany({
-		where: and(eq(prdSessions.userId, user.id), eq(prdSessions.status, 'completed')),
+		where: and(
+			eq(prdSessions.userId, user.id),
+			eq(prdSessions.status, 'completed'),
+			isNull(prdSessions.deletedAt)
+		),
 		orderBy: [desc(prdSessions.updatedAt)],
 		columns: {
 			id: true,

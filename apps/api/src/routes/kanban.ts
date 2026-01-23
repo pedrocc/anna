@@ -1,7 +1,7 @@
 import { zValidator } from '@hono/zod-validator'
 import { db, smEpics, smSessions, smStories } from '@repo/db'
 import { FetchStoriesByIdsSchema, PaginationSchema } from '@repo/shared'
-import { and, asc, desc, eq, gt, inArray, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, gt, inArray, isNull, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { getUserByClerkId } from '../lib/helpers.js'
 import { commonErrors, successResponse } from '../lib/response.js'
@@ -30,7 +30,11 @@ kanbanRoutes.get('/sessions', authMiddleware, zValidator('query', PaginationSche
 	// Get sessions that have stories
 	const [sessions, countResult] = await Promise.all([
 		db.query.smSessions.findMany({
-			where: and(eq(smSessions.userId, user.id), gt(smSessions.totalStories, 0)),
+			where: and(
+				eq(smSessions.userId, user.id),
+				gt(smSessions.totalStories, 0),
+				isNull(smSessions.deletedAt)
+			),
 			columns: {
 				id: true,
 				projectName: true,
@@ -49,7 +53,13 @@ kanbanRoutes.get('/sessions', authMiddleware, zValidator('query', PaginationSche
 		db
 			.select({ count: sql<number>`count(*)` })
 			.from(smSessions)
-			.where(and(eq(smSessions.userId, user.id), gt(smSessions.totalStories, 0))),
+			.where(
+				and(
+					eq(smSessions.userId, user.id),
+					gt(smSessions.totalStories, 0),
+					isNull(smSessions.deletedAt)
+				)
+			),
 	])
 
 	return successResponse(c, sessions, 200, {
@@ -74,7 +84,11 @@ kanbanRoutes.get('/sessions/:id/board', authMiddleware, async (c) => {
 
 	// Get session with epics and stories
 	const session = await db.query.smSessions.findFirst({
-		where: and(eq(smSessions.id, sessionId), eq(smSessions.userId, user.id)),
+		where: and(
+			eq(smSessions.id, sessionId),
+			eq(smSessions.userId, user.id),
+			isNull(smSessions.deletedAt)
+		),
 		columns: {
 			id: true,
 			projectName: true,
@@ -87,6 +101,7 @@ kanbanRoutes.get('/sessions/:id/board', authMiddleware, async (c) => {
 		},
 		with: {
 			epics: {
+				where: isNull(smEpics.deletedAt),
 				orderBy: [asc(smEpics.number)],
 				columns: {
 					id: true,
@@ -100,6 +115,7 @@ kanbanRoutes.get('/sessions/:id/board', authMiddleware, async (c) => {
 				},
 			},
 			stories: {
+				where: isNull(smStories.deletedAt),
 				orderBy: [asc(smStories.epicNumber), asc(smStories.storyNumber)],
 				columns: {
 					id: true,
@@ -190,7 +206,7 @@ kanbanRoutes.post(
 
 		// Get user's session IDs to scope the query
 		const userSessions = await db.query.smSessions.findMany({
-			where: eq(smSessions.userId, user.id),
+			where: and(eq(smSessions.userId, user.id), isNull(smSessions.deletedAt)),
 			columns: { id: true },
 		})
 
@@ -202,7 +218,11 @@ kanbanRoutes.post(
 
 		// Fetch stories matching the provided IDs, scoped to user's sessions
 		const stories = await db.query.smStories.findMany({
-			where: and(inArray(smStories.id, ids), inArray(smStories.sessionId, sessionIds)),
+			where: and(
+				inArray(smStories.id, ids),
+				inArray(smStories.sessionId, sessionIds),
+				isNull(smStories.deletedAt)
+			),
 			columns: {
 				id: true,
 				sessionId: true,

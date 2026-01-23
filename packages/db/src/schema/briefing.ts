@@ -167,6 +167,9 @@ export const briefingSessions = pgTable(
 		createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 		updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 		completedAt: timestamp('completed_at', { withTimezone: true }),
+
+		// Soft delete
+		deletedAt: timestamp('deleted_at', { withTimezone: true }),
 	},
 	(table) => ({
 		userIdIdx: index('briefing_sessions_user_id_idx').on(table.userId),
@@ -174,6 +177,7 @@ export const briefingSessions = pgTable(
 		currentStepIdx: index('briefing_sessions_current_step_idx').on(table.currentStep),
 		createdAtIdx: index('briefing_sessions_created_at_idx').on(table.createdAt),
 		updatedAtIdx: index('briefing_sessions_updated_at_idx').on(table.updatedAt),
+		deletedAtIdx: index('briefing_sessions_deleted_at_idx').on(table.deletedAt),
 		projectNameLength: check(
 			'briefing_sessions_project_name_length',
 			sql`length(${table.projectName}) > 0 AND length(${table.projectName}) <= 200`

@@ -20,7 +20,7 @@ import {
 	UpdatePrdDocumentSchema,
 	UpdatePrdSessionSchema,
 } from '@repo/shared'
-import { and, desc, eq, gte, ne, sql } from 'drizzle-orm'
+import { and, desc, eq, gte, isNull, ne, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { streamSSE } from 'hono/streaming'
 import { getUserByClerkId } from '../lib/helpers.js'
@@ -152,7 +152,7 @@ prdRoutes.get('/sessions', authMiddleware, zValidator('query', PaginationSchema)
 
 	const [sessions, countResult] = await Promise.all([
 		db.query.prdSessions.findMany({
-			where: eq(prdSessions.userId, user.id),
+			where: and(eq(prdSessions.userId, user.id), isNull(prdSessions.deletedAt)),
 			limit,
 			offset,
 			orderBy: [desc(prdSessions.updatedAt)],
@@ -160,7 +160,7 @@ prdRoutes.get('/sessions', authMiddleware, zValidator('query', PaginationSchema)
 		db
 			.select({ count: sql<number>`count(*)` })
 			.from(prdSessions)
-			.where(eq(prdSessions.userId, user.id)),
+			.where(and(eq(prdSessions.userId, user.id), isNull(prdSessions.deletedAt))),
 	])
 
 	return successResponse(c, sessions, 200, {
@@ -181,7 +181,11 @@ prdRoutes.get('/sessions/:id', authMiddleware, async (c) => {
 	}
 
 	const session = await db.query.prdSessions.findFirst({
-		where: and(eq(prdSessions.id, sessionId), eq(prdSessions.userId, user.id)),
+		where: and(
+			eq(prdSessions.id, sessionId),
+			eq(prdSessions.userId, user.id),
+			isNull(prdSessions.deletedAt)
+		),
 		with: {
 			messages: {
 				orderBy: [desc(prdMessages.createdAt)],
@@ -395,7 +399,7 @@ prdRoutes.patch(
 	}
 )
 
-// Delete session
+// Delete session (soft delete)
 prdRoutes.delete('/sessions/:id', authMiddleware, async (c) => {
 	const { userId } = getAuth(c)
 	const sessionId = c.req.param('id')
@@ -406,8 +410,15 @@ prdRoutes.delete('/sessions/:id', authMiddleware, async (c) => {
 	}
 
 	const [deleted] = await db
-		.delete(prdSessions)
-		.where(and(eq(prdSessions.id, sessionId), eq(prdSessions.userId, user.id)))
+		.update(prdSessions)
+		.set({ deletedAt: new Date() })
+		.where(
+			and(
+				eq(prdSessions.id, sessionId),
+				eq(prdSessions.userId, user.id),
+				isNull(prdSessions.deletedAt)
+			)
+		)
 		.returning()
 
 	if (!deleted) {

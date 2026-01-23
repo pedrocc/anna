@@ -96,12 +96,16 @@ export const brainstormSessions = pgTable(
 		createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 		updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 		completedAt: timestamp('completed_at', { withTimezone: true }),
+
+		// Soft delete
+		deletedAt: timestamp('deleted_at', { withTimezone: true }),
 	},
 	(table) => ({
 		userIdIdx: index('brainstorm_sessions_user_id_idx').on(table.userId),
 		statusIdx: index('brainstorm_sessions_status_idx').on(table.status),
 		currentStepIdx: index('brainstorm_sessions_current_step_idx').on(table.currentStep),
 		createdAtIdx: index('brainstorm_sessions_created_at_idx').on(table.createdAt),
+		deletedAtIdx: index('brainstorm_sessions_deleted_at_idx').on(table.deletedAt),
 		projectNameLength: check(
 			'brainstorm_sessions_project_name_length',
 			sql`length(${table.projectName}) > 0 AND length(${table.projectName}) <= 200`

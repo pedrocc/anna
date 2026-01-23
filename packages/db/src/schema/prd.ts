@@ -249,6 +249,9 @@ export const prdSessions = pgTable(
 		createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 		updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 		completedAt: timestamp('completed_at', { withTimezone: true }),
+
+		// Soft delete
+		deletedAt: timestamp('deleted_at', { withTimezone: true }),
 	},
 	(table) => ({
 		userIdIdx: index('prd_sessions_user_id_idx').on(table.userId),
@@ -257,6 +260,7 @@ export const prdSessions = pgTable(
 		projectTypeIdx: index('prd_sessions_project_type_idx').on(table.projectType),
 		createdAtIdx: index('prd_sessions_created_at_idx').on(table.createdAt),
 		updatedAtIdx: index('prd_sessions_updated_at_idx').on(table.updatedAt),
+		deletedAtIdx: index('prd_sessions_deleted_at_idx').on(table.deletedAt),
 		projectNameLength: check(
 			'prd_sessions_project_name_length',
 			sql`length(${table.projectName}) > 0 AND length(${table.projectName}) <= 200`

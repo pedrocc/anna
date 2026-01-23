@@ -20,7 +20,7 @@ import {
 	UpdateBriefingDocumentSchema,
 	UpdateBriefingSessionSchema,
 } from '@repo/shared'
-import { and, desc, eq, gte, ne, sql } from 'drizzle-orm'
+import { and, desc, eq, gte, isNull, ne, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { streamSSE } from 'hono/streaming'
 import {
@@ -64,7 +64,7 @@ briefingRoutes.get(
 
 		const [sessions, countResult] = await Promise.all([
 			db.query.briefingSessions.findMany({
-				where: eq(briefingSessions.userId, user.id),
+				where: and(eq(briefingSessions.userId, user.id), isNull(briefingSessions.deletedAt)),
 				limit,
 				offset,
 				orderBy: [desc(briefingSessions.updatedAt)],
@@ -80,7 +80,7 @@ briefingRoutes.get(
 			db
 				.select({ count: sql<number>`count(*)` })
 				.from(briefingSessions)
-				.where(eq(briefingSessions.userId, user.id)),
+				.where(and(eq(briefingSessions.userId, user.id), isNull(briefingSessions.deletedAt))),
 		])
 
 		return successResponse(c, sessions, 200, {
@@ -102,7 +102,11 @@ briefingRoutes.get('/sessions/:id', authMiddleware, async (c) => {
 	}
 
 	const session = await db.query.briefingSessions.findFirst({
-		where: and(eq(briefingSessions.id, sessionId), eq(briefingSessions.userId, user.id)),
+		where: and(
+			eq(briefingSessions.id, sessionId),
+			eq(briefingSessions.userId, user.id),
+			isNull(briefingSessions.deletedAt)
+		),
 		with: {
 			messages: {
 				orderBy: [desc(briefingMessages.createdAt)],
@@ -247,7 +251,7 @@ briefingRoutes.patch(
 	}
 )
 
-// Delete session
+// Delete session (soft delete)
 briefingRoutes.delete('/sessions/:id', authMiddleware, async (c) => {
 	const { userId } = getAuth(c)
 	const sessionId = c.req.param('id')
@@ -258,8 +262,15 @@ briefingRoutes.delete('/sessions/:id', authMiddleware, async (c) => {
 	}
 
 	const [deleted] = await db
-		.delete(briefingSessions)
-		.where(and(eq(briefingSessions.id, sessionId), eq(briefingSessions.userId, user.id)))
+		.update(briefingSessions)
+		.set({ deletedAt: new Date() })
+		.where(
+			and(
+				eq(briefingSessions.id, sessionId),
+				eq(briefingSessions.userId, user.id),
+				isNull(briefingSessions.deletedAt)
+			)
+		)
 		.returning()
 
 	if (!deleted) {

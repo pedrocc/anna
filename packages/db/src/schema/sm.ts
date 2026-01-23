@@ -190,6 +190,9 @@ export const smSessions = pgTable(
 		createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 		updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 		completedAt: timestamp('completed_at', { withTimezone: true }),
+
+		// Soft delete
+		deletedAt: timestamp('deleted_at', { withTimezone: true }),
 	},
 	(table) => ({
 		userIdIdx: index('sm_sessions_user_id_idx').on(table.userId),
@@ -198,6 +201,7 @@ export const smSessions = pgTable(
 		currentStepIdx: index('sm_sessions_current_step_idx').on(table.currentStep),
 		createdAtIdx: index('sm_sessions_created_at_idx').on(table.createdAt),
 		updatedAtIdx: index('sm_sessions_updated_at_idx').on(table.updatedAt),
+		deletedAtIdx: index('sm_sessions_deleted_at_idx').on(table.deletedAt),
 		projectNameLength: check(
 			'sm_sessions_project_name_length',
 			sql`length(${table.projectName}) > 0 AND length(${table.projectName}) <= 200`
@@ -288,6 +292,9 @@ export const smEpics = pgTable(
 		// Timestamps
 		createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 		updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+
+		// Soft delete
+		deletedAt: timestamp('deleted_at', { withTimezone: true }),
 	},
 	(table) => ({
 		sessionIdIdx: index('sm_epics_session_id_idx').on(table.sessionId),
@@ -297,6 +304,7 @@ export const smEpics = pgTable(
 		sessionStatusIdx: index('sm_epics_session_status_idx').on(table.sessionId, table.status),
 		// Composite index for ordering epics by number within a session
 		sessionNumberIdx: index('sm_epics_session_number_idx').on(table.sessionId, table.number),
+		deletedAtIdx: index('sm_epics_deleted_at_idx').on(table.deletedAt),
 		numberPositive: check('sm_epics_number_positive', sql`${table.number} >= 1`),
 		titleLength: check(
 			'sm_epics_title_length',
@@ -369,6 +377,9 @@ export const smStories = pgTable(
 		// Timestamps
 		createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 		updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+
+		// Soft delete
+		deletedAt: timestamp('deleted_at', { withTimezone: true }),
 	},
 	(table) => ({
 		sessionIdIdx: index('sm_stories_session_id_idx').on(table.sessionId),
@@ -377,6 +388,7 @@ export const smStories = pgTable(
 		storyKeyIdx: index('sm_stories_story_key_idx').on(table.storyKey),
 		// Composite index for filtered queries by session and status
 		sessionStatusIdx: index('sm_stories_session_status_idx').on(table.sessionId, table.status),
+		deletedAtIdx: index('sm_stories_deleted_at_idx').on(table.deletedAt),
 		epicNumberPositive: check('sm_stories_epic_number_positive', sql`${table.epicNumber} >= 1`),
 		storyNumberPositive: check('sm_stories_story_number_positive', sql`${table.storyNumber} >= 1`),
 		titleLength: check(
