@@ -31,8 +31,9 @@ describe('chat route error logging pattern', () => {
 		const testError = new Error('Connection timeout')
 		chatLogger.error({ err: testError }, 'Chat stream error')
 
-		const callArgs = errorSpy.mock.calls[0]!
-		const loggedData = callArgs[0] as { err: Error }
+		const callArgs = errorSpy.mock.calls[0]
+		expect(callArgs).toBeDefined()
+		const loggedData = (callArgs as unknown[])[0] as { err: Error }
 		expect(loggedData.err).toBe(testError)
 		expect(loggedData.err.message).toBe('Connection timeout')
 		expect(loggedData.err.stack).toBeDefined()
@@ -62,8 +63,9 @@ describe('error logging ensures full error details server-side', () => {
 		const error = new Error('Database connection lost')
 		logger.error({ err: error, sessionId: 'sess_123' }, 'Operation failed')
 
-		const callArgs = errorSpy.mock.calls[0]!
-		const loggedData = callArgs[0] as { err: Error; sessionId: string }
+		const callArgs = errorSpy.mock.calls[0]
+		expect(callArgs).toBeDefined()
+		const loggedData = (callArgs as unknown[])[0] as { err: Error; sessionId: string }
 		expect(loggedData.err).toBe(error)
 		expect(loggedData.sessionId).toBe('sess_123')
 
