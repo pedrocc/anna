@@ -5,79 +5,88 @@ import { streamSSE } from 'hono/streaming'
 import { getOpenRouterClient, OpenRouterAPIError } from '../lib/openrouter.js'
 import { commonErrors, successResponse } from '../lib/response.js'
 import { type AuthVariables, authMiddleware } from '../middleware/auth.js'
+import { rateLimiter, userKeyExtractor } from '../middleware/rate-limiter.js'
 
 export const chatRoutes = new Hono<{ Variables: AuthVariables }>()
 
 // Chat completion
-chatRoutes.post('/', authMiddleware, zValidator('json', ChatRequestSchema), async (c) => {
-	const data = c.req.valid('json')
+chatRoutes.post(
+	'/',
+	authMiddleware,
+	rateLimiter({ type: 'chat', keyExtractor: userKeyExtractor }),
+	zValidator('json', ChatRequestSchema),
+	async (c) => {
+		const data = c.req.valid('json')
 
-	try {
-		const client = getOpenRouterClient()
+		try {
+			const client = getOpenRouterClient()
 
-		// Non-streaming response
-		if (!data.stream) {
-			const response = await client.chat({
-				messages: data.messages,
-				model: data.model,
-				temperature: data.temperature,
-				max_tokens: data.max_tokens,
-			})
-
-			return successResponse(c, {
-				id: response.id,
-				model: response.model,
-				message: response.choices[0]?.message,
-				usage: response.usage,
-			})
-		}
-
-		// Streaming response
-		return streamSSE(c, async (stream) => {
-			try {
-				const generator = client.chatStream({
+			// Non-streaming response
+			if (!data.stream) {
+				const response = await client.chat({
 					messages: data.messages,
 					model: data.model,
 					temperature: data.temperature,
 					max_tokens: data.max_tokens,
 				})
 
-				for await (const chunk of generator) {
-					await stream.writeSSE({
-						data: JSON.stringify({ content: chunk }),
-					})
-				}
-
-				await stream.writeSSE({
-					data: '[DONE]',
+				return successResponse(c, {
+					id: response.id,
+					model: response.model,
+					message: response.choices[0]?.message,
+					usage: response.usage,
 				})
-			} catch (error) {
-				if (error instanceof OpenRouterAPIError) {
-					await stream.writeSSE({
-						data: JSON.stringify({
-							error: {
-								code: error.code,
-								message: error.message,
-							},
-						}),
-					})
-				}
 			}
-		})
-	} catch (error) {
-		if (error instanceof OpenRouterAPIError) {
-			if (error.status === 401) {
-				return commonErrors.unauthorized(c, 'Invalid OpenRouter API key')
-			}
-			if (error.status === 429) {
-				return commonErrors.badRequest(c, 'Rate limit exceeded', { code: error.code })
-			}
-			return commonErrors.badRequest(c, error.message, { code: error.code })
-		}
 
-		throw error
+			// Streaming response
+			return streamSSE(c, async (stream) => {
+				try {
+					const generator = client.chatStream({
+						messages: data.messages,
+						model: data.model,
+						temperature: data.temperature,
+						max_tokens: data.max_tokens,
+					})
+
+					for await (const chunk of generator) {
+						await stream.writeSSE({
+							data: JSON.stringify({ content: chunk }),
+						})
+					}
+
+					await stream.writeSSE({
+						data: '[DONE]',
+					})
+				} catch (error) {
+					if (error instanceof OpenRouterAPIError) {
+						await stream.writeSSE({
+							data: JSON.stringify({
+								error: {
+									code: error.code,
+									message: error.message,
+								},
+							}),
+						})
+					}
+				}
+			})
+		} catch (error) {
+			if (error instanceof OpenRouterAPIError) {
+				if (error.status === 401) {
+					return commonErrors.unauthorized(c, 'Invalid OpenRouter API key')
+				}
+				if (error.status === 429) {
+					return commonErrors.badRequest(c, 'Rate limit exceeded', { code: error.code })
+				}
+				return commonErrors.badRequest(c, error.message, { code: error.code })
+			}
+
+			// Log unexpected errors and return a generic error response
+			console.error('Unexpected error in chat route:', error)
+			return commonErrors.internalError(c, 'An unexpected error occurred')
+		}
 	}
-})
+)
 
 // List available models
 chatRoutes.get('/models', authMiddleware, async (c) => {

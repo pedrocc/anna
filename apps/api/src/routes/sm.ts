@@ -51,7 +51,7 @@ import {
 	SM_STEPS_ORDER,
 } from '../lib/sm-prompts.js'
 import { type AuthVariables, authMiddleware, getAuth } from '../middleware/auth.js'
-import { rateLimiter } from '../middleware/rate-limiter.js'
+import { rateLimiter, userKeyExtractor } from '../middleware/rate-limiter.js'
 
 export const smRoutes = new Hono<{ Variables: AuthVariables }>()
 
@@ -417,8 +417,8 @@ smRoutes.post(
 
 smRoutes.post(
 	'/chat',
-	rateLimiter({ type: 'chat' }),
 	authMiddleware,
+	rateLimiter({ type: 'chat', keyExtractor: userKeyExtractor }),
 	zValidator('json', SmChatRequestSchema),
 	async (c) => {
 		const { userId } = getAuth(c)
@@ -807,6 +807,7 @@ smRoutes.post(
 smRoutes.post(
 	'/messages/:messageId/edit',
 	authMiddleware,
+	rateLimiter({ type: 'chat', keyExtractor: userKeyExtractor }),
 	zValidator('json', EditSmMessageRequestSchema),
 	async (c) => {
 		const { userId } = getAuth(c)
@@ -1451,8 +1452,8 @@ smRoutes.post('/sessions/:id/enrich', authMiddleware, async (c) => {
 // Generate document from session
 smRoutes.post(
 	'/sessions/:id/document',
-	rateLimiter({ type: 'document' }),
 	authMiddleware,
+	rateLimiter({ type: 'document', keyExtractor: userKeyExtractor }),
 	zValidator('json', CreateSmDocumentSchema.optional()),
 	async (c) => {
 		const { userId } = getAuth(c)

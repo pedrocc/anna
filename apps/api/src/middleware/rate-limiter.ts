@@ -1,4 +1,5 @@
 import { RATE_LIMIT } from '@repo/shared'
+import type { Context } from 'hono'
 import { createMiddleware } from 'hono/factory'
 import { Redis } from 'ioredis'
 import { getClientIp } from './trusted-proxy.js'
@@ -6,6 +7,7 @@ import { getClientIp } from './trusted-proxy.js'
 let redis: Redis | null = null
 
 type RateLimitType = 'default' | 'chat' | 'document'
+type KeyExtractor = (c: Context) => string | undefined
 
 function getRedis(): Redis {
 	if (!redis) {
@@ -52,19 +54,35 @@ function getRateLimitConfig(type: RateLimitType): { windowMs: number; max: numbe
 	}
 }
 
+/**
+ * Extract authenticated user ID from Clerk auth context.
+ * Used as keyExtractor to apply per-user rate limits on authenticated routes.
+ */
+export const userKeyExtractor: KeyExtractor = (c: Context): string | undefined => {
+	try {
+		const auth = c.get('clerkAuth')
+		return auth?.userId ?? undefined
+	} catch {
+		return undefined
+	}
+}
+
 export const rateLimiter = (options?: {
 	windowMs?: number
 	max?: number
 	type?: RateLimitType
+	keyExtractor?: KeyExtractor
 }) => {
 	const config = options?.type ? getRateLimitConfig(options.type) : getRateLimitConfig('default')
 	const windowMs = options?.windowMs ?? config.windowMs
 	const maxRequests = options?.max ?? config.max
 	const keyPrefix = options?.type ? `ratelimit:${options.type}:` : 'ratelimit:'
+	const keyExtractor = options?.keyExtractor
 
 	return createMiddleware(async (c, next) => {
-		const ip = getClientIp(c)
-		const key = `${keyPrefix}${ip}`
+		const extractedKey = keyExtractor?.(c)
+		const identifier = extractedKey ?? getClientIp(c)
+		const key = `${keyPrefix}${identifier}`
 
 		const redisClient = getRedis()
 		const current = await redisClient.incr(key)

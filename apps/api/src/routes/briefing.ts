@@ -39,7 +39,7 @@ import { commonErrors, successResponse } from '../lib/response.js'
 const briefingLogger = createLogger('briefing')
 
 import { type AuthVariables, authMiddleware, getAuth } from '../middleware/auth.js'
-import { rateLimiter } from '../middleware/rate-limiter.js'
+import { rateLimiter, userKeyExtractor } from '../middleware/rate-limiter.js'
 
 export const briefingRoutes = new Hono<{ Variables: AuthVariables }>()
 
@@ -346,8 +346,8 @@ briefingRoutes.post(
 
 briefingRoutes.post(
 	'/chat',
-	rateLimiter({ type: 'chat' }),
 	authMiddleware,
+	rateLimiter({ type: 'chat', keyExtractor: userKeyExtractor }),
 	zValidator('json', BriefingChatRequestSchema),
 	async (c) => {
 		const { userId } = getAuth(c)
@@ -594,6 +594,7 @@ briefingRoutes.post(
 briefingRoutes.post(
 	'/messages/:messageId/edit',
 	authMiddleware,
+	rateLimiter({ type: 'chat', keyExtractor: userKeyExtractor }),
 	zValidator('json', EditBriefingMessageRequestSchema),
 	async (c) => {
 		const { userId } = getAuth(c)
@@ -864,8 +865,8 @@ briefingRoutes.post(
 // Generate document from session
 briefingRoutes.post(
 	'/sessions/:id/document',
-	rateLimiter({ type: 'document' }),
 	authMiddleware,
+	rateLimiter({ type: 'document', keyExtractor: userKeyExtractor }),
 	zValidator('json', CreateBriefingDocumentSchema.optional()),
 	async (c) => {
 		const { userId } = getAuth(c)

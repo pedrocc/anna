@@ -41,7 +41,7 @@ import {
 } from '../lib/prd-prompts.js'
 import { commonErrors, successResponse } from '../lib/response.js'
 import { type AuthVariables, authMiddleware, getAuth } from '../middleware/auth.js'
-import { rateLimiter } from '../middleware/rate-limiter.js'
+import { rateLimiter, userKeyExtractor } from '../middleware/rate-limiter.js'
 
 export const prdRoutes = new Hono<{ Variables: AuthVariables }>()
 
@@ -482,8 +482,8 @@ prdRoutes.post(
 
 prdRoutes.post(
 	'/chat',
-	rateLimiter({ type: 'chat' }),
 	authMiddleware,
+	rateLimiter({ type: 'chat', keyExtractor: userKeyExtractor }),
 	zValidator('json', PrdChatRequestSchema),
 	async (c) => {
 		const { userId } = getAuth(c)
@@ -691,6 +691,7 @@ prdRoutes.post(
 prdRoutes.post(
 	'/messages/:messageId/edit',
 	authMiddleware,
+	rateLimiter({ type: 'chat', keyExtractor: userKeyExtractor }),
 	zValidator('json', EditPrdMessageRequestSchema),
 	async (c) => {
 		const { userId } = getAuth(c)
@@ -929,8 +930,8 @@ prdRoutes.post(
 // Generate document from session
 prdRoutes.post(
 	'/sessions/:id/document',
-	rateLimiter({ type: 'document' }),
 	authMiddleware,
+	rateLimiter({ type: 'document', keyExtractor: userKeyExtractor }),
 	zValidator('json', CreatePrdDocumentSchema.optional()),
 	async (c) => {
 		const { userId } = getAuth(c)
