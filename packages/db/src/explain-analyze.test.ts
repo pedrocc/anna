@@ -3,6 +3,14 @@ import { eq, sql } from 'drizzle-orm'
 import { closeDb, db } from './client.js'
 import { smEpics, smSessions, smStories, users } from './schema/index.js'
 
+let dbAvailable = false
+try {
+	await db.execute(sql`SELECT 1`)
+	dbAvailable = true
+} catch {
+	// DB not available, tests will be skipped
+}
+
 /**
  * EXPLAIN ANALYZE Tests
  *
@@ -33,7 +41,7 @@ function assertIndexUsed(plan: string, indexName: string): void {
 	}
 }
 
-describe('EXPLAIN ANALYZE - Composite Index Verification', () => {
+describe.skipIf(!dbAvailable)('EXPLAIN ANALYZE - Composite Index Verification', () => {
 	let testUserId: string
 	let testSessionId: string
 

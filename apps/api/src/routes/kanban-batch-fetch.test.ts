@@ -1,14 +1,22 @@
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test'
 import { db } from '@repo/db'
 import { smEpics, smSessions, smStories, users } from '@repo/db/schema'
-import { and, eq, inArray } from 'drizzle-orm'
+import { and, eq, inArray, sql } from 'drizzle-orm'
+
+let dbAvailable = false
+try {
+	await db.execute(sql`SELECT 1`)
+	dbAvailable = true
+} catch {
+	// DB not available, tests will be skipped
+}
 
 function assertDefined<T>(value: T | undefined | null, msg = 'Expected value to be defined'): T {
 	if (value == null) throw new Error(msg)
 	return value
 }
 
-describe('Kanban - Batch fetch stories by IDs (inArray)', () => {
+describe.skipIf(!dbAvailable)('Kanban - Batch fetch stories by IDs (inArray)', () => {
 	let testUserId: string
 	let otherUserId: string
 	let sessionId: string

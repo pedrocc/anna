@@ -3,6 +3,14 @@ import { eq, sql } from 'drizzle-orm'
 import { closeDb, db } from './client.js'
 import { smEpics, smMessages, smSessions, smStories, users } from './schema/index.js'
 
+let dbAvailable = false
+try {
+	await db.execute(sql`SELECT 1`)
+	dbAvailable = true
+} catch {
+	// DB not available, tests will be skipped
+}
+
 /**
  * Transaction Rollback Tests
  *
@@ -10,7 +18,7 @@ import { smEpics, smMessages, smSessions, smStories, users } from './schema/inde
  * when errors occur mid-process, ensuring data consistency.
  */
 
-describe('Database Transaction Rollback', () => {
+describe.skipIf(!dbAvailable)('Database Transaction Rollback', () => {
 	let testUserId: string
 
 	beforeAll(async () => {
