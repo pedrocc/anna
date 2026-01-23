@@ -60,8 +60,7 @@ function getRateLimitConfig(type: RateLimitType): { windowMs: number; max: numbe
  */
 export const userKeyExtractor: KeyExtractor = (c: Context): string | undefined => {
 	try {
-		const auth = c.get('clerkAuth')
-		return auth?.userId ?? undefined
+		return c.get('userId') ?? undefined
 	} catch {
 		return undefined
 	}

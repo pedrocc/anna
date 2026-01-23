@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test'
 import type { Context } from 'hono'
 import { Hono } from 'hono'
 
-type ClerkAuthVariables = {
-	clerkAuth: { userId: string }
+type AuthVariables = {
+	userId: string
 }
 
 // Mock Redis before importing the rate limiter
@@ -184,10 +184,10 @@ describe('rate-limiter middleware', () => {
 
 	describe('per-user rate limiting (keyExtractor)', () => {
 		it('should use user ID as key when keyExtractor provides it', async () => {
-			const app = new Hono<{ Variables: ClerkAuthVariables }>()
-			// Simulate auth middleware setting clerkAuth
+			const app = new Hono<{ Variables: AuthVariables }>()
+			// Simulate auth middleware setting userId
 			app.use('*', async (c, next) => {
-				c.set('clerkAuth', { userId: 'user_123' })
+				c.set('userId', 'user_123')
 				await next()
 			})
 			app.use('*', rateLimiter({ type: 'chat', keyExtractor: userKeyExtractor }))
@@ -218,9 +218,9 @@ describe('rate-limiter middleware', () => {
 				return Promise.resolve(requestCount)
 			})
 
-			const app = new Hono<{ Variables: ClerkAuthVariables }>()
+			const app = new Hono<{ Variables: AuthVariables }>()
 			app.use('*', async (c, next) => {
-				c.set('clerkAuth', { userId: 'user_abc' })
+				c.set('userId', 'user_abc')
 				await next()
 			})
 			app.use('*', rateLimiter({ type: 'chat', keyExtractor: userKeyExtractor }))
@@ -236,9 +236,9 @@ describe('rate-limiter middleware', () => {
 				Promise.resolve(RATE_LIMIT.CHAT_MAX_REQUESTS + 1)
 			)
 
-			const app = new Hono<{ Variables: ClerkAuthVariables }>()
+			const app = new Hono<{ Variables: AuthVariables }>()
 			app.use('*', async (c, next) => {
-				c.set('clerkAuth', { userId: 'user_limited' })
+				c.set('userId', 'user_limited')
 				await next()
 			})
 			app.use('*', rateLimiter({ type: 'chat', keyExtractor: userKeyExtractor }))
@@ -264,10 +264,10 @@ describe('rate-limiter middleware', () => {
 	})
 
 	describe('userKeyExtractor', () => {
-		it('should extract userId from clerkAuth context', () => {
+		it('should extract userId from context', () => {
 			const mockContext = {
 				get: (key: string) => {
-					if (key === 'clerkAuth') return { userId: 'user_test123' }
+					if (key === 'userId') return 'user_test123'
 					return undefined
 				},
 			}
@@ -275,7 +275,7 @@ describe('rate-limiter middleware', () => {
 			expect(result).toBe('user_test123')
 		})
 
-		it('should return undefined when clerkAuth is not set', () => {
+		it('should return undefined when userId is not set', () => {
 			const mockContext = {
 				get: () => undefined,
 			}
@@ -286,7 +286,7 @@ describe('rate-limiter middleware', () => {
 		it('should return undefined when userId is null', () => {
 			const mockContext = {
 				get: (key: string) => {
-					if (key === 'clerkAuth') return { userId: null }
+					if (key === 'userId') return null
 					return undefined
 				},
 			}
