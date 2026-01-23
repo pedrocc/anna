@@ -45,6 +45,14 @@ describe('PaginationSchema', () => {
 		expect(() => PaginationSchema.parse({ limit: 101 })).toThrow()
 	})
 
+	test('rejects zero limit', () => {
+		expect(() => PaginationSchema.parse({ limit: 0 })).toThrow()
+	})
+
+	test('rejects negative limit', () => {
+		expect(() => PaginationSchema.parse({ limit: -1 })).toThrow()
+	})
+
 	test('rejects negative page', () => {
 		expect(() => PaginationSchema.parse({ page: -1 })).toThrow()
 	})
