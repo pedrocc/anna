@@ -36,12 +36,13 @@ import {
 	Settings,
 	Trash2,
 } from 'lucide-react'
-import { useCallback, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useLocation, useParams } from 'wouter'
 import { DocumentViewer } from '../components/brainstorm'
 import { ChatInterface, StepIndicator } from '../components/briefing'
 import { useBriefingChat, useBriefingDocument } from '../hooks/useBriefingChat'
 import { useMessageEdit } from '../hooks/useMessageEdit'
+import { useStableCallback } from '../hooks/useStableCallback'
 import { api, useBriefingSession } from '../lib/api-client'
 
 // Timeout em milissegundos para considerar uma geração como abandonada (10 minutos)
@@ -93,15 +94,13 @@ export function BriefingSessionPage() {
 	// Get the single document (first one)
 	const document = session?.documents?.[0] ?? null
 
-	// biome-ignore lint/correctness/useExhaustiveDependencies: id ensures callback is recreated when navigating between sessions
-	const handleMessageComplete = useCallback(() => {
+	const handleMessageComplete = useStableCallback(() => {
 		mutate()
-	}, [id, mutate])
+	})
 
-	// biome-ignore lint/correctness/useExhaustiveDependencies: id ensures callback is recreated when navigating between sessions
-	const handleStepUpdate = useCallback(() => {
+	const handleStepUpdate = useStableCallback(() => {
 		mutate()
-	}, [id, mutate])
+	})
 
 	const {
 		sendMessage,
@@ -128,12 +127,9 @@ export function BriefingSessionPage() {
 		onStepUpdate: handleStepUpdate,
 	})
 
-	const handleEditMessage = useCallback(
-		async (messageId: string, content: string) => {
-			await editMessage(messageId, content)
-		},
-		[editMessage]
-	)
+	const handleEditMessage = useStableCallback(async (messageId: string, content: string) => {
+		await editMessage(messageId, content)
+	})
 
 	const handleGenerateDocument = async () => {
 		setActionError(null)

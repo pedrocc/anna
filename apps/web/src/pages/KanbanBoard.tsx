@@ -13,6 +13,7 @@ import { useCallback, useMemo, useState } from 'react'
 import { useLocation, useParams } from 'wouter'
 import { AppleBoard, AppleCardOverlay, AppleFilters, AppleHeader } from '../components/kanban/apple'
 import { StoryDetailSheet } from '../components/kanban/StoryDetailSheet'
+import { useStableCallback } from '../hooks/useStableCallback'
 import { api, type KanbanStory, useKanbanBoard } from '../lib/api-client'
 
 type StoryStatus = KanbanStory['status']
@@ -50,6 +51,10 @@ export function KanbanBoardPage() {
 		() => new Map(data?.stories.map((s) => [s.id, s]) ?? []),
 		[data?.stories]
 	)
+
+	const handleRefresh = useStableCallback(() => {
+		mutate()
+	})
 
 	const handleDelete = useCallback(async () => {
 		if (!sessionId) return
@@ -179,7 +184,7 @@ export function KanbanBoardPage() {
 				<p style={{ color: 'var(--apple-priority-critical)', fontSize: '14px' }}>
 					Erro ao carregar o board
 				</p>
-				<button type="button" onClick={() => mutate()} className="apple-filter-pill">
+				<button type="button" onClick={handleRefresh} className="apple-filter-pill">
 					Tentar novamente
 				</button>
 			</div>
@@ -195,7 +200,7 @@ export function KanbanBoardPage() {
 				totalPoints={data.session.totalStoryPoints}
 				isUpdating={isUpdating}
 				isDeleting={isDeleting}
-				onRefresh={() => mutate()}
+				onRefresh={handleRefresh}
 				onDelete={handleDelete}
 			/>
 
@@ -238,7 +243,7 @@ export function KanbanBoardPage() {
 				story={selectedStory}
 				open={sheetOpen}
 				onOpenChange={setSheetOpen}
-				onUpdate={() => mutate()}
+				onUpdate={handleRefresh}
 			/>
 		</div>
 	)

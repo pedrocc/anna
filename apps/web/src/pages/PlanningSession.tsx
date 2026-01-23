@@ -37,7 +37,7 @@ import {
 	Settings,
 	Trash2,
 } from 'lucide-react'
-import { useCallback, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useLocation, useParams } from 'wouter'
 import { DocumentViewer } from '../components/brainstorm'
 import { DocumentList } from '../components/briefing'
@@ -45,6 +45,7 @@ import { ChatInterface, StepIndicator } from '../components/sm'
 import { BacklogDocumentViewer } from '../components/sm/BacklogDocumentViewer'
 import { useMessageEdit } from '../hooks/useMessageEdit'
 import { useSmChat, useSmDocument } from '../hooks/useSmChat'
+import { useStableCallback } from '../hooks/useStableCallback'
 import { api, type SmDocumentFromAPI, useSmSession } from '../lib/api-client'
 
 // Timeout em milissegundos para considerar uma geração como abandonada (10 minutos)
@@ -94,29 +95,25 @@ export function PlanningSessionPage() {
 		}
 	}, [session?.documents, initialTabSet])
 
-	const handleMessageComplete = useCallback(() => {
+	const handleMessageComplete = useStableCallback(() => {
 		mutate()
-	}, [mutate])
+	})
 
 	const { generateDocument, isGenerating } = useSmDocument(id ?? '')
 
-	// biome-ignore lint/correctness/useExhaustiveDependencies: id ensures callback is recreated when navigating between sessions
-	const handleStepUpdate = useCallback(
-		(newStep: string) => {
-			mutate()
-			// Se avançou para 'complete', gera o documento automaticamente
-			if (newStep === 'complete') {
-				setTimeout(() => {
-					generateDocument().then(() => {
-						mutate()
-						setSelectedDocument(null)
-						setActiveTab('document')
-					})
-				}, 500)
-			}
-		},
-		[id, mutate, generateDocument]
-	)
+	const handleStepUpdate = useStableCallback((newStep: string) => {
+		mutate()
+		// Se avançou para 'complete', gera o documento automaticamente
+		if (newStep === 'complete') {
+			setTimeout(() => {
+				generateDocument().then(() => {
+					mutate()
+					setSelectedDocument(null)
+					setActiveTab('document')
+				})
+			}, 500)
+		}
+	})
 
 	const {
 		sendMessage,
@@ -140,12 +137,9 @@ export function PlanningSessionPage() {
 		onMessageComplete: handleMessageComplete,
 	})
 
-	const handleEditMessage = useCallback(
-		async (messageId: string, content: string) => {
-			await editMessage(messageId, content)
-		},
-		[editMessage]
-	)
+	const handleEditMessage = useStableCallback(async (messageId: string, content: string) => {
+		await editMessage(messageId, content)
+	})
 
 	const handleGenerateDocument = async () => {
 		try {
@@ -417,7 +411,7 @@ export function PlanningSessionPage() {
 											epicNumber: Number.parseInt(s.storyKey.split('-')[0] ?? '0', 10),
 											storyNumber: Number.parseInt(s.storyKey.split('-')[1] ?? '0', 10),
 										}))}
-										onUpdate={() => mutate()}
+										onUpdate={handleMessageComplete}
 									/>
 								) : (
 									<DocumentViewer
