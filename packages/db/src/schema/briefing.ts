@@ -165,7 +165,10 @@ export const briefingSessions = pgTable(
 
 		// Timestamps
 		createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-		updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+		updatedAt: timestamp('updated_at', { withTimezone: true })
+			.defaultNow()
+			.notNull()
+			.$onUpdate(() => new Date()),
 		completedAt: timestamp('completed_at', { withTimezone: true }),
 
 		// Soft delete
@@ -178,6 +181,11 @@ export const briefingSessions = pgTable(
 		createdAtIdx: index('briefing_sessions_created_at_idx').on(table.createdAt),
 		updatedAtIdx: index('briefing_sessions_updated_at_idx').on(table.updatedAt),
 		deletedAtIdx: index('briefing_sessions_deleted_at_idx').on(table.deletedAt),
+		userStatusIdx: index('briefing_sessions_user_status_idx').on(table.userId, table.status),
+		userCreatedAtIdx: index('briefing_sessions_user_created_at_idx').on(
+			table.userId,
+			table.createdAt
+		),
 		projectNameLength: check(
 			'briefing_sessions_project_name_length',
 			sql`length(${table.projectName}) > 0 AND length(${table.projectName}) <= 200`
@@ -248,7 +256,10 @@ export const briefingDocuments = pgTable(
 
 		// Timestamps
 		createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-		updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+		updatedAt: timestamp('updated_at', { withTimezone: true })
+			.defaultNow()
+			.notNull()
+			.$onUpdate(() => new Date()),
 	},
 	(table) => ({
 		sessionIdIdx: index('briefing_documents_session_id_idx').on(table.sessionId),

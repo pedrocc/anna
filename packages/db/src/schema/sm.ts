@@ -188,7 +188,10 @@ export const smSessions = pgTable(
 
 		// Timestamps
 		createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-		updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+		updatedAt: timestamp('updated_at', { withTimezone: true })
+			.defaultNow()
+			.notNull()
+			.$onUpdate(() => new Date()),
 		completedAt: timestamp('completed_at', { withTimezone: true }),
 
 		// Soft delete
@@ -291,7 +294,10 @@ export const smEpics = pgTable(
 
 		// Timestamps
 		createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-		updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+		updatedAt: timestamp('updated_at', { withTimezone: true })
+			.defaultNow()
+			.notNull()
+			.$onUpdate(() => new Date()),
 
 		// Soft delete
 		deletedAt: timestamp('deleted_at', { withTimezone: true }),
@@ -376,7 +382,10 @@ export const smStories = pgTable(
 
 		// Timestamps
 		createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-		updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+		updatedAt: timestamp('updated_at', { withTimezone: true })
+			.defaultNow()
+			.notNull()
+			.$onUpdate(() => new Date()),
 
 		// Soft delete
 		deletedAt: timestamp('deleted_at', { withTimezone: true }),
@@ -441,7 +450,10 @@ export const smDocuments = pgTable(
 
 		// Timestamps
 		createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-		updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+		updatedAt: timestamp('updated_at', { withTimezone: true })
+			.defaultNow()
+			.notNull()
+			.$onUpdate(() => new Date()),
 	},
 	(table) => ({
 		sessionIdIdx: index('sm_documents_session_id_idx').on(table.sessionId),

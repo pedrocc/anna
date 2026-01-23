@@ -99,6 +99,13 @@
       "when": 1769400000000,
       "tag": "0013_add_soft_delete",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1769500000000,
+      "tag": "0014_add_composite_indexes",
+      "breakpoints": true
     }
   ]
 }

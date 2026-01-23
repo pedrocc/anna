@@ -94,7 +94,10 @@ export const brainstormSessions = pgTable(
 
 		// Timestamps
 		createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-		updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+		updatedAt: timestamp('updated_at', { withTimezone: true })
+			.defaultNow()
+			.notNull()
+			.$onUpdate(() => new Date()),
 		completedAt: timestamp('completed_at', { withTimezone: true }),
 
 		// Soft delete
@@ -105,6 +108,7 @@ export const brainstormSessions = pgTable(
 		statusIdx: index('brainstorm_sessions_status_idx').on(table.status),
 		currentStepIdx: index('brainstorm_sessions_current_step_idx').on(table.currentStep),
 		createdAtIdx: index('brainstorm_sessions_created_at_idx').on(table.createdAt),
+		updatedAtIdx: index('brainstorm_sessions_updated_at_idx').on(table.updatedAt),
 		deletedAtIdx: index('brainstorm_sessions_deleted_at_idx').on(table.deletedAt),
 		projectNameLength: check(
 			'brainstorm_sessions_project_name_length',

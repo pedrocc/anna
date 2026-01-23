@@ -24,7 +24,10 @@ export const users = pgTable(
 		avatarUrl: text('avatar_url'),
 		metadata: jsonb('metadata').$type<Record<string, unknown>>(),
 		createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-		updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+		updatedAt: timestamp('updated_at', { withTimezone: true })
+			.defaultNow()
+			.notNull()
+			.$onUpdate(() => new Date()),
 	},
 	(table) => ({
 		clerkIdIdx: uniqueIndex('users_clerk_id_idx').on(table.clerkId),

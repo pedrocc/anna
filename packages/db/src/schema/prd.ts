@@ -247,7 +247,10 @@ export const prdSessions = pgTable(
 
 		// Timestamps
 		createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-		updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+		updatedAt: timestamp('updated_at', { withTimezone: true })
+			.defaultNow()
+			.notNull()
+			.$onUpdate(() => new Date()),
 		completedAt: timestamp('completed_at', { withTimezone: true }),
 
 		// Soft delete
@@ -261,6 +264,8 @@ export const prdSessions = pgTable(
 		createdAtIdx: index('prd_sessions_created_at_idx').on(table.createdAt),
 		updatedAtIdx: index('prd_sessions_updated_at_idx').on(table.updatedAt),
 		deletedAtIdx: index('prd_sessions_deleted_at_idx').on(table.deletedAt),
+		userStatusIdx: index('prd_sessions_user_status_idx').on(table.userId, table.status),
+		userCreatedAtIdx: index('prd_sessions_user_created_at_idx').on(table.userId, table.createdAt),
 		projectNameLength: check(
 			'prd_sessions_project_name_length',
 			sql`length(${table.projectName}) > 0 AND length(${table.projectName}) <= 200`
@@ -328,7 +333,10 @@ export const prdDocuments = pgTable(
 
 		// Timestamps
 		createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-		updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+		updatedAt: timestamp('updated_at', { withTimezone: true })
+			.defaultNow()
+			.notNull()
+			.$onUpdate(() => new Date()),
 	},
 	(table) => ({
 		sessionIdIdx: index('prd_documents_session_id_idx').on(table.sessionId),
