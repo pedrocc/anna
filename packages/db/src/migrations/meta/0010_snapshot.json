@@ -120,12 +120,8 @@
           "name": "brainstorm_messages_session_id_brainstorm_sessions_id_fk",
           "tableFrom": "brainstorm_messages",
           "tableTo": "brainstorm_sessions",
-          "columnsFrom": [
-            "session_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["session_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -316,12 +312,8 @@
           "name": "brainstorm_sessions_user_id_users_id_fk",
           "tableFrom": "brainstorm_sessions",
           "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -442,12 +434,8 @@
           "name": "briefing_documents_session_id_briefing_sessions_id_fk",
           "tableFrom": "briefing_documents",
           "tableTo": "briefing_sessions",
-          "columnsFrom": [
-            "session_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["session_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -567,12 +555,8 @@
           "name": "briefing_messages_session_id_briefing_sessions_id_fk",
           "tableFrom": "briefing_messages",
           "tableTo": "briefing_sessions",
-          "columnsFrom": [
-            "session_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["session_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -883,12 +867,8 @@
           "name": "briefing_sessions_user_id_users_id_fk",
           "tableFrom": "briefing_sessions",
           "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1009,12 +989,8 @@
           "name": "prd_documents_session_id_prd_sessions_id_fk",
           "tableFrom": "prd_documents",
           "tableTo": "prd_sessions",
-          "columnsFrom": [
-            "session_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["session_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1134,12 +1110,8 @@
           "name": "prd_messages_session_id_prd_sessions_id_fk",
           "tableFrom": "prd_messages",
           "tableTo": "prd_sessions",
-          "columnsFrom": [
-            "session_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["session_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1504,12 +1476,8 @@
           "name": "prd_sessions_user_id_users_id_fk",
           "tableFrom": "prd_sessions",
           "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1630,12 +1598,8 @@
           "name": "sm_documents_session_id_sm_sessions_id_fk",
           "tableFrom": "sm_documents",
           "tableTo": "sm_sessions",
-          "columnsFrom": [
-            "session_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["session_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1838,12 +1802,8 @@
           "name": "sm_epics_session_id_sm_sessions_id_fk",
           "tableFrom": "sm_epics",
           "tableTo": "sm_sessions",
-          "columnsFrom": [
-            "session_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["session_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1963,12 +1923,8 @@
           "name": "sm_messages_session_id_sm_sessions_id_fk",
           "tableFrom": "sm_messages",
           "tableTo": "sm_sessions",
-          "columnsFrom": [
-            "session_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["session_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -2222,12 +2178,8 @@
           "name": "sm_sessions_user_id_users_id_fk",
           "tableFrom": "sm_sessions",
           "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -2235,12 +2187,8 @@
           "name": "sm_sessions_prd_session_id_prd_sessions_id_fk",
           "tableFrom": "sm_sessions",
           "tableTo": "prd_sessions",
-          "columnsFrom": [
-            "prd_session_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["prd_session_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -2481,12 +2429,8 @@
           "name": "sm_stories_session_id_sm_sessions_id_fk",
           "tableFrom": "sm_stories",
           "tableTo": "sm_sessions",
-          "columnsFrom": [
-            "session_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["session_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -2494,12 +2438,8 @@
           "name": "sm_stories_epic_id_sm_epics_id_fk",
           "tableFrom": "sm_stories",
           "tableTo": "sm_epics",
-          "columnsFrom": [
-            "epic_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["epic_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -2642,16 +2582,12 @@
         "users_clerk_id_unique": {
           "name": "users_clerk_id_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "clerk_id"
-          ]
+          "columns": ["clerk_id"]
         },
         "users_email_unique": {
           "name": "users_email_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "email"
-          ]
+          "columns": ["email"]
         }
       },
       "policies": {},
@@ -2663,41 +2599,22 @@
     "public.brainstorm_approach": {
       "name": "brainstorm_approach",
       "schema": "public",
-      "values": [
-        "ai_recommended",
-        "user_selected",
-        "quick_session",
-        "comprehensive"
-      ]
+      "values": ["ai_recommended", "user_selected", "quick_session", "comprehensive"]
     },
     "public.brainstorm_message_role": {
       "name": "brainstorm_message_role",
       "schema": "public",
-      "values": [
-        "system",
-        "user",
-        "assistant"
-      ]
+      "values": ["system", "user", "assistant"]
     },
     "public.brainstorm_status": {
       "name": "brainstorm_status",
       "schema": "public",
-      "values": [
-        "active",
-        "paused",
-        "completed",
-        "archived"
-      ]
+      "values": ["active", "paused", "completed", "archived"]
     },
     "public.brainstorm_step": {
       "name": "brainstorm_step",
       "schema": "public",
-      "values": [
-        "setup",
-        "technique",
-        "execution",
-        "document"
-      ]
+      "values": ["setup", "technique", "execution", "document"]
     },
     "public.brainstorm_technique": {
       "name": "brainstorm_technique",
@@ -2731,43 +2648,22 @@
     "public.briefing_generation_status": {
       "name": "briefing_generation_status",
       "schema": "public",
-      "values": [
-        "idle",
-        "generating",
-        "completed",
-        "failed"
-      ]
+      "values": ["idle", "generating", "completed", "failed"]
     },
     "public.briefing_message_role": {
       "name": "briefing_message_role",
       "schema": "public",
-      "values": [
-        "system",
-        "user",
-        "assistant"
-      ]
+      "values": ["system", "user", "assistant"]
     },
     "public.briefing_status": {
       "name": "briefing_status",
       "schema": "public",
-      "values": [
-        "active",
-        "paused",
-        "completed",
-        "archived"
-      ]
+      "values": ["active", "paused", "completed", "archived"]
     },
     "public.briefing_step": {
       "name": "briefing_step",
       "schema": "public",
-      "values": [
-        "init",
-        "vision",
-        "users",
-        "metrics",
-        "scope",
-        "complete"
-      ]
+      "values": ["init", "vision", "users", "metrics", "scope", "complete"]
     },
     "public.prd_document_type": {
       "name": "prd_document_type",
@@ -2785,30 +2681,17 @@
     "public.prd_domain_complexity": {
       "name": "prd_domain_complexity",
       "schema": "public",
-      "values": [
-        "low",
-        "medium",
-        "high"
-      ]
+      "values": ["low", "medium", "high"]
     },
     "public.prd_generation_status": {
       "name": "prd_generation_status",
       "schema": "public",
-      "values": [
-        "idle",
-        "generating",
-        "completed",
-        "failed"
-      ]
+      "values": ["idle", "generating", "completed", "failed"]
     },
     "public.prd_message_role": {
       "name": "prd_message_role",
       "schema": "public",
-      "values": [
-        "system",
-        "user",
-        "assistant"
-      ]
+      "values": ["system", "user", "assistant"]
     },
     "public.prd_project_type": {
       "name": "prd_project_type",
@@ -2830,12 +2713,7 @@
     "public.prd_status": {
       "name": "prd_status",
       "schema": "public",
-      "values": [
-        "active",
-        "paused",
-        "completed",
-        "archived"
-      ]
+      "values": ["active", "paused", "completed", "archived"]
     },
     "public.prd_step": {
       "name": "prd_step",
@@ -2869,83 +2747,42 @@
     "public.sm_epic_status": {
       "name": "sm_epic_status",
       "schema": "public",
-      "values": [
-        "backlog",
-        "in_progress",
-        "done"
-      ]
+      "values": ["backlog", "in_progress", "done"]
     },
     "public.sm_generation_status": {
       "name": "sm_generation_status",
       "schema": "public",
-      "values": [
-        "idle",
-        "generating",
-        "completed",
-        "failed"
-      ]
+      "values": ["idle", "generating", "completed", "failed"]
     },
     "public.sm_message_role": {
       "name": "sm_message_role",
       "schema": "public",
-      "values": [
-        "system",
-        "user",
-        "assistant"
-      ]
+      "values": ["system", "user", "assistant"]
     },
     "public.sm_status": {
       "name": "sm_status",
       "schema": "public",
-      "values": [
-        "active",
-        "paused",
-        "completed",
-        "archived"
-      ]
+      "values": ["active", "paused", "completed", "archived"]
     },
     "public.sm_step": {
       "name": "sm_step",
       "schema": "public",
-      "values": [
-        "init",
-        "epics",
-        "stories",
-        "details",
-        "planning",
-        "review",
-        "complete"
-      ]
+      "values": ["init", "epics", "stories", "details", "planning", "review", "complete"]
     },
     "public.sm_story_priority": {
       "name": "sm_story_priority",
       "schema": "public",
-      "values": [
-        "critical",
-        "high",
-        "medium",
-        "low"
-      ]
+      "values": ["critical", "high", "medium", "low"]
     },
     "public.sm_story_status": {
       "name": "sm_story_status",
       "schema": "public",
-      "values": [
-        "backlog",
-        "ready_for_dev",
-        "in_progress",
-        "review",
-        "done"
-      ]
+      "values": ["backlog", "ready_for_dev", "in_progress", "review", "done"]
     },
     "public.user_role": {
       "name": "user_role",
       "schema": "public",
-      "values": [
-        "admin",
-        "user",
-        "guest"
-      ]
+      "values": ["admin", "user", "guest"]
     }
   },
   "schemas": {},

@@ -271,9 +271,7 @@ describe('rate-limiter middleware', () => {
 					return undefined
 				},
 			}
-			const result = userKeyExtractor(
-				mockContext as unknown as Context
-			)
+			const result = userKeyExtractor(mockContext as unknown as Context)
 			expect(result).toBe('user_test123')
 		})
 
@@ -281,9 +279,7 @@ describe('rate-limiter middleware', () => {
 			const mockContext = {
 				get: () => undefined,
 			}
-			const result = userKeyExtractor(
-				mockContext as unknown as Context
-			)
+			const result = userKeyExtractor(mockContext as unknown as Context)
 			expect(result).toBeUndefined()
 		})
 
@@ -294,9 +290,7 @@ describe('rate-limiter middleware', () => {
 					return undefined
 				},
 			}
-			const result = userKeyExtractor(
-				mockContext as unknown as Context
-			)
+			const result = userKeyExtractor(mockContext as unknown as Context)
 			expect(result).toBeUndefined()
 		})
 
@@ -306,9 +300,7 @@ describe('rate-limiter middleware', () => {
 					throw new Error('Context not available')
 				},
 			}
-			const result = userKeyExtractor(
-				mockContext as unknown as Context
-			)
+			const result = userKeyExtractor(mockContext as unknown as Context)
 			expect(result).toBeUndefined()
 		})
 	})
