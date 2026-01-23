@@ -481,7 +481,7 @@ describe('trusted-proxy middleware', () => {
 		it('should set clientIp in context', async () => {
 			process.env['TRUST_ALL_PROXIES'] = 'true'
 
-			const app = new Hono()
+			const app = new Hono<{ Variables: { clientIp: string } }>()
 			app.use('*', trustedProxyMiddleware())
 			app.get('/test', (c) => {
 				const ip = c.get('clientIp')
@@ -494,12 +494,12 @@ describe('trusted-proxy middleware', () => {
 				},
 			})
 
-			const data = await response.json()
+			const data = (await response.json()) as { ip: string }
 			expect(data.ip).toBe('203.0.113.50')
 		})
 
 		it('should work with custom config', async () => {
-			const app = new Hono()
+			const app = new Hono<{ Variables: { clientIp: string } }>()
 			app.use('*', trustedProxyMiddleware({ trustAll: true }))
 			app.get('/test', (c) => {
 				const ip = c.get('clientIp')
@@ -512,7 +512,7 @@ describe('trusted-proxy middleware', () => {
 				},
 			})
 
-			const data = await response.json()
+			const data = (await response.json()) as { ip: string }
 			expect(data.ip).toBe('203.0.113.60')
 		})
 	})
@@ -520,7 +520,9 @@ describe('trusted-proxy middleware', () => {
 	describe('Cloudflare IP ranges validity', () => {
 		it('should have valid CIDR format for all IPv4 ranges', () => {
 			for (const cidr of CLOUDFLARE_IPV4_RANGES) {
-				const [ip, bits] = cidr.split('/')
+				const parts = cidr.split('/')
+				const ip = parts[0] as string
+				const bits = parts[1] as string
 				expect(ip).toMatch(/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/)
 				expect(Number.parseInt(bits, 10)).toBeGreaterThanOrEqual(0)
 				expect(Number.parseInt(bits, 10)).toBeLessThanOrEqual(32)
@@ -531,7 +533,7 @@ describe('trusted-proxy middleware', () => {
 	describe('real connection IP via Bun server', () => {
 		it('should get actual connection IP from Bun runtime', async () => {
 			// This test verifies that when running on Bun, getConnInfo provides the real IP
-			const app = new Hono()
+			const app = new Hono<{ Variables: { clientIp: string } }>()
 			app.use('*', trustedProxyMiddleware())
 			app.get('/ip', (c) => {
 				const ip = c.get('clientIp')
@@ -541,7 +543,7 @@ describe('trusted-proxy middleware', () => {
 			// When making a request through Bun's test server, the IP should be resolved
 			// In test environment, this will be 127.0.0.1 or ::1
 			const response = await app.request('/ip')
-			const data = await response.json()
+			const data = (await response.json()) as { ip: string }
 
 			// The IP should be either localhost (IPv4 or IPv6) or 'unknown' in edge cases
 			// but NOT the string 'unknown' when getConnInfo works
@@ -552,7 +554,7 @@ describe('trusted-proxy middleware', () => {
 			process.env['TRUST_ALL_PROXIES'] = 'false'
 			process.env['NODE_ENV'] = 'test'
 
-			const app = new Hono()
+			const app = new Hono<{ Variables: { clientIp: string } }>()
 			app.use('*', trustedProxyMiddleware())
 			app.get('/ip', (c) => {
 				const ip = c.get('clientIp')
@@ -561,7 +563,7 @@ describe('trusted-proxy middleware', () => {
 
 			// Request without proxy headers - should get the actual connection IP
 			const response = await app.request('/ip')
-			const data = await response.json()
+			const data = (await response.json()) as { ip: string }
 
 			// Should return something (connection IP or unknown), not crash
 			expect(typeof data.ip).toBe('string')

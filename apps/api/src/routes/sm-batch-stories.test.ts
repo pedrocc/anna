@@ -401,6 +401,7 @@ describe('SM Stories - Batch creation (parallel)', () => {
 					{
 						id: crypto.randomUUID(),
 						type: 'given_when_then' as const,
+						description: 'Form submission saves data',
 						given: 'I am logged in',
 						when: 'I click submit',
 						// biome-ignore lint/suspicious/noThenProperty: Given-When-Then acceptance criteria, not a Promise

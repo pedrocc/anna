@@ -48,7 +48,9 @@ const RAILWAY_TRUSTED_HEADERS = ['cf-connecting-ip', 'x-real-ip'] as const
  * Parse CIDR notation to check if IP is in range
  */
 function ipInCidr(ip: string, cidr: string): boolean {
-	const [range, bitsStr] = cidr.split('/')
+	const parts = cidr.split('/')
+	const range = parts[0] ?? ''
+	const bitsStr = parts[1] ?? '0'
 	const bits = Number.parseInt(bitsStr, 10)
 
 	// Handle IPv6
@@ -74,9 +76,18 @@ function ipv4InCidr(ip: string, range: string, bits: number): boolean {
 	const rangeParts = range.split('.').map((p) => Number.parseInt(p, 10))
 
 	// Use >>> 0 to treat as unsigned 32-bit integer
-	const ipNum = ((ipParts[0] << 24) | (ipParts[1] << 16) | (ipParts[2] << 8) | ipParts[3]) >>> 0
+	const ipNum =
+		(((ipParts[0] ?? 0) << 24) |
+			((ipParts[1] ?? 0) << 16) |
+			((ipParts[2] ?? 0) << 8) |
+			(ipParts[3] ?? 0)) >>>
+		0
 	const rangeNum =
-		((rangeParts[0] << 24) | (rangeParts[1] << 16) | (rangeParts[2] << 8) | rangeParts[3]) >>> 0
+		(((rangeParts[0] ?? 0) << 24) |
+			((rangeParts[1] ?? 0) << 16) |
+			((rangeParts[2] ?? 0) << 8) |
+			(rangeParts[3] ?? 0)) >>>
+		0
 
 	// Create mask - use >>> 0 for unsigned behavior
 	const mask = bits === 32 ? 0xffffffff : ~((1 << (32 - bits)) - 1) >>> 0
@@ -98,7 +109,7 @@ function ipv6InCidr(ip: string, range: string, bits: number): boolean {
 
 	if (partialBits > 0 && fullBits < 8) {
 		const mask = 0xffff << (16 - partialBits)
-		if ((ipParts[fullBits] & mask) !== (rangeParts[fullBits] & mask)) {
+		if (((ipParts[fullBits] ?? 0) & mask) !== ((rangeParts[fullBits] ?? 0) & mask)) {
 			return false
 		}
 	}
@@ -194,7 +205,7 @@ export function getClientIp(c: Context, config?: TrustedProxyConfig): string {
 			const value = c.req.header(header)
 			if (value) {
 				// cf-connecting-ip is a single IP, x-real-ip should also be single
-				return normalizeIp(value.split(',')[0].trim())
+				return normalizeIp((value.split(',')[0] ?? value).trim())
 			}
 		}
 	}

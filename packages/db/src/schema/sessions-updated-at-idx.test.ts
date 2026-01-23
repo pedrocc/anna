@@ -9,10 +9,8 @@ describe('updatedAtIdx on session tables', () => {
 		it('should have an index on updatedAt', () => {
 			const tableConfig = getTableConfig(briefingSessions)
 			const indexes = tableConfig.indexes.map((i) => {
-				const cfg = (i as Record<string, unknown>).config as {
-					name: string
-					columns: { name: string }[]
-				}
+				const cfg = (i as unknown as { config: { name: string; columns: { name: string }[] } })
+					.config
 				return { name: cfg.name, columns: cfg.columns.map((c) => c.name) }
 			})
 
@@ -27,10 +25,8 @@ describe('updatedAtIdx on session tables', () => {
 		it('should have an index on updatedAt', () => {
 			const tableConfig = getTableConfig(prdSessions)
 			const indexes = tableConfig.indexes.map((i) => {
-				const cfg = (i as Record<string, unknown>).config as {
-					name: string
-					columns: { name: string }[]
-				}
+				const cfg = (i as unknown as { config: { name: string; columns: { name: string }[] } })
+					.config
 				return { name: cfg.name, columns: cfg.columns.map((c) => c.name) }
 			})
 
@@ -45,10 +41,8 @@ describe('updatedAtIdx on session tables', () => {
 		it('should have an index on updatedAt', () => {
 			const tableConfig = getTableConfig(smSessions)
 			const indexes = tableConfig.indexes.map((i) => {
-				const cfg = (i as Record<string, unknown>).config as {
-					name: string
-					columns: { name: string }[]
-				}
+				const cfg = (i as unknown as { config: { name: string; columns: { name: string }[] } })
+					.config
 				return { name: cfg.name, columns: cfg.columns.map((c) => c.name) }
 			})
 
