@@ -1117,7 +1117,7 @@ briefingRoutes.get('/documents/:id', authMiddleware, async (c) => {
 		},
 	})
 
-	if (!document) {
+	if (!document || !document.session) {
 		return commonErrors.notFound(c, 'Document not found')
 	}
 
@@ -1152,7 +1152,7 @@ briefingRoutes.patch(
 			},
 		})
 
-		if (!document) {
+		if (!document || !document.session) {
 			return commonErrors.notFound(c, 'Document not found')
 		}
 
@@ -1193,7 +1193,7 @@ briefingRoutes.delete('/documents/:id', authMiddleware, async (c) => {
 		},
 	})
 
-	if (!document) {
+	if (!document || !document.session) {
 		return commonErrors.notFound(c, 'Document not found')
 	}
 

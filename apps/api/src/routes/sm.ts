@@ -1118,7 +1118,7 @@ smRoutes.patch('/epics/:id', authMiddleware, zValidator('json', UpdateSmEpicSche
 		},
 	})
 
-	if (!epic) {
+	if (!epic || !epic.session) {
 		return commonErrors.notFound(c, 'Epic not found')
 	}
 
@@ -1152,7 +1152,7 @@ smRoutes.delete('/epics/:id', authMiddleware, async (c) => {
 		},
 	})
 
-	if (!epic) {
+	if (!epic || !epic.session) {
 		return commonErrors.notFound(c, 'Epic not found')
 	}
 
@@ -1330,7 +1330,7 @@ smRoutes.patch(
 			},
 		})
 
-		if (!story) {
+		if (!story || !story.session) {
 			return commonErrors.notFound(c, 'Story not found')
 		}
 
@@ -1365,7 +1365,7 @@ smRoutes.delete('/stories/:id', authMiddleware, async (c) => {
 		},
 	})
 
-	if (!story) {
+	if (!story || !story.session) {
 		return commonErrors.notFound(c, 'Story not found')
 	}
 
@@ -1728,7 +1728,7 @@ smRoutes.get('/documents/:id', authMiddleware, async (c) => {
 		},
 	})
 
-	if (!document) {
+	if (!document || !document.session) {
 		return commonErrors.notFound(c, 'Document not found')
 	}
 
@@ -1761,7 +1761,7 @@ smRoutes.patch(
 			},
 		})
 
-		if (!document) {
+		if (!document || !document.session) {
 			return commonErrors.notFound(c, 'Document not found')
 		}
 
@@ -1800,7 +1800,7 @@ smRoutes.delete('/documents/:id', authMiddleware, async (c) => {
 		},
 	})
 
-	if (!document) {
+	if (!document || !document.session) {
 		return commonErrors.notFound(c, 'Document not found')
 	}
 
