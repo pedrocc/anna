@@ -38,14 +38,8 @@ export function KanbanBoard({ stories, columnStats, onStoryClick }: KanbanBoardP
 						label={column.label}
 						count={columnStats[column.id]}
 					>
-						{columnStories.map((story, index) => (
-							<div
-								key={story.id}
-								className="animate-card-enter"
-								style={{ animationDelay: `${index * 30}ms` }}
-							>
-								<KanbanCard story={story} onClick={onStoryClick} />
-							</div>
+						{columnStories.map((story) => (
+							<KanbanCard key={story.id} story={story} onClick={onStoryClick} />
 						))}
 					</KanbanColumn>
 				)

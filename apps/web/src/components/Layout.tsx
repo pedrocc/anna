@@ -28,6 +28,7 @@ export function UserSync() {
 			return
 		}
 
+		// Set flag before async call to prevent concurrent syncs
 		isSyncing.current = true
 		api.users
 			.syncName(fullName)

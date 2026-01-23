@@ -184,6 +184,7 @@ export function PMSessionPage() {
 		} catch (err) {
 			console.error('Failed to delete session:', err)
 			setActionError('Falha ao excluir sessão. Tente novamente.')
+		} finally {
 			setIsDeleting(false)
 		}
 	}
