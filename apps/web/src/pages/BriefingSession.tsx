@@ -137,8 +137,7 @@ export function BriefingSessionPage() {
 			await generateDocument()
 			await mutate()
 			setActiveTab('document')
-		} catch (err) {
-			console.error('Failed to generate document:', err)
+		} catch (_err) {
 			setActionError('Falha ao gerar documento. Tente novamente.')
 		}
 	}
@@ -161,8 +160,7 @@ export function BriefingSessionPage() {
 		try {
 			await api.briefing.deleteSession(id)
 			navigate('/briefing')
-		} catch (err) {
-			console.error('Failed to delete session:', err)
+		} catch (_err) {
 			setActionError('Falha ao excluir sessão. Tente novamente.')
 			setIsDeleting(false)
 		}
@@ -177,8 +175,7 @@ export function BriefingSessionPage() {
 			await mutate()
 			setShowRenameDialog(false)
 			setNewProjectName('')
-		} catch (err) {
-			console.error('Failed to rename session:', err)
+		} catch (_err) {
 			setActionError('Falha ao renomear sessão. Tente novamente.')
 		} finally {
 			setIsRenaming(false)

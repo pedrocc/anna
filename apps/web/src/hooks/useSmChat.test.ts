@@ -117,7 +117,7 @@ describe('useSmChat session navigation', () => {
 
 		// Simulate content arriving
 		act(() => {
-			stream1!.updateContent('Partial response')
+			stream1?.updateContent('Partial response')
 		})
 		expect(result.current.streamingContent).toBe('Partial response')
 
@@ -175,7 +175,7 @@ describe('useSmChat session navigation', () => {
 
 		// Try to update content from session 1's stream (should be ignored)
 		act(() => {
-			stream1!.updateContent('Stale content from session 1')
+			stream1?.updateContent('Stale content from session 1')
 		})
 
 		// Content should remain empty for session 2
@@ -194,7 +194,7 @@ describe('useSmChat session navigation', () => {
 			stream = result.current.startStream('Hello')
 		})
 		act(() => {
-			stream!.updateContent('Content')
+			stream?.updateContent('Content')
 		})
 
 		const requestIdBefore = result.current.getRequestId()
@@ -245,7 +245,7 @@ describe('useSmChat session navigation', () => {
 			stream2 = result.current.startStream('Message 2')
 		})
 		act(() => {
-			stream2!.updateContent('Response for session 2')
+			stream2?.updateContent('Response for session 2')
 		})
 
 		expect(result.current.isStreaming).toBe(true)
@@ -264,12 +264,12 @@ describe('useSmChat session navigation', () => {
 		expect(result.current.isStreaming).toBe(true)
 
 		act(() => {
-			stream!.updateContent('Response')
+			stream?.updateContent('Response')
 		})
 		expect(result.current.streamingContent).toBe('Response')
 
 		act(() => {
-			stream!.complete()
+			stream?.complete()
 		})
 		expect(result.current.isStreaming).toBe(false)
 		expect(result.current.streamingContent).toBe('')
@@ -285,13 +285,13 @@ describe('useSmChat session navigation', () => {
 			stream = result.current.startStream('Hello')
 		})
 		act(() => {
-			stream!.updateContent('Accumulated streaming content')
+			stream?.updateContent('Accumulated streaming content')
 		})
 		expect(result.current.streamingContent).toBe('Accumulated streaming content')
 
 		// Complete request - streamingContent should be cleared
 		act(() => {
-			stream!.complete()
+			stream?.complete()
 		})
 		expect(result.current.streamingContent).toBe('')
 	})
@@ -305,12 +305,12 @@ describe('useSmChat abort behavior', () => {
 		act(() => {
 			stream = result.current.startStream('Hello')
 		})
-		expect(stream!.abortController.signal.aborted).toBe(false)
+		expect(stream?.abortController.signal.aborted).toBe(false)
 
 		act(() => {
 			result.current.cancelStream()
 		})
-		expect(stream!.abortController.signal.aborted).toBe(true)
+		expect(stream?.abortController.signal.aborted).toBe(true)
 	})
 
 	it('should abort stream when sessionId changes', () => {
@@ -323,13 +323,13 @@ describe('useSmChat abort behavior', () => {
 		act(() => {
 			stream = result.current.startStream('Hello')
 		})
-		expect(stream!.abortController.signal.aborted).toBe(false)
+		expect(stream?.abortController.signal.aborted).toBe(false)
 
 		// Navigate to different session
 		rerender({ sessionId: 'session-2' })
 
 		// Previous stream should be aborted
-		expect(stream!.abortController.signal.aborted).toBe(true)
+		expect(stream?.abortController.signal.aborted).toBe(true)
 	})
 
 	it('should abort previous stream when starting new stream', () => {
@@ -339,13 +339,13 @@ describe('useSmChat abort behavior', () => {
 		act(() => {
 			stream1 = result.current.startStream('Hello')
 		})
-		expect(stream1!.abortController.signal.aborted).toBe(false)
+		expect(stream1?.abortController.signal.aborted).toBe(false)
 
 		let stream2: ReturnType<typeof result.current.startStream>
 		act(() => {
 			stream2 = result.current.startStream('World')
 		})
-		expect(stream1!.abortController.signal.aborted).toBe(true)
-		expect(stream2!.abortController.signal.aborted).toBe(false)
+		expect(stream1?.abortController.signal.aborted).toBe(true)
+		expect(stream2?.abortController.signal.aborted).toBe(false)
 	})
 })

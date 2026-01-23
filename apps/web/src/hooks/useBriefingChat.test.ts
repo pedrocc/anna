@@ -117,26 +117,26 @@ describe('useBriefingChat requestId guard', () => {
 		act(() => {
 			request1 = result.current.sendMessage('Message 1')
 		})
-		const requestId1 = request1!.currentRequestId
+		const requestId1 = request1?.currentRequestId
 
 		// Start second request (should invalidate first)
 		let request2: ReturnType<typeof result.current.sendMessage>
 		act(() => {
 			request2 = result.current.sendMessage('Message 2')
 		})
-		const requestId2 = request2!.currentRequestId
+		const requestId2 = request2?.currentRequestId
 
 		expect(requestId2).toBe(requestId1 + 1)
 
 		// Try to update from request1 - should be ignored
 		act(() => {
-			request1!.updateContent('Stale content from request 1')
+			request1?.updateContent('Stale content from request 1')
 		})
 		expect(result.current.streamingContent).toBe('')
 
 		// Update from request2 - should work
 		act(() => {
-			request2!.updateContent('Content from request 2')
+			request2?.updateContent('Content from request 2')
 		})
 		expect(result.current.streamingContent).toBe('Content from request 2')
 	})
@@ -157,13 +157,13 @@ describe('useBriefingChat requestId guard', () => {
 
 		// Error from request1 should be ignored
 		act(() => {
-			request1!.setErrorWithGuard(new Error('Stale error'))
+			request1?.setErrorWithGuard(new Error('Stale error'))
 		})
 		expect(result.current.error).toBeNull()
 
 		// Error from request2 should work
 		act(() => {
-			request2!.setErrorWithGuard(new Error('Current error'))
+			request2?.setErrorWithGuard(new Error('Current error'))
 		})
 		expect(result.current.error?.message).toBe('Current error')
 	})
@@ -187,13 +187,13 @@ describe('useBriefingChat requestId guard', () => {
 
 		// Complete request1 - should be ignored, isStreaming should stay true
 		act(() => {
-			request1!.complete()
+			request1?.complete()
 		})
 		expect(result.current.isStreaming).toBe(true)
 
 		// Complete request2 - should work
 		act(() => {
-			request2!.complete()
+			request2?.complete()
 		})
 		expect(result.current.isStreaming).toBe(false)
 	})
@@ -207,13 +207,13 @@ describe('useBriefingChat requestId guard', () => {
 			request = result.current.sendMessage('Hello')
 		})
 		act(() => {
-			request!.updateContent('Accumulated streaming content')
+			request?.updateContent('Accumulated streaming content')
 		})
 		expect(result.current.streamingContent).toBe('Accumulated streaming content')
 
 		// Complete request - streamingContent should be cleared
 		act(() => {
-			request!.complete()
+			request?.complete()
 		})
 		expect(result.current.streamingContent).toBe('')
 	})
@@ -239,7 +239,7 @@ describe('useBriefingChat requestId guard', () => {
 
 		// Try to trigger step update from session-1 request - should be ignored
 		act(() => {
-			request1!.triggerStepUpdate(stepCallback)
+			request1?.triggerStepUpdate(stepCallback)
 		})
 		expect(stepUpdateCalled).toBe(false)
 
@@ -251,7 +251,7 @@ describe('useBriefingChat requestId guard', () => {
 
 		// Trigger step update from session-2 request - should work
 		act(() => {
-			request2!.triggerStepUpdate(stepCallback)
+			request2?.triggerStepUpdate(stepCallback)
 		})
 		expect(stepUpdateCalled).toBe(true)
 	})
@@ -289,15 +289,15 @@ describe('useBriefingChat requestId guard', () => {
 		act(() => {
 			request1 = result.current.sendMessage('Message 1')
 		})
-		expect(request1!.abortController.signal.aborted).toBe(false)
+		expect(request1?.abortController.signal.aborted).toBe(false)
 
 		let request2: ReturnType<typeof result.current.sendMessage>
 		act(() => {
 			request2 = result.current.sendMessage('Message 2')
 		})
 
-		expect(request1!.abortController.signal.aborted).toBe(true)
-		expect(request2!.abortController.signal.aborted).toBe(false)
+		expect(request1?.abortController.signal.aborted).toBe(true)
+		expect(request2?.abortController.signal.aborted).toBe(false)
 	})
 
 	it('should abort request when sessionId changes', () => {
@@ -309,12 +309,12 @@ describe('useBriefingChat requestId guard', () => {
 		act(() => {
 			request = result.current.sendMessage('Message 1')
 		})
-		expect(request!.abortController.signal.aborted).toBe(false)
+		expect(request?.abortController.signal.aborted).toBe(false)
 
 		// Navigate to session-2
 		rerender({ sessionId: 'session-2' })
 
-		expect(request!.abortController.signal.aborted).toBe(true)
+		expect(request?.abortController.signal.aborted).toBe(true)
 	})
 })
 
@@ -330,7 +330,7 @@ describe('useBriefingChat session navigation', () => {
 			request = result.current.sendMessage('Hello')
 		})
 		act(() => {
-			request!.updateContent('Streaming content')
+			request?.updateContent('Streaming content')
 		})
 
 		expect(result.current.isStreaming).toBe(true)
@@ -366,7 +366,7 @@ describe('useBriefingChat session navigation', () => {
 			request2 = result.current.sendMessage('Message for session 2')
 		})
 		act(() => {
-			request2!.updateContent('Content for session 2')
+			request2?.updateContent('Content for session 2')
 		})
 
 		expect(result.current.isStreaming).toBe(true)
@@ -385,8 +385,8 @@ describe('useBriefingChat error persistence', () => {
 			request1 = result.current.sendMessage('Message 1')
 		})
 		act(() => {
-			request1!.setErrorWithGuard(new Error('Network error'))
-			request1!.complete()
+			request1?.setErrorWithGuard(new Error('Network error'))
+			request1?.complete()
 		})
 		expect(result.current.error?.message).toBe('Network error')
 
@@ -406,8 +406,8 @@ describe('useBriefingChat error persistence', () => {
 			request = result.current.sendMessage('Message 1')
 		})
 		act(() => {
-			request!.setErrorWithGuard(new Error('Server error'))
-			request!.complete()
+			request?.setErrorWithGuard(new Error('Server error'))
+			request?.complete()
 		})
 		expect(result.current.error?.message).toBe('Server error')
 
@@ -429,8 +429,8 @@ describe('useBriefingChat error persistence', () => {
 			request = result.current.sendMessage('Message 1')
 		})
 		act(() => {
-			request!.setErrorWithGuard(new Error('Error in session 1'))
-			request!.complete()
+			request?.setErrorWithGuard(new Error('Error in session 1'))
+			request?.complete()
 		})
 		expect(result.current.error?.message).toBe('Error in session 1')
 
@@ -448,8 +448,8 @@ describe('useBriefingChat error persistence', () => {
 			request1 = result.current.sendMessage('Message 1')
 		})
 		act(() => {
-			request1!.setErrorWithGuard(new Error('First error'))
-			request1!.complete()
+			request1?.setErrorWithGuard(new Error('First error'))
+			request1?.complete()
 		})
 		expect(result.current.error?.message).toBe('First error')
 
@@ -459,8 +459,8 @@ describe('useBriefingChat error persistence', () => {
 			request2 = result.current.sendMessage('Message 2')
 		})
 		act(() => {
-			request2!.setErrorWithGuard(new Error('Second error'))
-			request2!.complete()
+			request2?.setErrorWithGuard(new Error('Second error'))
+			request2?.complete()
 		})
 		expect(result.current.error?.message).toBe('Second error')
 	})

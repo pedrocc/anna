@@ -138,8 +138,7 @@ export function PMSessionPage() {
 			await generateDocument()
 			await mutate()
 			setActiveTab('document')
-		} catch (err) {
-			console.error('Failed to generate document:', err)
+		} catch (_err) {
 			setActionError('Falha ao gerar documento. Tente novamente.')
 		}
 	}
@@ -151,8 +150,7 @@ export function PMSessionPage() {
 		try {
 			await api.prd.updateDocumentById(document.id, { content })
 			await mutate()
-		} catch (err) {
-			console.error('Failed to save document:', err)
+		} catch (_err) {
 			setActionError('Falha ao salvar documento. Tente novamente.')
 		} finally {
 			setIsSavingDoc(false)
@@ -166,8 +164,7 @@ export function PMSessionPage() {
 		try {
 			await api.prd.deleteDocumentById(document.id)
 			await mutate()
-		} catch (err) {
-			console.error('Failed to delete document:', err)
+		} catch (_err) {
 			setActionError('Falha ao excluir documento. Tente novamente.')
 		} finally {
 			setIsDeletingDoc(false)
@@ -181,8 +178,7 @@ export function PMSessionPage() {
 		try {
 			await api.prd.deleteSession(id)
 			navigate('/pm')
-		} catch (err) {
-			console.error('Failed to delete session:', err)
+		} catch (_err) {
 			setActionError('Falha ao excluir sessão. Tente novamente.')
 		} finally {
 			setIsDeleting(false)
@@ -198,8 +194,7 @@ export function PMSessionPage() {
 			await mutate()
 			setShowRenameDialog(false)
 			setNewProjectName('')
-		} catch (err) {
-			console.error('Failed to rename session:', err)
+		} catch (_err) {
 			setActionError('Falha ao renomear sessão. Tente novamente.')
 		} finally {
 			setIsRenaming(false)

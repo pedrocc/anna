@@ -147,9 +147,7 @@ export function PlanningSessionPage() {
 			await mutate()
 			setSelectedDocument(null)
 			setActiveTab('document')
-		} catch (err) {
-			console.error('Failed to generate document:', err)
-		}
+		} catch (_err) {}
 	}
 
 	const handleSaveDocument = async (content: string) => {

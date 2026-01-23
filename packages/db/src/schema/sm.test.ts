@@ -6,8 +6,7 @@ describe('smEpics schema', () => {
 	it('should have a composite index on (sessionId, number)', () => {
 		const tableConfig = getTableConfig(smEpics)
 		const indexes = tableConfig.indexes.map((i) => {
-			const cfg = (i as unknown as { config: { name: string; columns: { name: string }[] } })
-				.config
+			const cfg = (i as unknown as { config: { name: string; columns: { name: string }[] } }).config
 			return { name: cfg.name, columns: cfg.columns.map((c) => c.name) }
 		})
 
