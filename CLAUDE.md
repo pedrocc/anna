@@ -859,6 +859,21 @@ describe('Feature', () => {
 - Multi-stage build configurado
 - Variáveis de ambiente via Railway dashboard
 
+## Pós-Push: Verificação de CI
+
+**OBRIGATÓRIO:** Após todo `git push`, SEMPRE executar:
+
+1. Aguardar ~60s para o workflow iniciar
+2. Verificar status: `gh run list --limit 1 --json status,conclusion,name,databaseId`
+3. Se status = `in_progress`, aguardar com: `gh run watch <id>`
+4. Se conclusion = `failure`:
+   - Ler logs: `gh run view <id> --log-failed`
+   - Analisar erros e criar plano de correção
+   - Apresentar plano ao usuário e aguardar aprovação
+   - Implementar fix, rodar testes locais, push novamente
+   - Repetir verificação até CI passar
+5. Se conclusion = `success`, informar ao usuário que CI passou
+
 ## Checklist de Verificação
 
 Antes de fazer commit/PR, verifique:
