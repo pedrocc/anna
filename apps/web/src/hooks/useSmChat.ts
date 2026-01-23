@@ -393,6 +393,7 @@ export function useSmDocument(sessionId: string) {
 		} finally {
 			if (isMountedRef.current) {
 				setIsGenerating(false)
+				setStreamingContent('')
 			}
 		}
 	}, [sessionId, getToken])

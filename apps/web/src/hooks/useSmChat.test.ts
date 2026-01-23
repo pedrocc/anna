@@ -73,6 +73,7 @@ function useSessionNavigationBehavior(sessionId: string) {
 				complete: () => {
 					if (isMountedRef.current && requestIdRef.current === currentRequestId) {
 						setIsStreaming(false)
+						setStreamingContent('')
 						setPendingUserMessage(null)
 					}
 				},
@@ -271,7 +272,28 @@ describe('useSmChat session navigation', () => {
 			stream!.complete()
 		})
 		expect(result.current.isStreaming).toBe(false)
+		expect(result.current.streamingContent).toBe('')
 		expect(result.current.pendingUserMessage).toBeNull()
+	})
+
+	it('should reset streamingContent on completion', () => {
+		const { result } = renderHook(() => useSessionNavigationBehavior('session-1'))
+
+		// Start request and accumulate content
+		let stream: ReturnType<typeof result.current.startStream>
+		act(() => {
+			stream = result.current.startStream('Hello')
+		})
+		act(() => {
+			stream!.updateContent('Accumulated streaming content')
+		})
+		expect(result.current.streamingContent).toBe('Accumulated streaming content')
+
+		// Complete request - streamingContent should be cleared
+		act(() => {
+			stream!.complete()
+		})
+		expect(result.current.streamingContent).toBe('')
 	})
 })
 

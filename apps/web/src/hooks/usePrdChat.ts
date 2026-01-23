@@ -215,6 +215,7 @@ export function usePrdChat({
 				// Only update streaming state if this is still the current request
 				if (isMountedRef.current && requestIdRef.current === currentRequestId) {
 					setIsStreaming(false)
+					setStreamingContent('')
 					setPendingUserMessage(null)
 				}
 			}
@@ -359,6 +360,7 @@ export function usePrdDocument(sessionId: string) {
 		} finally {
 			if (isMountedRef.current) {
 				setIsGenerating(false)
+				setStreamingContent('')
 			}
 		}
 	}, [sessionId, getToken])

@@ -83,6 +83,7 @@ function useBriefingChatBehavior(sessionId: string) {
 				complete: () => {
 					if (isMountedRef.current && requestIdRef.current === currentRequestId) {
 						setIsStreaming(false)
+						setStreamingContent('')
 						setPendingUserMessage(null)
 					}
 				},
@@ -195,6 +196,26 @@ describe('useBriefingChat requestId guard', () => {
 			request2!.complete()
 		})
 		expect(result.current.isStreaming).toBe(false)
+	})
+
+	it('should reset streamingContent on completion', () => {
+		const { result } = renderHook(() => useBriefingChatBehavior('session-1'))
+
+		// Start request and accumulate content
+		let request: ReturnType<typeof result.current.sendMessage>
+		act(() => {
+			request = result.current.sendMessage('Hello')
+		})
+		act(() => {
+			request!.updateContent('Accumulated streaming content')
+		})
+		expect(result.current.streamingContent).toBe('Accumulated streaming content')
+
+		// Complete request - streamingContent should be cleared
+		act(() => {
+			request!.complete()
+		})
+		expect(result.current.streamingContent).toBe('')
 	})
 
 	it('should guard step update callbacks with requestId and sessionId', () => {
