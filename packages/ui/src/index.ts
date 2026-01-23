@@ -12,6 +12,7 @@ export {
 	Sun,
 	User,
 } from 'lucide-react'
+export { toast } from 'sonner'
 export * from './components/accordion.js'
 export * from './components/alert.js'
 export * from './components/alert-dialog.js'
