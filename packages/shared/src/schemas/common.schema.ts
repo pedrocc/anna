@@ -95,3 +95,62 @@ export const GenerationErrorSchema = z.object({
 	status: z.number().int().optional(),
 })
 export type GenerationError = z.infer<typeof GenerationErrorSchema>
+
+// ============================================
+// FIELD OPTIONALITY CONVENTION
+// ============================================
+//
+// This project follows a strict convention for field optionality across
+// CREATE, UPDATE, and READ schemas:
+//
+//   CREATE → .optional()
+//     Field can be omitted. Server applies defaults or leaves as null in DB.
+//     Semantics: "you may provide this, or not"
+//
+//   UPDATE → .optional().nullable()
+//     - undefined (omitted): do NOT change this field
+//     - null: explicitly CLEAR this field (set to null in DB)
+//     - value: SET to this value
+//
+//   READ → .nullable()
+//     Field is always present in the response, but its value may be null
+//     (reflecting the DB state). Never undefined in API responses.
+//
+// Examples:
+//   CREATE: projectDescription: z.string().max(5000).optional()
+//   UPDATE: projectDescription: z.string().max(5000).optional().nullable()
+//   READ:   projectDescription: z.string().max(5000).nullable()
+//
+
+/**
+ * Wraps a schema for use in CREATE operations.
+ * The field becomes optional (can be omitted).
+ *
+ * Convention: CREATE = optional
+ */
+export function forCreate<T extends z.ZodType>(schema: T) {
+	return schema.optional()
+}
+
+/**
+ * Wraps a schema for use in UPDATE operations.
+ * The field becomes optional AND nullable:
+ * - undefined (omitted) = no change
+ * - null = clear the field
+ * - value = set to value
+ *
+ * Convention: UPDATE = optional + nullable
+ */
+export function forUpdate<T extends z.ZodType>(schema: T) {
+	return schema.optional().nullable()
+}
+
+/**
+ * Wraps a schema for use in READ operations.
+ * The field is always present but may be null (DB state).
+ *
+ * Convention: READ = nullable
+ */
+export function forRead<T extends z.ZodType>(schema: T) {
+	return schema.nullable()
+}

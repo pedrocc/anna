@@ -4,6 +4,9 @@ import {
 	ApiErrorSchema,
 	ApiResponseSchema,
 	createSortSchema,
+	forCreate,
+	forRead,
+	forUpdate,
 	HttpUrlSchema,
 	IdSchema,
 	PaginationSchema,
@@ -332,5 +335,95 @@ describe('ApiErrorSchema', () => {
 			},
 		})
 		expect(result.error.details?.field).toBe('email')
+	})
+})
+
+describe('forCreate', () => {
+	const schema = z.object({
+		name: z.string().min(1),
+		description: forCreate(z.string().max(500)),
+	})
+
+	test('accepts value when provided', () => {
+		const result = schema.parse({ name: 'Test', description: 'A description' })
+		expect(result.description).toBe('A description')
+	})
+
+	test('accepts omitted field (undefined)', () => {
+		const result = schema.parse({ name: 'Test' })
+		expect(result.description).toBeUndefined()
+	})
+
+	test('rejects null (not nullable)', () => {
+		expect(() => schema.parse({ name: 'Test', description: null })).toThrow()
+	})
+
+	test('still validates inner schema', () => {
+		expect(() => schema.parse({ name: 'Test', description: 'a'.repeat(501) })).toThrow()
+	})
+})
+
+describe('forUpdate', () => {
+	const schema = z.object({
+		name: forUpdate(z.string().min(1)),
+		description: forUpdate(z.string().max(500)),
+	})
+
+	test('accepts value when provided', () => {
+		const result = schema.parse({ name: 'Updated', description: 'New desc' })
+		expect(result.name).toBe('Updated')
+		expect(result.description).toBe('New desc')
+	})
+
+	test('accepts omitted fields (no change semantics)', () => {
+		const result = schema.parse({})
+		expect(result.name).toBeUndefined()
+		expect(result.description).toBeUndefined()
+	})
+
+	test('accepts null (clear field semantics)', () => {
+		const result = schema.parse({ name: null, description: null })
+		expect(result.name).toBeNull()
+		expect(result.description).toBeNull()
+	})
+
+	test('still validates inner schema when value provided', () => {
+		expect(() => schema.parse({ name: '' })).toThrow()
+		expect(() => schema.parse({ description: 'a'.repeat(501) })).toThrow()
+	})
+
+	test('distinguishes undefined vs null vs value', () => {
+		const full = schema.parse({ name: 'Val', description: null })
+		expect(full.name).toBe('Val')
+		expect(full.description).toBeNull()
+
+		const empty = schema.parse({})
+		expect(empty.name).toBeUndefined()
+		expect(empty.description).toBeUndefined()
+	})
+})
+
+describe('forRead', () => {
+	const schema = z.object({
+		name: z.string().min(1),
+		description: forRead(z.string().max(500)),
+	})
+
+	test('accepts value when present', () => {
+		const result = schema.parse({ name: 'Test', description: 'A desc' })
+		expect(result.description).toBe('A desc')
+	})
+
+	test('accepts null (DB may store null)', () => {
+		const result = schema.parse({ name: 'Test', description: null })
+		expect(result.description).toBeNull()
+	})
+
+	test('rejects omitted field (always present in READ)', () => {
+		expect(() => schema.parse({ name: 'Test' })).toThrow()
+	})
+
+	test('still validates inner schema when value provided', () => {
+		expect(() => schema.parse({ name: 'Test', description: 'a'.repeat(501) })).toThrow()
 	})
 })
