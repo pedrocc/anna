@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test'
 import { eq, sql } from 'drizzle-orm'
-import { closeDb, db } from './client.js'
+import { db } from './client.js'
 import { smEpics, smMessages, smSessions, smStories, users } from './schema/index.js'
 
 let dbAvailable = false
@@ -44,7 +44,6 @@ describe.skipIf(!dbAvailable)('Database Transaction Rollback', () => {
 		if (testUserId) {
 			await db.delete(users).where(eq(users.id, testUserId))
 		}
-		await closeDb()
 	})
 
 	describe('Session + Message Transaction', () => {

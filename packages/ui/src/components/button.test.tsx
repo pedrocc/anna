@@ -1,8 +1,12 @@
-import { describe, expect, it } from 'bun:test'
-import { render, screen } from '@testing-library/react'
+import { beforeEach, describe, expect, it } from 'bun:test'
+import { cleanup, render, screen } from '@testing-library/react'
 import { Button } from './button.js'
 
 describe('Button', () => {
+	beforeEach(() => {
+		cleanup()
+	})
+
 	describe('type attribute', () => {
 		it('defaults to type="button"', () => {
 			render(<Button>Click</Button>)

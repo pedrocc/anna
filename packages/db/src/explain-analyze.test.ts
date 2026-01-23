@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test'
 import { eq, sql } from 'drizzle-orm'
-import { closeDb, db } from './client.js'
+import { db } from './client.js'
 import { smEpics, smSessions, smStories, users } from './schema/index.js'
 
 let dbAvailable = false
@@ -107,7 +107,6 @@ describe.skipIf(!dbAvailable)('EXPLAIN ANALYZE - Composite Index Verification', 
 		if (testUserId) {
 			await db.delete(users).where(eq(users.id, testUserId))
 		}
-		await closeDb()
 	})
 
 	describe('sm_epics_session_number_idx (session_id, number)', () => {

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, spyOn } from 'bun:test'
-import { render, screen } from '@testing-library/react'
+import { cleanup, render, screen } from '@testing-library/react'
 import { ErrorBoundary } from './ErrorBoundary.js'
 
 function ThrowError({ message }: { message: string }): never {
@@ -14,6 +14,7 @@ describe('ErrorBoundary', () => {
 	let consoleSpy: ReturnType<typeof spyOn>
 
 	beforeEach(() => {
+		cleanup()
 		consoleSpy = spyOn(console, 'error').mockImplementation(() => {})
 	})
 

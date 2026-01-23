@@ -172,6 +172,21 @@ describe('Auth Middleware', () => {
 	})
 
 	describe('Token Error Differentiation (mocked)', () => {
+		let originalKey: string | undefined
+
+		beforeAll(() => {
+			originalKey = process.env['CLERK_SECRET_KEY']
+			process.env['CLERK_SECRET_KEY'] = 'sk_test_fake_key_for_mocked_tests'
+		})
+
+		afterAll(() => {
+			if (originalKey) {
+				process.env['CLERK_SECRET_KEY'] = originalKey
+			} else {
+				delete process.env['CLERK_SECRET_KEY']
+			}
+		})
+
 		test('returns TOKEN_EXPIRED for TokenVerificationError with TokenExpired reason', async () => {
 			// Use a dedicated app that mocks verifyToken to throw TokenExpired
 			const { Hono } = await import('hono')
