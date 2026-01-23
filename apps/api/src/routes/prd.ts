@@ -748,6 +748,20 @@ prdRoutes.post(
 		const editedStep = message.step
 		const messageTimestamp = message.createdAt
 
+		// Snapshot messages to delete for rollback if LLM fails
+		const deletedMessagesSnapshot = await db.query.prdMessages.findMany({
+			where: and(
+				eq(prdMessages.sessionId, sessionId),
+				gte(prdMessages.createdAt, messageTimestamp)
+			),
+		})
+		const originalSessionState = {
+			currentStep: session.currentStep,
+			stepsCompleted: session.stepsCompleted,
+			status: session.status,
+			completedAt: session.completedAt,
+		}
+
 		// 4-6. Use transaction to ensure atomicity of message edit operations
 		await db.transaction(async (tx) => {
 			// 4. Delete all messages from this point onwards (inclusive)
@@ -924,6 +938,46 @@ prdRoutes.post(
 
 				await stream.writeSSE({ data: '[DONE]' })
 			} catch (error) {
+				prdLogger.error({ err: error, sessionId }, 'Message edit stream error')
+
+				// Rollback: restore deleted messages and session state
+				try {
+					await db.transaction(async (tx) => {
+						await tx
+							.delete(prdMessages)
+							.where(
+								and(
+									eq(prdMessages.sessionId, sessionId),
+									gte(prdMessages.createdAt, messageTimestamp)
+								)
+							)
+						if (deletedMessagesSnapshot.length > 0) {
+							await tx.insert(prdMessages).values(
+								deletedMessagesSnapshot.map((m) => ({
+									id: m.id,
+									sessionId: m.sessionId,
+									role: m.role,
+									content: m.content,
+									step: m.step,
+									createdAt: m.createdAt,
+								}))
+							)
+						}
+						await tx
+							.update(prdSessions)
+							.set({
+								currentStep: originalSessionState.currentStep,
+								stepsCompleted: originalSessionState.stepsCompleted,
+								status: originalSessionState.status,
+								completedAt: originalSessionState.completedAt,
+								updatedAt: new Date(),
+							})
+							.where(eq(prdSessions.id, sessionId))
+					})
+				} catch (rollbackErr) {
+					prdLogger.error({ err: rollbackErr, sessionId }, 'Failed to rollback message edit')
+				}
+
 				if (error instanceof OpenRouterAPIError) {
 					await stream.writeSSE({
 						data: JSON.stringify({

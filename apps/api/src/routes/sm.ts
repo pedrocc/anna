@@ -863,6 +863,26 @@ smRoutes.post(
 		const editedStep = message.step
 		const messageTimestamp = message.createdAt
 
+		// Snapshot data for rollback if LLM fails
+		const deletedMessagesSnapshot = await db.query.smMessages.findMany({
+			where: and(eq(smMessages.sessionId, sessionId), gte(smMessages.createdAt, messageTimestamp)),
+		})
+		const deletedEpicsSnapshot = await db.query.smEpics.findMany({
+			where: and(eq(smEpics.sessionId, sessionId), gte(smEpics.createdAt, messageTimestamp)),
+		})
+		const deletedStoriesSnapshot = await db.query.smStories.findMany({
+			where: and(eq(smStories.sessionId, sessionId), gte(smStories.createdAt, messageTimestamp)),
+		})
+		const originalSessionState = {
+			currentStep: session.currentStep,
+			stepsCompleted: session.stepsCompleted,
+			status: session.status,
+			completedAt: session.completedAt,
+			totalEpics: session.totalEpics,
+			totalStories: session.totalStories,
+			totalStoryPoints: session.totalStoryPoints,
+		}
+
 		// 4-7. Use transaction to ensure atomicity of message edit operations
 		await db.transaction(async (tx) => {
 			// 4. Delete all messages from this point onwards (inclusive)
@@ -1046,6 +1066,91 @@ smRoutes.post(
 
 				await stream.writeSSE({ data: '[DONE]' })
 			} catch (error) {
+				smLogger.error({ err: error, sessionId }, 'Message edit stream error')
+
+				// Rollback: restore deleted messages, epics, stories, and session state
+				try {
+					await db.transaction(async (tx) => {
+						// Remove newly inserted messages
+						await tx
+							.delete(smMessages)
+							.where(
+								and(
+									eq(smMessages.sessionId, sessionId),
+									gte(smMessages.createdAt, messageTimestamp)
+								)
+							)
+						// Restore messages
+						if (deletedMessagesSnapshot.length > 0) {
+							await tx.insert(smMessages).values(
+								deletedMessagesSnapshot.map((m) => ({
+									id: m.id,
+									sessionId: m.sessionId,
+									role: m.role,
+									content: m.content,
+									step: m.step,
+									createdAt: m.createdAt,
+								}))
+							)
+						}
+						// Restore epics
+						if (deletedEpicsSnapshot.length > 0) {
+							await tx.insert(smEpics).values(
+								deletedEpicsSnapshot.map((e) => ({
+									id: e.id,
+									sessionId: e.sessionId,
+									number: e.number,
+									title: e.title,
+									description: e.description,
+									status: e.status,
+									createdAt: e.createdAt,
+								}))
+							)
+						}
+						// Restore stories
+						if (deletedStoriesSnapshot.length > 0) {
+							await tx.insert(smStories).values(
+								deletedStoriesSnapshot.map((s) => ({
+									id: s.id,
+									sessionId: s.sessionId,
+									epicId: s.epicId,
+									epicNumber: s.epicNumber,
+									storyNumber: s.storyNumber,
+									storyKey: s.storyKey,
+									title: s.title,
+									asA: s.asA,
+									iWant: s.iWant,
+									soThat: s.soThat,
+									description: s.description,
+									acceptanceCriteria: s.acceptanceCriteria ?? [],
+									tasks: s.tasks ?? [],
+									devNotes: s.devNotes ?? {},
+									storyPoints: s.storyPoints,
+									priority: s.priority,
+									status: s.status,
+									createdAt: s.createdAt,
+								}))
+							)
+						}
+						// Restore session state
+						await tx
+							.update(smSessions)
+							.set({
+								currentStep: originalSessionState.currentStep,
+								stepsCompleted: originalSessionState.stepsCompleted,
+								status: originalSessionState.status,
+								completedAt: originalSessionState.completedAt,
+								totalEpics: originalSessionState.totalEpics,
+								totalStories: originalSessionState.totalStories,
+								totalStoryPoints: originalSessionState.totalStoryPoints,
+								updatedAt: new Date(),
+							})
+							.where(eq(smSessions.id, sessionId))
+					})
+				} catch (rollbackErr) {
+					smLogger.error({ err: rollbackErr, sessionId }, 'Failed to rollback message edit')
+				}
+
 				if (error instanceof OpenRouterAPIError) {
 					await stream.writeSSE({
 						data: JSON.stringify({

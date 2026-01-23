@@ -315,6 +315,7 @@ briefingRoutes.post(
 			// Find all PRD sessions that reference this briefing in inputDocuments
 			const allPrdSessions = await tx.query.prdSessions.findMany({
 				where: eq(prdSessions.userId, user.id),
+				limit: 200,
 			})
 
 			const linkedPrdIds: string[] = []
@@ -648,6 +649,20 @@ briefingRoutes.post(
 		const editedStep = message.step
 		const messageTimestamp = message.createdAt
 
+		// Snapshot messages to delete for rollback if LLM fails
+		const deletedMessagesSnapshot = await db.query.briefingMessages.findMany({
+			where: and(
+				eq(briefingMessages.sessionId, sessionId),
+				gte(briefingMessages.createdAt, messageTimestamp)
+			),
+		})
+		const originalSessionState = {
+			currentStep: session.currentStep,
+			stepsCompleted: session.stepsCompleted,
+			status: session.status,
+			completedAt: session.completedAt,
+		}
+
 		// 4-6. Use transaction to ensure atomicity of message edit operations
 		await db.transaction(async (tx) => {
 			// 4. Delete all messages from this point onwards (inclusive)
@@ -856,6 +871,49 @@ briefingRoutes.post(
 
 				await stream.writeSSE({ data: '[DONE]' })
 			} catch (error) {
+				briefingLogger.error({ err: error, sessionId }, 'Message edit stream error')
+
+				// Rollback: restore deleted messages and session state
+				try {
+					await db.transaction(async (tx) => {
+						// Delete the new user message we inserted
+						await tx
+							.delete(briefingMessages)
+							.where(
+								and(
+									eq(briefingMessages.sessionId, sessionId),
+									gte(briefingMessages.createdAt, messageTimestamp)
+								)
+							)
+						// Re-insert original messages
+						if (deletedMessagesSnapshot.length > 0) {
+							await tx.insert(briefingMessages).values(
+								deletedMessagesSnapshot.map((m) => ({
+									id: m.id,
+									sessionId: m.sessionId,
+									role: m.role,
+									content: m.content,
+									step: m.step,
+									createdAt: m.createdAt,
+								}))
+							)
+						}
+						// Restore session state
+						await tx
+							.update(briefingSessions)
+							.set({
+								currentStep: originalSessionState.currentStep,
+								stepsCompleted: originalSessionState.stepsCompleted,
+								status: originalSessionState.status,
+								completedAt: originalSessionState.completedAt,
+								updatedAt: new Date(),
+							})
+							.where(eq(briefingSessions.id, sessionId))
+					})
+				} catch (rollbackErr) {
+					briefingLogger.error({ err: rollbackErr, sessionId }, 'Failed to rollback message edit')
+				}
+
 				if (error instanceof OpenRouterAPIError) {
 					await stream.writeSSE({
 						data: JSON.stringify({
