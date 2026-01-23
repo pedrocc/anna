@@ -1,6 +1,6 @@
 import { useAuth } from '@clerk/clerk-react'
 import { toast } from '@repo/ui'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 
 declare const __API_URL__: string | undefined
 const API_URL = __API_URL__ ?? 'http://localhost:3000'
@@ -45,18 +45,11 @@ export function usePrdChat({
 	// Track sessionId to prevent callbacks from firing for wrong sessions
 	const sessionIdRef = useRef(sessionId)
 
-	// Track mounted state
-	useEffect(() => {
+	// Track mounted state and handle sessionId changes
+	// Uses useLayoutEffect to synchronize refs before paint
+	useLayoutEffect(() => {
 		isMountedRef.current = true
-		return () => {
-			isMountedRef.current = false
-			// Cancel any ongoing stream on unmount
-			abortControllerRef.current?.abort()
-		}
-	}, [])
 
-	// Handle sessionId changes - cancel ongoing streams and reset state
-	useEffect(() => {
 		// If sessionId changed, cancel any ongoing stream and reset state
 		if (sessionIdRef.current !== sessionId) {
 			abortControllerRef.current?.abort()
@@ -64,10 +57,14 @@ export function usePrdChat({
 			setStreamingContent('')
 			setPendingUserMessage(null)
 			setError(null)
-			// Increment request ID to invalidate any pending callbacks
 			requestIdRef.current++
 		}
 		sessionIdRef.current = sessionId
+
+		return () => {
+			isMountedRef.current = false
+			abortControllerRef.current?.abort()
+		}
 	}, [sessionId])
 
 	const clearError = useCallback(() => {
@@ -247,8 +244,8 @@ export function usePrdDocument(sessionId: string) {
 	const isMountedRef = useRef(true)
 	const abortControllerRef = useRef<AbortController | null>(null)
 
-	// Track mounted state
-	useEffect(() => {
+	// Track mounted state - uses useLayoutEffect to synchronize refs before paint
+	useLayoutEffect(() => {
 		isMountedRef.current = true
 		return () => {
 			isMountedRef.current = false

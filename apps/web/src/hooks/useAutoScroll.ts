@@ -1,19 +1,15 @@
-import { type RefObject, useEffect } from 'react'
+import { type RefObject, useLayoutEffect } from 'react'
 
 /**
- * Auto-scrolls to a target element when a dependency changes,
- * using requestAnimationFrame with proper cleanup to avoid
- * state updates on unmounted components.
+ * Auto-scrolls to a target element when a dependency changes.
+ * Uses useLayoutEffect to measure and scroll before the browser paints,
+ * preventing visual flicker when content changes.
  */
 export function useAutoScroll(scrollRef: RefObject<HTMLElement | null>, dependency: unknown) {
 	// biome-ignore lint/correctness/useExhaustiveDependencies: dependency triggers scroll, scrollRef is stable
-	useEffect(() => {
+	useLayoutEffect(() => {
 		if (!scrollRef.current) return
 
-		const rafId = requestAnimationFrame(() => {
-			scrollRef.current?.scrollIntoView({ behavior: 'smooth' })
-		})
-
-		return () => cancelAnimationFrame(rafId)
+		scrollRef.current.scrollIntoView({ behavior: 'smooth' })
 	}, [dependency])
 }

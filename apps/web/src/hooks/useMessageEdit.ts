@@ -1,6 +1,6 @@
 import { useAuth } from '@clerk/clerk-react'
 import { toast } from '@repo/ui'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 
 declare const __API_URL__: string | undefined
 const API_URL = __API_URL__ ?? 'http://localhost:3000'
@@ -43,12 +43,11 @@ export function useMessageEdit({
 	// Track request ID to prevent stale state updates from previous requests
 	const requestIdRef = useRef(0)
 
-	// Track mounted state
-	useEffect(() => {
+	// Track mounted state - uses useLayoutEffect to synchronize refs before paint
+	useLayoutEffect(() => {
 		isMountedRef.current = true
 		return () => {
 			isMountedRef.current = false
-			// Cancel any ongoing edit on unmount
 			abortControllerRef.current?.abort()
 		}
 	}, [])

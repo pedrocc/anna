@@ -1,16 +1,13 @@
 import { describe, expect, it } from 'bun:test'
 import { act, renderHook } from '@testing-library/react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 
 /**
  * Tests for session navigation behavior during streaming.
  *
- * The bug: When rapidly navigating between planning sessions during streaming,
- * the hook didn't properly cancel ongoing streams or reset state for the new session.
- * This could cause streaming content from session A to appear in session B.
- *
- * The fix: Adding a useEffect that reacts to sessionId changes, cancels ongoing streams,
- * resets state, and invalidates pending callbacks via requestIdRef and sessionIdRef.
+ * The pattern: A single useLayoutEffect handles both mount tracking and
+ * sessionId change detection, synchronizing refs before paint to prevent
+ * visual flicker and stale state updates.
  */
 
 // Simplified hook that simulates the core session navigation behavior we're testing
@@ -25,17 +22,10 @@ function useSessionNavigationBehavior(sessionId: string) {
 	const requestIdRef = useRef(0)
 	const sessionIdRef = useRef(sessionId)
 
-	// Track mounted state
-	useEffect(() => {
+	// Combined: track mounted state and handle sessionId changes
+	useLayoutEffect(() => {
 		isMountedRef.current = true
-		return () => {
-			isMountedRef.current = false
-			abortControllerRef.current?.abort()
-		}
-	}, [])
 
-	// Handle sessionId changes - cancel ongoing streams and reset state
-	useEffect(() => {
 		if (sessionIdRef.current !== sessionId) {
 			abortControllerRef.current?.abort()
 			setIsStreaming(false)
@@ -45,6 +35,11 @@ function useSessionNavigationBehavior(sessionId: string) {
 			requestIdRef.current++
 		}
 		sessionIdRef.current = sessionId
+
+		return () => {
+			isMountedRef.current = false
+			abortControllerRef.current?.abort()
+		}
 	}, [sessionId])
 
 	const cancelStream = useCallback(() => {

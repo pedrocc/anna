@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'bun:test'
 import { act, renderHook } from '@testing-library/react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 
 /**
  * Tests for requestId guard behavior in useBriefingChat.
  *
- * The pattern: State updates should only occur if the current requestId
- * matches the requestId of the response. This prevents stale responses
+ * The pattern: A single useLayoutEffect handles both mount tracking and
+ * sessionId change detection. State updates should only occur if the current
+ * requestId matches the requestId of the response, preventing stale responses
  * from overwriting newer data when multiple requests are in flight.
  */
 
@@ -22,16 +23,10 @@ function useBriefingChatBehavior(sessionId: string) {
 	const requestIdRef = useRef(0)
 	const sessionIdRef = useRef(sessionId)
 
-	useEffect(() => {
+	// Combined: track mounted state and handle sessionId changes
+	useLayoutEffect(() => {
 		isMountedRef.current = true
-		return () => {
-			isMountedRef.current = false
-			abortControllerRef.current?.abort()
-		}
-	}, [])
 
-	// Handle sessionId changes - reset state and invalidate pending callbacks
-	useEffect(() => {
 		if (sessionIdRef.current !== sessionId) {
 			abortControllerRef.current?.abort()
 			setIsStreaming(false)
@@ -41,6 +36,11 @@ function useBriefingChatBehavior(sessionId: string) {
 			requestIdRef.current++
 		}
 		sessionIdRef.current = sessionId
+
+		return () => {
+			isMountedRef.current = false
+			abortControllerRef.current?.abort()
+		}
 	}, [sessionId])
 
 	const sendMessage = useCallback(
