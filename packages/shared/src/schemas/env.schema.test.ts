@@ -41,6 +41,37 @@ describe('ServerEnvSchema', () => {
 		})
 	})
 
+	describe('NODE_ENV', () => {
+		test('accepts production', () => {
+			const result = ServerEnvSchema.parse({ ...validServerEnv, NODE_ENV: 'production' })
+			expect(result.NODE_ENV).toBe('production')
+		})
+
+		test('accepts development', () => {
+			const result = ServerEnvSchema.parse({ ...validServerEnv, NODE_ENV: 'development' })
+			expect(result.NODE_ENV).toBe('development')
+		})
+
+		test('accepts test', () => {
+			const result = ServerEnvSchema.parse({ ...validServerEnv, NODE_ENV: 'test' })
+			expect(result.NODE_ENV).toBe('test')
+		})
+
+		test('defaults to development when not provided', () => {
+			const { NODE_ENV, ...envWithoutNodeEnv } = validServerEnv
+			const result = ServerEnvSchema.parse(envWithoutNodeEnv)
+			expect(result.NODE_ENV).toBe('development')
+		})
+
+		test('rejects invalid NODE_ENV value', () => {
+			expect(() => ServerEnvSchema.parse({ ...validServerEnv, NODE_ENV: 'staging' })).toThrow()
+		})
+
+		test('rejects empty string', () => {
+			expect(() => ServerEnvSchema.parse({ ...validServerEnv, NODE_ENV: '' })).toThrow()
+		})
+	})
+
 	describe('LOG_LEVEL', () => {
 		test('defaults to info when not provided', () => {
 			const result = ServerEnvSchema.parse(validServerEnv)

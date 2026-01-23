@@ -99,9 +99,12 @@ jobs:
 
       - name: Build API
         run: bun run --filter @repo/api build
+        env:
+          NODE_ENV: production
 
       - name: Build Web
         run: bun run --filter @repo/web build
         env:
+          NODE_ENV: production
           CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_PUBLISHABLE_KEY }}
           API_URL: ${{ vars.API_URL || 'http://localhost:3000' }}

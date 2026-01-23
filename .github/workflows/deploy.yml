@@ -27,6 +27,7 @@ jobs:
         run: railway up --service api --detach
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          NODE_ENV: production
 
   deploy-web:
     name: Deploy Web
@@ -45,6 +46,7 @@ jobs:
         run: railway up --service web --detach
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          NODE_ENV: production
 
   notify:
     name: Notify
