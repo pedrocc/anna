@@ -43,14 +43,14 @@ interface PrdSessionContext {
 	}> | null
 	regulatoryRequirements?: string[] | null
 	domainExpertise?: string[] | null
-	skipDomainStep?: string | null
+	skipDomainStep?: boolean | null
 	// Innovation
 	innovations?: Array<{
 		type: string
 		description: string
 		impact: string
 	}> | null
-	skipInnovationStep?: string | null
+	skipInnovationStep?: boolean | null
 	// Project Type
 	projectTypeDetails?: Record<string, unknown> | null
 	projectTypeQuestions?: Record<string, string> | null
@@ -1568,12 +1568,12 @@ export function shouldSkipStep(step: PrdStep, context: PrdSessionContext): boole
 
 	// Skip domain step if complexity is low
 	if (step === 'domain') {
-		return context.domainComplexity === 'low' || context.skipDomainStep === 'true'
+		return context.domainComplexity === 'low' || context.skipDomainStep === true
 	}
 
 	// Skip innovation step if no innovation signals
 	if (step === 'innovation') {
-		return context.skipInnovationStep === 'true'
+		return context.skipInnovationStep === true
 	}
 
 	return false

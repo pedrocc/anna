@@ -768,7 +768,7 @@ Vendas Master é uma plataforma digital de vendas de carnes premium que revoluci
 		],
 		regulatoryRequirements: ['Licença ANVISA', 'Certificação SIF', 'LGPD'],
 		domainExpertise: ['Logística refrigerada', 'Qualidade de carnes', 'E-commerce'],
-		skipDomainStep: 'false',
+		skipDomainStep: false,
 		innovations: [
 			{
 				id: uuid(),
@@ -778,7 +778,7 @@ Vendas Master é uma plataforma digital de vendas de carnes premium que revoluci
 				risks: ['Custo de implementação', 'Adesão dos fornecedores'],
 			},
 		],
-		skipInnovationStep: 'false',
+		skipInnovationStep: false,
 		projectTypeDetails: {
 			framework: 'React + Node.js',
 			hosting: 'AWS',
