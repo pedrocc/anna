@@ -278,8 +278,11 @@ prdRoutes.post(
 					max_tokens: 4096,
 				})
 				annaAnalysis = response.choices[0]?.message?.content ?? ''
-			} catch {
-				// Fallback message if AI generation fails
+			} catch (error) {
+				prdLogger.error(
+					{ err: error, projectName: data.projectName },
+					'AI briefing analysis failed, using fallback'
+				)
 				annaAnalysis = `Recebi o briefing do projeto **"${data.projectName}"**. Vou analisar o documento e preparar as proximas etapas do PRD.
 
 Com base no briefing, vamos avancar para a etapa de **Descoberta**. Me conte: qual e o tipo de projeto que estamos construindo? (API, Mobile App, SaaS, etc.)`
@@ -356,6 +359,10 @@ Com base no briefing, vamos avancar para a etapa de **Descoberta**. Me conte: qu
 		})
 
 		if (!sessionWithMessages) {
+			prdLogger.error(
+				{ projectName: data.projectName },
+				'Failed to create PRD session: transaction returned null'
+			)
 			return commonErrors.internalError(c, 'Failed to create session')
 		}
 
@@ -793,6 +800,7 @@ prdRoutes.post(
 		})
 
 		if (!updatedSession) {
+			prdLogger.error({ sessionId }, 'Failed to refresh PRD session: query returned null')
 			return commonErrors.internalError(c, 'Failed to refresh session')
 		}
 

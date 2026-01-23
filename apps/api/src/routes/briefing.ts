@@ -208,6 +208,10 @@ briefingRoutes.post(
 		})
 
 		if (!sessionWithMessages) {
+			briefingLogger.error(
+				{ projectName: data.projectName },
+				'Failed to create briefing session: transaction returned null'
+			)
 			return commonErrors.internalError(c, 'Failed to create session')
 		}
 
@@ -699,6 +703,7 @@ briefingRoutes.post(
 		})
 
 		if (!updatedSession) {
+			briefingLogger.error({ sessionId }, 'Failed to refresh briefing session: query returned null')
 			return commonErrors.internalError(c, 'Failed to refresh session')
 		}
 

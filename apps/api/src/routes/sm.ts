@@ -283,6 +283,10 @@ smRoutes.post('/sessions', authMiddleware, zValidator('json', CreateSmSessionSch
 	})
 
 	if (!sessionWithMessages) {
+		smLogger.error(
+			{ projectName: data.projectName },
+			'Failed to create SM session: transaction returned null'
+		)
 		return commonErrors.internalError(c, 'Failed to create session')
 	}
 
@@ -939,6 +943,7 @@ smRoutes.post(
 		})
 
 		if (!updatedSession) {
+			smLogger.error({ sessionId }, 'Failed to refresh SM session: query returned null')
 			return commonErrors.internalError(c, 'Failed to refresh session')
 		}
 

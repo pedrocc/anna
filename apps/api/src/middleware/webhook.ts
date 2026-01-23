@@ -1,5 +1,6 @@
 import type { Context, Next } from 'hono'
 import { Webhook } from 'svix'
+import { apiLogger } from '../lib/logger.js'
 import { commonErrors } from '../lib/response.js'
 
 /**
@@ -11,8 +12,7 @@ export async function verifyClerkWebhook(c: Context, next: Next) {
 	const webhookSecret = process.env['CLERK_WEBHOOK_SECRET']
 
 	if (!webhookSecret) {
-		// biome-ignore lint/suspicious/noConsole: Critical error needs to be logged for debugging
-		console.error('CLERK_WEBHOOK_SECRET is not configured')
+		apiLogger.error('CLERK_WEBHOOK_SECRET is not configured')
 		return commonErrors.internalError(c, 'Webhook verification not configured')
 	}
 

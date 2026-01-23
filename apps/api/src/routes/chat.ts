@@ -2,10 +2,13 @@ import { zValidator } from '@hono/zod-validator'
 import { ChatRequestSchema } from '@repo/shared'
 import { Hono } from 'hono'
 import { streamSSE } from 'hono/streaming'
+import { createLogger } from '../lib/logger.js'
 import { getOpenRouterClient, OpenRouterAPIError } from '../lib/openrouter.js'
 import { commonErrors, successResponse } from '../lib/response.js'
 import { type AuthVariables, authMiddleware } from '../middleware/auth.js'
 import { rateLimiter, userKeyExtractor } from '../middleware/rate-limiter.js'
+
+const chatLogger = createLogger('chat')
 
 export const chatRoutes = new Hono<{ Variables: AuthVariables }>()
 
@@ -58,6 +61,7 @@ chatRoutes.post(
 						data: '[DONE]',
 					})
 				} catch (error) {
+					chatLogger.error({ err: error }, 'Chat stream error')
 					if (error instanceof OpenRouterAPIError) {
 						await stream.writeSSE({
 							data: JSON.stringify({
@@ -81,8 +85,7 @@ chatRoutes.post(
 				return commonErrors.badRequest(c, error.message, { code: error.code })
 			}
 
-			// Log unexpected errors and return a generic error response
-			console.error('Unexpected error in chat route:', error)
+			chatLogger.error({ err: error, path: c.req.path }, 'Unexpected error in chat route')
 			return commonErrors.internalError(c, 'An unexpected error occurred')
 		}
 	}

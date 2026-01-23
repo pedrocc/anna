@@ -5,6 +5,7 @@ import { logger } from 'hono/logger'
 import { requestId } from 'hono/request-id'
 import { secureHeaders } from 'hono/secure-headers'
 import { timing } from 'hono/timing'
+import { apiLogger } from './lib/logger.js'
 import { commonErrors } from './lib/response.js'
 import { errorHandler } from './middleware/error-handler.js'
 import { closeRedis, rateLimiter } from './middleware/rate-limiter.js'
@@ -61,11 +62,9 @@ const port = Number(process.env['PORT']) || 3000
 
 // Graceful shutdown handlers
 async function gracefulShutdown(signal: string): Promise<void> {
-	// biome-ignore lint/suspicious/noConsole: Shutdown logging
-	console.log(`${signal} received, closing connections...`)
+	apiLogger.info({ signal }, 'Graceful shutdown initiated')
 	await Promise.all([closeRedis(), closeDb()])
-	// biome-ignore lint/suspicious/noConsole: Shutdown logging
-	console.log('All connections closed')
+	apiLogger.info('All connections closed')
 	process.exit(0)
 }
 
