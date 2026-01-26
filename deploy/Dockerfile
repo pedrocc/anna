@@ -75,6 +75,11 @@ COPY packages/shared/package.json ./packages/shared/
 COPY packages/email/package.json ./packages/email/
 COPY packages/jobs/package.json ./packages/jobs/
 COPY tooling/typescript/package.json ./tooling/typescript/
+# Additional packages needed for lockfile consistency
+COPY apps/api/package.json ./apps/api/
+COPY apps/web/package.json ./apps/web/
+COPY packages/ui/package.json ./packages/ui/
+COPY tooling/biome/package.json ./tooling/biome/
 
 # Install production dependencies
 RUN bun install --frozen-lockfile --production
@@ -92,7 +97,6 @@ RUN cd packages/db && bun add -d drizzle-kit
 
 # Copy API build output
 COPY --from=builder-api /app/apps/api/dist ./apps/api/dist
-COPY apps/api/package.json ./apps/api/
 
 # Copy Web build output to nginx html dir
 COPY --from=builder-web /app/apps/web/dist /usr/share/nginx/html
