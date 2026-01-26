@@ -54,7 +54,7 @@ COPY packages/ui ./packages/ui
 COPY apps/web ./apps/web
 COPY tooling ./tooling
 
-ENV API_URL=/api
+ENV API_URL=
 ENV CLERK_PUBLISHABLE_KEY=${CLERK_PUBLISHABLE_KEY}
 
 RUN cd apps/web && bun run build.ts

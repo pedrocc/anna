@@ -7,7 +7,7 @@ services:
         - CLERK_PUBLISHABLE_KEY=${CLERK_PUBLISHABLE_KEY}
         - SENTRY_DSN=${SENTRY_DSN:-}
     ports:
-      - "${APP_PORT:-80}:80"
+      - "${APP_PORT:-90}:80"
     environment:
       - DATABASE_URL=postgresql://${POSTGRES_USER:-anna}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-anna}
       - REDIS_URL=redis://redis:6379
@@ -24,9 +24,9 @@ services:
       - LOG_LEVEL=${LOG_LEVEL:-info}
       - SENTRY_DSN=${SENTRY_DSN:-}
     depends_on:
-      postgres:
+      postgres-anna:
         condition: service_healthy
-      redis:
+      redis-anna:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
@@ -36,7 +36,7 @@ services:
       start_period: 60s
       retries: 3
 
-  postgres:
+  postgres-anna:
     image: postgres:17-alpine
     environment:
       - POSTGRES_USER=${POSTGRES_USER:-anna}
@@ -51,7 +51,7 @@ services:
       timeout: 5s
       retries: 5
 
-  redis:
+  redis-anna:
     image: redis:7-alpine
     command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
     volumes:
