@@ -1,6 +1,6 @@
 // apps/web/build.ts
 // biome-ignore-all lint/suspicious/noConsole: Build script needs console output
-import { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { $ } from 'bun' // Usamos o shell do Bun para rodar comandos
 
@@ -25,7 +25,7 @@ const result = await Bun.build({
 	},
 	define: {
 		'process.env.NODE_ENV': '"production"',
-		__API_URL__: JSON.stringify(process.env['API_URL'] ?? ''), 
+		__API_URL__: JSON.stringify(process.env['API_URL'] ?? ''),
 		__CLERK_PUBLISHABLE_KEY__: JSON.stringify(process.env['CLERK_PUBLISHABLE_KEY'] || ''),
 	},
 })
@@ -65,10 +65,7 @@ const jsFile = result.outputs
 let html = htmlTemplate.replace('src/main.tsx', jsFile ?? 'main.js')
 
 // Aqui está o segredo: Injetamos o link para o styles.css que geramos no passo 2
-html = html.replace(
-	'</head>', 
-	`<link rel="stylesheet" href="/styles.css">\n  </head>`
-)
+html = html.replace('</head>', `<link rel="stylesheet" href="/styles.css">\n  </head>`)
 
 writeFileSync(join(outdir, 'index.html'), html)
 console.log(`✅ Build finalizado com sucesso!`)
