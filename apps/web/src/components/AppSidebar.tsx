@@ -1,4 +1,4 @@
-import { SignOutButton, useUser } from '@clerk/clerk-react'
+import { SignOutButton, useClerk, useUser } from '@clerk/clerk-react'
 import {
 	Avatar,
 	AvatarFallback,
@@ -28,6 +28,7 @@ import {
 	Kanban,
 	LayoutDashboard,
 	LogOut,
+	Settings,
 	User,
 } from 'lucide-react'
 import type { ComponentType } from 'react'
@@ -85,6 +86,7 @@ function SidebarLogo() {
 export function AppSidebar() {
 	const [location] = useLocation()
 	const { user } = useUser()
+	const { openUserProfile } = useClerk()
 
 	const isActive = (href: string) => {
 		if (href === '/dashboard') {
@@ -164,6 +166,11 @@ export function AppSidebar() {
 								</p>
 							</div>
 						</DropdownMenuLabel>
+						<DropdownMenuSeparator />
+						<DropdownMenuItem className="cursor-pointer" onClick={() => openUserProfile()}>
+							<Settings className="mr-2 size-4" />
+							<span>Minha Conta</span>
+						</DropdownMenuItem>
 						<DropdownMenuSeparator />
 						<SignOutButton>
 							<DropdownMenuItem className="cursor-pointer text-destructive focus:text-destructive">
